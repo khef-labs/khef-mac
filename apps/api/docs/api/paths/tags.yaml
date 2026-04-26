@@ -1,0 +1,197 @@
+ProjectsByIdTags:
+  get:
+    operationId: listProjectTags
+    tags:
+      - projects
+    summary: List tags used in a project
+    description: Retrieve tags used by memories in the specified project, with usage counts, ordered by usage descending.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    responses:
+      '200':
+        description: Tags with usage counts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: ../components/schemas.yaml#/Tag
+                      - type: object
+                        properties:
+                          usage_count:
+                            type: integer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+Tags:
+  get:
+    operationId: listTags
+    tags:
+      - tags
+    summary: List all tags
+    description: Retrieve all tags ordered alphabetically. Optionally filter by case-insensitive partial match.
+    parameters:
+      - name: q
+        in: query
+        description: Case-insensitive partial match on tag name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of tags
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Tag
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createTag
+    tags:
+      - tags
+    summary: Create a tag
+    description: Create a new tag. Name must be unique.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Tag name (will be trimmed)
+            required:
+              - name
+    responses:
+      '201':
+        description: Tag created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag:
+                  $ref: ../components/schemas.yaml#/Tag
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '409':
+        description: Tag already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+TagsById:
+  patch:
+    operationId: updateTag
+    tags:
+      - tags
+    summary: Rename a tag
+    description: Rename an existing tag. New name must be unique.
+    parameters:
+      - name: tagId
+        in: path
+        required: true
+        description: Tag UUID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                description: New tag name
+            required:
+              - name
+    responses:
+      '200':
+        description: Tag renamed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tag:
+                  $ref: ../components/schemas.yaml#/Tag
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Tag name already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteTag
+    tags:
+      - tags
+    summary: Delete a tag
+    description: Delete a tag. Only tags not in use by any memory can be deleted.
+    parameters:
+      - name: tagId
+        in: path
+        required: true
+        description: Tag UUID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Tag deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Tag is in use and cannot be deleted
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - type: object
+                  properties:
+                    usage_count:
+                      type: integer
+TagsByIdMemories:
+  get:
+    operationId: listTagMemories
+    tags:
+      - tags
+    summary: Get memories by tag
+    description: Retrieve all memories tagged with a specific tag name
+    parameters:
+      - name: name
+        in: path
+        required: true
+        description: Tag name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of memories with this tag
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memories:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Memory
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

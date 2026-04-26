@@ -1,0 +1,588 @@
+.page {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--page-max-width, 900px);
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.headerIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-2xl);
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.count {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.definitionsLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  text-decoration: none;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.definitionsLink:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.defKey {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Status pills */
+.statusPills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--muted);
+    color: var(--fg);
+  }
+}
+
+.pillCount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.pillSelected {
+  font-weight: 600;
+}
+
+.pill_running.pillSelected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+
+.pill_queued.pillSelected {
+  border-color: var(--brand-purple);
+  background: color-mix(in srgb, var(--brand-purple) 10%, transparent);
+  color: var(--brand-purple);
+}
+
+.pill_pending.pillSelected {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--warning);
+}
+
+.pill_completed.pillSelected {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+.pill_failed.pillSelected {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+}
+
+.pill_canceled.pillSelected {
+  border-color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 10%, transparent);
+  color: var(--fg);
+}
+
+/* Sortable column headers */
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+/* Definition combobox multi-select */
+.defFilter {
+  position: relative;
+  min-width: 180px;
+  max-width: 280px;
+  flex-shrink: 1;
+}
+
+.defCombobox {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px var(--space-2);
+  min-height: 34px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: text;
+  transition: border-color var(--transition-fast);
+  overflow: hidden;
+
+  &:hover {
+    border-color: var(--muted);
+  }
+}
+
+.defComboboxOpen {
+  border-color: var(--accent);
+}
+
+.defComboboxInput {
+  flex: 1;
+  min-width: 80px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  outline: none;
+  padding: 2px 0;
+
+  &::placeholder {
+    color: var(--muted);
+  }
+}
+
+.defChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.defChipRemove {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+.defChipMore {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}
+
+.defDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  min-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.defDropdownClearAll {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.1s, background 0.1s;
+
+  &:hover {
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 5%, transparent);
+  }
+}
+
+.defDropdownList {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.defDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background 0.1s;
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.defDropdownName {
+  font-size: var(--text-sm);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.defDropdownEmpty {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Selection */
+.selectCell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: var(--text-sm);
+}
+
+.selectionDeleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--error) 60%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-2);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+
+  &:hover {
+    background: color-mix(in srgb, var(--error) 20%, transparent);
+    border-color: var(--error);
+  }
+}
+
+/* Table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 500;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.row {
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.row:hover {
+  background-color: color-mix(in srgb, var(--fg) 3%, transparent);
+}
+
+/* Status badges */
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.statusQueued {
+  background: color-mix(in srgb, var(--brand-purple) 15%, transparent);
+  color: var(--brand-purple);
+}
+
+.statusPending {
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  color: var(--warning);
+}
+
+.statusRunning {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.statusCompleted {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.statusFailed {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+.statusCanceled {
+  background: color-mix(in srgb, var(--muted) 15%, transparent);
+  color: var(--muted);
+}
+
+/* Progress */
+.progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.progressActive {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* Duration */
+.duration {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Timestamp */
+.timestamp {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Type column — absorbs all remaining table width */
+.typeCell {
+  width: 100%;
+}
+
+/* Type label */
+.typeLabel {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg);
+}
+
+/* Project label */
+.projectLabel {
+  color: var(--fg);
+  font-size: var(--text-sm);
+}
+
+.projectNone {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Actions */
+.actionsCell {
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.actionBtn:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.actionBtnDanger:hover {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.actionBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Spinning animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Empty & error */
+.empty {
+  color: var(--muted);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.error {
+  color: var(--error);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  background-color: color-mix(in srgb, var(--error) 10%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.paginationButtons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.paginationBtn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+.paginationBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .table th:nth-child(5),
+  .table td:nth-child(5),
+  .table th:nth-child(6),
+  .table td:nth-child(6) {
+    display: none;
+  }
+}

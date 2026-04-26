@@ -1,0 +1,60 @@
+RulesSyncProjectById:
+  post:
+    operationId: syncProjectRules
+    tags:
+      - rules
+    summary: Sync assistant rules to config files
+    description: |
+      Sync assistant-rule memories to config files on disk.
+      For regular projects: requires `location` in request body (target directory).
+      For the "user" project: syncs to ~/.claude/ and ~/.codex/.
+    parameters:
+      - name: projectHandle
+        in: path
+        required: true
+        description: Project handle (e.g., 'khef' or 'user')
+        schema:
+          type: string
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              location:
+                type: string
+                description: Target directory path (required for non-user projects)
+    responses:
+      '200':
+        description: Sync results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: success
+                project:
+                  type: string
+                rulesCount:
+                  type: integer
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      agent:
+                        type: string
+                      target:
+                        type: string
+                      action:
+                        type: string
+                        enum:
+                          - created
+                          - updated
+                          - unchanged
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

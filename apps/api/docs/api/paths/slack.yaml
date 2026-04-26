@@ -1,0 +1,153 @@
+SlackIngest:
+  post:
+    operationId: ingestSlack
+    tags:
+      - slack
+    summary: Ingest Slack markdown content
+    description: >
+      Ingest Slack chat history (markdown format) into the slack-messages kvec collection.
+      Content is chunked at ### heading boundaries so each message gets its own embedding.
+      Skips re-ingestion if content hash is unchanged.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SlackIngestBody
+    responses:
+      '201':
+        description: Content ingested
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SlackIngestResult
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+
+SlackSearch:
+  get:
+    operationId: searchSlack
+    tags:
+      - slack
+    summary: Search ingested Slack content
+    description: >
+      Search across all ingested Slack messages.
+      Supports semantic vector search and keyword/full-text search modes.
+      Returns matching chunks with content, scores, and metadata.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        description: Search query (minimum 2 characters)
+        schema:
+          type: string
+          minLength: 2
+      - name: mode
+        in: query
+        description: Search mode (defaults to semantic)
+        schema:
+          type: string
+          enum: [semantic, keyword]
+          default: semantic
+      - name: channel
+        in: query
+        description: Filter by channel name
+        schema:
+          type: string
+      - name: workspace
+        in: query
+        description: Filter by workspace name
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 10
+          maximum: 50
+      - name: since
+        in: query
+        description: Only include documents updated after this date (ISO 8601)
+        schema:
+          type: string
+          format: date-time
+      - name: until
+        in: query
+        description: Only include documents updated before this date (ISO 8601)
+        schema:
+          type: string
+          format: date-time
+    responses:
+      '200':
+        description: Search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SlackSearchResult
+                total_count:
+                  type: integer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+
+SlackDocuments:
+  get:
+    operationId: listSlackDocuments
+    tags:
+      - slack
+    summary: List ingested Slack documents
+    description: >
+      Returns all ingested Slack documents with metadata, chunk counts, and timestamps.
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+          maximum: 200
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: Document list with pagination
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                documents:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SlackDocument
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SlackDocumentsById:
+  delete:
+    operationId: deleteSlackDocument
+    tags:
+      - slack
+    summary: Delete an ingested Slack document
+    description: >
+      Removes a document and all its chunks from the slack-messages collection.
+    parameters:
+      - name: documentId
+        in: path
+        required: true
+        description: The document_id used during ingestion
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Document deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

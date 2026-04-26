@@ -1,0 +1,161 @@
+.footer {
+  position: sticky;
+  bottom: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  z-index: 5;
+}
+
+/* Drag handle at top of panel */
+.dragHandle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 5px 0;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.dragHandle:hover .grip,
+.dragHandle:active .grip {
+  background: var(--muted);
+}
+
+.grip {
+  width: 32px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+/* Panel: flex column, height controlled by drag */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* Bottom bar with toggle icon */
+.bar {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.toggleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.toggleButton:hover {
+  color: var(--fg);
+}
+
+/* Route / View */
+.metaGrid {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.metaRow {
+  display: flex;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.metaLabel {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.metaValue {
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+}
+
+/* Side-by-side columns for source files + component tree */
+.columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.copyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+}
+
+.copyButton:hover {
+  color: var(--fg);
+}
+
+.codeBlock {
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono, monospace);
+  color: var(--fg);
+  overflow: auto;
+  white-space: pre;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 768px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}

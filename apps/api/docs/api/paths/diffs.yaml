@@ -1,0 +1,516 @@
+ProjectsByIdGitCommits:
+  get:
+    summary: Get commit history
+    description: Get recent commit history for a project's git repository
+    operationId: listProjectCommits
+    tags:
+      - Git
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: branch
+        in: query
+        schema:
+          type: string
+        description: Branch name (default current branch)
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+        description: Max commits to return
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+        description: Number of commits to skip (for pagination)
+      - name: path
+        in: query
+        schema:
+          type: string
+        description: Filter to specific file/directory
+    responses:
+      '200':
+        description: Commit history with pagination
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                branch:
+                  type: string
+                commits:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/GitCommit
+                pagination:
+                  type: object
+                  properties:
+                    limit:
+                      type: integer
+                    offset:
+                      type: integer
+                    has_more:
+                      type: boolean
+                  required:
+                    - limit
+                    - offset
+                    - has_more
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdGitDiff:
+  get:
+    summary: Get diff for a commit
+    description: Get unified diff for a specific commit or working tree changes
+    operationId: getProjectDiff
+    tags:
+      - Git
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: commit_sha
+        in: query
+        schema:
+          type: string
+        description: Commit SHA (omit for working tree)
+      - name: path
+        in: query
+        schema:
+          type: string
+        description: Filter to specific file/directory
+    responses:
+      '200':
+        description: Diff content and stats
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DiffResult
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdGitDiffWorking:
+  get:
+    summary: Get working tree diff
+    description: >-
+      Get diff for uncommitted changes with staged, unstaged, and combined views. Auto-cleans uncommitted diff records
+      and their comments when working tree is clean.
+    operationId: getProjectWorkingDiff
+    tags:
+      - Git
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: path
+        in: query
+        schema:
+          type: string
+        description: Filter to specific file/directory
+    responses:
+      '200':
+        description: Working tree diff
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/WorkingDiffResult
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdDiffs:
+  get:
+    summary: List diff records
+    description: List diff records with comments for a project
+    operationId: listProjectDiffs
+    tags:
+      - Diffs
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: branch
+        in: query
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: Diff records with pagination
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diffs:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: ../components/schemas.yaml#/DiffRecord
+                      - type: object
+                        properties:
+                          comment_count:
+                            type: integer
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+ProjectsByIdDiffsByCommitById:
+  get:
+    summary: Find diff by commit
+    description: Find diff record for a specific commit SHA
+    operationId: getDiffByCommit
+    tags:
+      - Diffs
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: sha
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: path
+        in: query
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Diff record with comments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diff:
+                  $ref: ../components/schemas.yaml#/DiffRecord
+                comments:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Comment
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdDiffsByRefById:
+  get:
+    summary: Find diff by ref
+    description: |
+      Find diff record by git ref. Use "working" for uncommitted changes,
+      or a commit SHA (short 7+ chars or full 40 chars).
+    operationId: getDiffByRef
+    tags:
+      - Diffs
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: ref
+        in: path
+        required: true
+        description: Git ref - "working" or commit SHA (short or full)
+        schema:
+          type: string
+      - name: path
+        in: query
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Diff record with comments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diff:
+                  $ref: ../components/schemas.yaml#/DiffRecord
+                comments:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Comment
+      '400':
+        description: SHA too short (must be at least 7 characters)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdDiffsByRefByIdComments:
+  post:
+    summary: Create comment on diff (with lazy diff record creation)
+    description: |
+      Create a comment on a diff, creating the diff record if it doesn't exist.
+      This is the preferred way to add comments as it creates diff records on-demand.
+      Use "working" for uncommitted changes or a full 40-character commit SHA.
+    operationId: createDiffCommentByRef
+    tags:
+      - Diffs
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: ref
+        in: path
+        required: true
+        description: Git ref - "working" or full 40-character commit SHA
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                maxLength: 5000
+              branch:
+                type: string
+                description: Required when creating a new diff record
+              path:
+                type: string
+                nullable: true
+                description: Filter diff to specific file path
+              author:
+                type: string
+                enum:
+                  - user
+                  - claude-code
+                  - codex-cli
+                default: user
+              anchor_path:
+                type: string
+                description: File path in the diff to anchor comment to
+              anchor_line:
+                type: integer
+                description: Line index in the diff to anchor comment to
+              anchor_text:
+                type: string
+                maxLength: 500
+                description: Exact text to anchor comment to
+              anchor_prefix:
+                type: string
+                maxLength: 128
+              anchor_suffix:
+                type: string
+                maxLength: 128
+              parent_comment_id:
+                type: string
+                format: uuid
+                description: Parent comment ID for replies
+    responses:
+      '201':
+        description: Comment created (and diff record if needed)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  $ref: ../components/schemas.yaml#/Comment
+                diff:
+                  $ref: ../components/schemas.yaml#/DiffRecord
+      '400':
+        description: |
+          Validation error:
+          - content is required
+          - branch is required when creating new diff record
+          - Full 40-character SHA required for commit comments
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+DiffsById:
+  get:
+    summary: Get diff with content
+    description: Get diff record with computed content from git and comments
+    operationId: getDiff
+    tags:
+      - Diffs
+    parameters:
+      - name: diffId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Diff with content and comments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diff:
+                  $ref: ../components/schemas.yaml#/DiffRecord
+                content:
+                  type: string
+                  description: Unified diff content (computed from git)
+                stats:
+                  $ref: ../components/schemas.yaml#/DiffStats
+                comments:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Comment
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+DiffsByIdComments:
+  get:
+    summary: List diff comments
+    description: Get comments for a diff record
+    operationId: listDiffComments
+    tags:
+      - Diffs
+    parameters:
+      - name: diffId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+          default: asc
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - orphaned
+            - resolved
+    responses:
+      '200':
+        description: Comments with pagination
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comments:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Comment
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    summary: Create diff comment
+    description: Add a comment to a diff record
+    operationId: createDiffComment
+    tags:
+      - Diffs
+    parameters:
+      - name: diffId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateCommentInput
+    responses:
+      '201':
+        description: Comment created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  $ref: ../components/schemas.yaml#/Comment
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+DiffsByIdCommentsById:
+  patch:
+    summary: Update diff comment
+    description: Update a comment on a diff
+    operationId: updateDiffComment
+    tags:
+      - Diffs
+    parameters:
+      - name: diffId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateCommentInput
+    responses:
+      '200':
+        description: Comment updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  $ref: ../components/schemas.yaml#/Comment
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    summary: Delete diff comment
+    description: Delete a comment from a diff
+    operationId: deleteDiffComment
+    tags:
+      - Diffs
+    parameters:
+      - name: diffId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Comment deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

@@ -1,0 +1,36 @@
+{
+  "name": "khef-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for khef - enables AI agents to store and retrieve project memories",
+  "type": "module",
+  "bin": {
+    "khef-mcp-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "dev": "tsx src/index.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "pg": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/pg": "^8.16.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  },
+  "overrides": {
+    "qs": "6.14.2"
+  }
+}

@@ -1,0 +1,430 @@
+AssistantsByIdMemories:
+  get:
+    operationId: listAssistantMemoryProjects
+    tags:
+      - assistant-memories
+    summary: List projects with memory directories
+    description: |
+      Lists project directories that contain memory files (`.md` files in a `memory/` subdirectory).
+      Auto-discovers files from disk and syncs to DB on each call.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of projects with memory directories
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projects:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      dir_name:
+                        type: string
+                        description: Encoded directory name
+                      decoded_path:
+                        type: string
+                        description: Decoded filesystem path
+                      file_count:
+                        type: integer
+                      total_size:
+                        type: integer
+                      last_modified:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      matched_project:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          name:
+                            type: string
+                          handle:
+                            type: string
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdMemoriesById:
+  get:
+    operationId: listAssistantMemoryFiles
+    tags:
+      - assistant-memories
+    summary: List memory files in a project
+    description: |
+      Lists all `.md` memory files in a project's `memory/` directory.
+      `projectDir` accepts raw dir name or khef project handle/name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        description: Encoded dir name or khef project handle/name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of memory files
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemoryFileSummary
+      '400':
+        description: Invalid project directory (path traversal)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+AssistantsByIdMemoriesByIdById:
+  get:
+    operationId: getAssistantMemoryFile
+    tags:
+      - assistant-memories
+    summary: Get current snapshot of a memory file
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Filename (must end in .md)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Memory file with current snapshot content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  $ref: ../components/schemas.yaml#/MemoryFile
+      '400':
+        description: Invalid filename
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  put:
+    operationId: replaceAssistantMemoryFile
+    tags:
+      - assistant-memories
+    summary: Write memory file to disk
+    description: |
+      Writes content to disk. If the file is new, creates snapshot 1.
+      If content changed, creates a new snapshot. Hash-based change detection
+      prevents duplicate snapshots.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+    responses:
+      '200':
+        description: File written and snapshot created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  $ref: ../components/schemas.yaml#/MemoryFile
+      '400':
+        description: Missing content or invalid filename
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteAssistantMemoryFile
+    tags:
+      - assistant-memories
+    summary: Delete memory file from disk
+    description: |
+      Deletes the file from disk but preserves DB record and snapshot history.
+      The file_path is set to NULL.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: File deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdMemoriesByIdByIdSnapshots:
+  get:
+    operationId: listAssistantMemorySnapshots
+    tags:
+      - assistant-memories
+    summary: List all snapshots of a memory file
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Snapshot list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshots:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemoryFileSnapshotSummary
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantMemorySnapshot
+    tags:
+      - assistant-memories
+    summary: Create a manual snapshot
+    description: Creates a new snapshot from the current file content on disk.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Snapshot created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot_number:
+                  type: integer
+                  description: The new snapshot number
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdMemoriesByIdByIdSnapshotsById:
+  get:
+    operationId: getAssistantMemorySnapshot
+    tags:
+      - assistant-memories
+    summary: Get specific snapshot of a memory file
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: snapshot
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Snapshot number (1-based)
+    responses:
+      '200':
+        description: Snapshot content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot:
+                  $ref: ../components/schemas.yaml#/MemoryFileSnapshot
+      '400':
+        description: Invalid snapshot number
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteAssistantMemorySnapshot
+    tags:
+      - assistant-memories
+    summary: Delete a specific snapshot
+    description: Cannot delete the only remaining snapshot.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: snapshot
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Snapshot number (1-based)
+    responses:
+      '204':
+        description: Snapshot deleted
+      '400':
+        description: Cannot delete only remaining snapshot
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdMemoriesByIdByIdSnapshotsByIdRestore:
+  post:
+    operationId: restoreAssistantMemorySnapshot
+    tags:
+      - assistant-memories
+    summary: Restore a snapshot
+    description: |
+      Writes the snapshot content to disk, creating a new snapshot in the process.
+      Returns both the restored snapshot number and the new snapshot number.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: snapshot
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Snapshot number to restore (1-based)
+    responses:
+      '200':
+        description: Snapshot restored
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restored_snapshot:
+                  type: integer
+                  description: The snapshot number that was restored
+                new_snapshot:
+                  type: integer
+                  description: The new current snapshot number
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

@@ -1,0 +1,347 @@
+AssistantsByIdAgents:
+  get:
+    operationId: listAssistantAgents
+    tags:
+      - assistants
+    summary: List user-level agents
+    description: List agents from the user's home directory (~/.claude/agents/).
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: compact
+        in: query
+        description: Return compact results (default true)
+        schema:
+          type: boolean
+    responses:
+      '200':
+        description: User-level agents
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agents:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Agent
+                agentsPath:
+                  type: string
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantAgent
+    tags:
+      - assistants
+    summary: Create user-level agent
+    description: Create a new agent in the user's home directory.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentCreate
+    responses:
+      '201':
+        description: Agent created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdAgentsById:
+  get:
+    operationId: getAssistantAgent
+    tags:
+      - assistants
+    summary: Get user-level agent
+    description: Get a single user-level agent by name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Agent found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateAssistantAgent
+    tags:
+      - assistants
+    summary: Update user-level agent
+    description: Update an existing user-level agent. Can modify any field including name (renames file).
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Current agent name
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentUpdate
+    responses:
+      '200':
+        description: Agent updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteAssistantAgent
+    tags:
+      - assistants
+    summary: Delete user-level agent
+    description: Delete a user-level agent by name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Agent deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdAgentsProjectById:
+  get:
+    operationId: listAssistantProjectAgents
+    tags:
+      - assistants
+    summary: List project-level agents
+    description: List agents from the project's .claude/agents/ directory.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: compact
+        in: query
+        description: Return compact results (default true)
+        schema:
+          type: boolean
+    responses:
+      '200':
+        description: Project-level agents
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agents:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Agent
+                agentsPath:
+                  type: string
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantProjectAgent
+    tags:
+      - assistants
+    summary: Create project-level agent
+    description: Create a new agent in the project's .claude/agents/ directory.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - $ref: ../components/parameters.yaml#/ProjectId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentCreate
+    responses:
+      '201':
+        description: Agent created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdAgentsProjectByIdById:
+  get:
+    operationId: getAssistantProjectAgent
+    tags:
+      - assistants
+    summary: Get project-level agent
+    description: Get a single project-level agent by name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: name
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Agent found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateAssistantProjectAgent
+    tags:
+      - assistants
+    summary: Update project-level agent
+    description: Update an existing project-level agent.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: name
+        in: path
+        required: true
+        description: Current agent name
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentUpdate
+    responses:
+      '200':
+        description: Agent updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent:
+                  $ref: ../components/schemas.yaml#/Agent
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteAssistantProjectAgent
+    tags:
+      - assistants
+    summary: Delete project-level agent
+    description: Delete a project-level agent by name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: name
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Agent deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

@@ -1,0 +1,63 @@
+ProjectId:
+  name: projectId
+  in: path
+  required: true
+  description: Project handle (e.g., 'khef'), name, or UUID
+  schema:
+    type: string
+  example: khef
+ProjectIdPath:
+  name: projectId
+  in: path
+  required: true
+  description: Project UUID (UUID-only path parameter)
+  schema:
+    type: string
+    format: uuid
+  example: 019b678e-207f-7c8f-87ba-3654f4e1b68b
+MemoryId:
+  name: memoryId
+  in: path
+  required: true
+  description: Memory UUID (UUID-only path parameter)
+  schema:
+    type: string
+    format: uuid
+  example: 019ba4e7-fc0e-7a9d-ab22-e8b75654162f
+RelationId:
+  name: relationId
+  in: path
+  required: true
+  description: Relation UUID
+  schema:
+    type: string
+    format: uuid
+CommentId:
+  name: commentId
+  in: path
+  required: true
+  description: Comment UUID
+  schema:
+    type: string
+    format: uuid
+ConfigId:
+  name: id
+  in: path
+  required: true
+  description: Config UUID
+  schema:
+    type: string
+    format: uuid
+CompactMutation:
+  name: compact
+  in: query
+  required: false
+  description: >-
+    Return a minimal response with only id, handle, status, and timestamps. Defaults to true. Set to false for full
+    memory response including content, type, and tags.
+  schema:
+    type: string
+    enum:
+      - 'true'
+      - 'false'
+    default: 'true'

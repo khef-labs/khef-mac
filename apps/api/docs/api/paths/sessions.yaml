@@ -1,0 +1,510 @@
+AssistantsByIdSessions:
+  get:
+    operationId: listSessionProjects
+    tags:
+      - sessions
+    summary: List session project directories
+    description: |
+      List all session project directories with stats (session count, total size, last modified).
+      Matches directories to khef projects via path comparison when possible.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Session project directories
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projects:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SessionProject
+                total_size:
+                  type: integer
+                  description: Total bytes across all session directories
+                total_sessions:
+                  type: integer
+                  description: Total session file count
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsById:
+  get:
+    operationId: listSessionFiles
+    tags:
+      - sessions
+    summary: List sessions in a project directory
+    description: |
+      List session files in a specific project directory with metadata and summary info.
+      The projectDir parameter accepts a khef project handle, name, or raw directory name.
+      Supports sorting by date or size, pagination, and content search across JSONL files.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        description: >-
+          Project identifier: a khef project handle (e.g., "khef"), project name, or raw directory name (e.g.,
+          "-Users-roger-projects-khef")
+        schema:
+          type: string
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+            - date
+            - size
+          default: date
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+          default: desc
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      - name: q
+        in: query
+        description: Substring search across session JSONL file content. Returns only matching sessions with search_excerpt.
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of sessions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SessionFile
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsByIdById:
+  get:
+    operationId: getSessionFile
+    tags:
+      - sessions
+    summary: Read session transcript
+    description: |
+      Read a session JSONL file and return parsed entries with pagination.
+      Entries include user messages, assistant messages, summaries, and file history snapshots.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        description: 'Project identifier: a khef project handle, name, or raw directory name'
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        description: Session UUID or agent-hex identifier
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: Session transcript
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    size:
+                      type: integer
+                    entry_count:
+                      type: integer
+                    entries:
+                      type: array
+                      items:
+                        $ref: ../components/schemas.yaml#/SessionEntry
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteSessionFile
+    tags:
+      - sessions
+    summary: Delete session
+    description: Delete a session JSONL file and its companion directory (subagents, tool results).
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: projectDir
+        in: path
+        required: true
+        description: 'Project identifier: a khef project handle, name, or raw directory name'
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Session deleted
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsBulkDelete:
+  post:
+    operationId: bulkDeleteSessions
+    tags:
+      - sessions
+    summary: Bulk delete sessions
+    description: |
+      Delete multiple sessions matching filter criteria.
+      At least one filter (projectDir, before, sessionIds) is required.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              projectDir:
+                type: string
+                description: Project identifier (handle, name, or raw directory name). Delete sessions in this project directory.
+              before:
+                type: string
+                format: date-time
+                description: Delete sessions modified before this date
+              sessionIds:
+                type: array
+                items:
+                  type: string
+                description: Delete specific sessions by ID
+    responses:
+      '200':
+        description: Bulk delete result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: integer
+                  description: Number of sessions deleted
+                freed_bytes:
+                  type: integer
+                  description: Total bytes freed
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsSyncEmbeddings:
+  post:
+    operationId: syncSessionEmbeddings
+    tags:
+      - sessions
+    summary: Sync session embeddings
+    description: |
+      Sync session transcripts to vector database for semantic search.
+      Extracts clean conversation content (prompts, responses, thinking) and creates embeddings.
+      Uses file size to detect changes - only re-embeds if session file grew.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: projectDir
+        in: query
+        description: Sync only sessions in this project directory (handle, name, or raw dir name)
+        schema:
+          type: string
+      - name: force
+        in: query
+        description: Force re-embedding even if file size unchanged
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Sync result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                synced:
+                  type: integer
+                  description: Number of sessions synced
+                skipped:
+                  type: integer
+                  description: Number of sessions skipped (unchanged or too small)
+                errors:
+                  type: integer
+                  description: Number of errors encountered
+                chunks_created:
+                  type: integer
+                  description: Total embedding chunks created
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsSyncEmbeddingsStatus:
+  get:
+    operationId: getSessionEmbeddingsStatus
+    tags:
+      - sessions
+    summary: Get session embedding status
+    description: Get status of session embedding sync including count of embedded sessions and total chunks.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: projectDir
+        in: query
+        description: Get status for specific project directory only
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Embedding status
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                embedded_sessions:
+                  type: integer
+                  description: Number of sessions with embeddings
+                total_chunks:
+                  type: integer
+                  description: Total embedding chunks across all sessions
+                last_sync:
+                  type: string
+                  format: date-time
+                  description: Timestamp of last sync
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsSearch:
+  get:
+    operationId: searchSessions
+    tags:
+      - sessions
+    summary: Search sessions
+    description: |
+      Search session transcripts using keyword or semantic search.
+      Returns matching chunks with session context (session_id, project, summary).
+      Use mode=keyword for exact text matching, mode=semantic (default) for vector similarity.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: q
+        in: query
+        required: true
+        description: Search query (natural language for semantic, exact text for keyword)
+        schema:
+          type: string
+      - name: mode
+        in: query
+        description: Search mode
+        schema:
+          type: string
+          enum:
+            - keyword
+            - semantic
+          default: semantic
+      - name: projectDir
+        in: query
+        description: Filter by project directory (handle, name, or raw dir name)
+        schema:
+          type: string
+      - name: sessionId
+        in: query
+        description: Filter to a specific session UUID
+        schema:
+          type: string
+      - name: excludeSessionId
+        in: query
+        description: Exclude results from this session UUID (e.g., exclude your own current session)
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Maximum number of results
+        schema:
+          type: integer
+          default: 10
+      - name: includeThinking
+        in: query
+        description: Include thinking blocks in results (default true)
+        schema:
+          type: boolean
+          default: true
+      - name: includeToolCalls
+        in: query
+        description: Include tool call blocks in results (default false)
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      session_id:
+                        type: string
+                        description: Session UUID
+                      project_dir:
+                        type: string
+                        description: Project directory name
+                      assistant_handle:
+                        type: string
+                        description: Assistant handle
+                      chunk_index:
+                        type: integer
+                        description: Index of matched chunk within session
+                      chunk_count:
+                        type: integer
+                        description: Total chunks in session
+                      summary:
+                        type: string
+                        description: Session summary if available
+                      score:
+                        type: number
+                        description: Similarity score (0-1)
+                      content:
+                        type: string
+                        description: Matched content chunk
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdSessionsLookupById:
+  get:
+    operationId: lookupSessionById
+    tags:
+      - sessions
+    summary: Lookup session by ID
+    description: |
+      Find a session by its UUID from the embeddings database.
+      Returns session metadata including project_dir for further lookups.
+      Only finds sessions that have been synced to the vector DB.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: sessionId
+        in: path
+        required: true
+        description: Session UUID to look up
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Session metadata
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id:
+                  type: string
+                  description: Session UUID
+                project_dir:
+                  type: string
+                  description: Project directory name
+                assistant_handle:
+                  type: string
+                  description: Assistant handle
+                file_size:
+                  type: integer
+                  description: File size in bytes
+                chunk_count:
+                  type: integer
+                  description: Number of embedded chunks
+                embedded_at:
+                  type: string
+                  format: date-time
+                  description: When the session was last embedded
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

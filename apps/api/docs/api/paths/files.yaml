@@ -1,0 +1,138 @@
+ProjectsByIdFiles:
+  post:
+    operationId: uploadProjectFile
+    tags:
+      - files
+    summary: Upload a file
+    description: Upload a file to a project. Supports images, PDFs, CSVs, and Office documents.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              file:
+                type: string
+                format: binary
+    responses:
+      '200':
+        description: File uploaded
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/FileUploadResponse
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  get:
+    operationId: listProjectFiles
+    tags:
+      - files
+    summary: List project files
+    description: List all files uploaded to a project.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    responses:
+      '200':
+        description: List of files
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/FileInfo
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdFilesById:
+  delete:
+    operationId: deleteProjectFile
+    tags:
+      - files
+    summary: Delete a file
+    description: Delete a file from the project and disk.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: fileId
+        in: path
+        required: true
+        description: File UUID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: File deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+FilesById:
+  get:
+    operationId: getFileById
+    tags:
+      - files
+    summary: Serve a file
+    description: Stream a file by ID. Returns the file with its original content type and immutable cache headers.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: File UUID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: File content
+        content:
+          '*/*':
+            schema:
+              type: string
+              format: binary
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+FilesMigrate:
+  post:
+    operationId: migrateFiles
+    tags:
+      - files
+    summary: Migrate files to new storage path
+    description: Move all uploaded files to a new storage directory and update database paths.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              targetPath:
+                type: string
+                description: New storage directory path
+            required:
+              - targetPath
+    responses:
+      '200':
+        description: Migration results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                moved:
+                  type: integer
+                skipped:
+                  type: integer
+                failed:
+                  type: integer
+                errors:
+                  type: array
+                  items:
+                    type: string
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

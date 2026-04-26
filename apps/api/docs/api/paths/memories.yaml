@@ -1,0 +1,1687 @@
+ProjectsByIdMemories:
+  get:
+    operationId: listProjectMemories
+    tags:
+      - memories
+    summary: List memories for a project
+    description: Retrieve memories for a specific project with optional filters, full-text search, and pagination
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - name: type
+        in: query
+        description: Filter by memory type
+        schema:
+          $ref: ../components/schemas.yaml#/MemoryType
+      - name: status
+        in: query
+        description: Filter by status value. Requires 'type' to be provided.
+        schema:
+          type: string
+      - name: tag
+        in: query
+        description: Filter by tag name
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Full-text search query. Searches in memory content and chunks using PostgreSQL tsvector.
+        schema:
+          type: string
+        example: redis caching
+      - name: search_mode
+        in: query
+        description: Search mode. 'all' searches content and tags; 'content' searches only content; 'tags' searches only tags
+        schema:
+          type: string
+          enum:
+            - all
+            - content
+            - tags
+          default: all
+      - name: sort
+        in: query
+        description: Sort field (when q is present, defaults to relevance)
+        schema:
+          type: string
+          enum:
+            - relevance
+            - updated_at
+            - created_at
+            - title
+      - name: order
+        in: query
+        description: Sort order (ignored for relevance)
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+      - name: compact
+        in: query
+        description: Return compact results with content excerpts (default true)
+        schema:
+          type: boolean
+      - name: handle
+        in: query
+        description: Filter by exact memory handle
+        schema:
+          type: string
+      - name: name
+        in: query
+        description: Filter by exact memory title
+        schema:
+          type: string
+      - name: pinned
+        in: query
+        description: >-
+          Filter by pinned status. true returns only pinned memories, false returns only unpinned. When omitted, returns
+          all memories with pinned sorted first.
+        schema:
+          type: boolean
+      - name: limit
+        in: query
+        description: Number of items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number of items to skip (for pagination)
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+    responses:
+      '200':
+        description: Paginated list of memories
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - memories
+                - pagination
+              properties:
+                memories:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Memory
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  post:
+    operationId: createProjectMemory
+    tags:
+      - memories
+    summary: Create a new memory
+    description: >-
+      Create a new memory in the specified project. Content >2000 chars is auto-chunked. Returns compact response by
+      default; use `?compact=false` for full response.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/CompactMutation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateMemoryInput
+    responses:
+      '201':
+        description: Memory created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  oneOf:
+                    - $ref: ../components/schemas.yaml#/CompactMutationMemory
+                    - $ref: ../components/schemas.yaml#/Memory
+      '400':
+        description: Invalid input
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdMemoriesById:
+  get:
+    operationId: getProjectMemory
+    tags:
+      - memories
+    summary: Get memory by UUID
+    description: Retrieve a single memory by UUID with its tags and chunks (if chunked)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: Memory found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/Memory
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                    - redis
+                    - caching
+                chunks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      chunk_index:
+                        type: integer
+                      content:
+                        type: string
+      '404':
+        description: Memory not found in this project
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  put:
+    operationId: replaceProjectMemory
+    tags:
+      - memories
+    summary: Replace memory
+    description: Full memory replacement. Requires title, content, and type. Use PATCH for partial updates.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/FullMemoryInput
+    responses:
+      '200':
+        description: Memory updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/Memory
+      '404':
+        description: Memory not found in this project
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  patch:
+    operationId: updateProjectMemory
+    tags:
+      - memories
+    summary: Update memory
+    description: Partial update of memory fields. Returns compact response by default; use `?compact=false` for full response.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - $ref: ../components/parameters.yaml#/CompactMutation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateMemoryInput
+    responses:
+      '200':
+        description: Memory updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  oneOf:
+                    - $ref: ../components/schemas.yaml#/CompactMutationMemory
+                    - $ref: ../components/schemas.yaml#/Memory
+      '404':
+        description: Memory not found in this project
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteProjectMemory
+    tags:
+      - memories
+    summary: Delete memory
+    description: Delete a memory and all associated chunks, tags, and relations (cascade delete)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '204':
+        description: Memory deleted successfully
+      '404':
+        description: Memory not found in this project
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdMemoriesByIdSuggestions:
+  get:
+    operationId: getMemorySuggestions
+    tags:
+      - memories
+    summary: Suggest related memories
+    description: Suggest related memories based on the source memory's content and tags, excluding already-related memories.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of suggestions to return (default 10)
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+    responses:
+      '200':
+        description: Suggested related memories
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source_memory_id:
+                  type: string
+                  format: uuid
+                suggestions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      memory:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          project_id:
+                            type: string
+                            format: uuid
+                          handle:
+                            type: string
+                          title:
+                            type: string
+                          type:
+                            $ref: ../components/schemas.yaml#/MemoryType
+                          status:
+                            type: string
+                          created_at:
+                            type: string
+                            format: date-time
+                          updated_at:
+                            type: string
+                            format: date-time
+                          content_excerpt:
+                            type: string
+                      suggested_relation_type:
+                        $ref: ../components/schemas.yaml#/RelationType
+                      score:
+                        type: number
+                        nullable: true
+      '404':
+        description: Memory not found in this project
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdMemoriesByIdStatus:
+  get:
+    operationId: getMemoryStatus
+    tags:
+      - memories
+    summary: Get memory status
+    description: Get the current status of a memory
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: Memory status retrieved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                  example: in_progress
+                updated_at:
+                  type: string
+                  format: date-time
+      '404':
+        description: Memory not found or no status set
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  put:
+    operationId: replaceMemoryStatus
+    tags:
+      - memories
+    summary: Set or update memory status
+    description: >-
+      Set or update the status of a memory. Status values are type-specific (e.g., todo uses backlog/in_progress/done,
+      decision uses proposed/accepted/rejected).
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status:
+                type: string
+                description: Status value (must be valid for the memory's type)
+                example: in_progress
+            required:
+              - status
+    responses:
+      '200':
+        description: Status updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id:
+                  type: string
+                  format: uuid
+                status:
+                  type: string
+                updated_at:
+                  type: string
+                  format: date-time
+      '400':
+        description: Invalid status for memory type
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdMemoriesByIdAppend:
+  post:
+    operationId: appendToMemory
+    tags:
+      - memories
+    summary: Append content to a memory
+    description: >-
+      Append content to an existing memory without replacing it. Content is automatically re-chunked if needed. Returns
+      compact response by default; use `?compact=false` for full response.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - $ref: ../components/parameters.yaml#/CompactMutation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              content:
+                type: string
+                description: Content to append
+              separator:
+                type: string
+                description: Separator between existing and new content (default newline+newline)
+                default: |+
+
+
+            required:
+              - content
+    responses:
+      '200':
+        description: Content appended
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  oneOf:
+                    - $ref: ../components/schemas.yaml#/CompactMutationMemory
+                    - $ref: ../components/schemas.yaml#/Memory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdMemoriesExport:
+  get:
+    operationId: exportProjectMemories
+    tags:
+      - memories
+    summary: Bulk export memories as zip
+    description: >-
+      Export project memories as a zip archive. Files are formatted according to the `format` parameter. Supports
+      filtering by type, tag, and status.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: type
+        in: query
+        description: >-
+          Comma-separated memory type names to include (e.g., 'commands,context,pattern'). Supports 'knowledge' to
+          expand to all knowledge subtypes.
+        schema:
+          type: string
+        example: commands,context,pattern
+      - name: tag
+        in: query
+        description: Filter by tag name
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by status value
+        schema:
+          type: string
+      - name: format
+        in: query
+        description: >-
+          File format in the zip archive. `seed` includes YAML frontmatter for round-trip seeding. `markdown` is raw
+          content. `docx` produces Word documents.
+        schema:
+          type: string
+          enum:
+            - seed
+            - markdown
+            - docx
+          default: seed
+    responses:
+      '200':
+        description: Zip archive of exported files
+        content:
+          application/zip:
+            schema:
+              type: string
+              format: binary
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+Memories:
+  get:
+    operationId: searchMemories
+    tags:
+      - memories
+    summary: List memories across all projects
+    description: >-
+      Cross-project list with optional filters and full-text search. Supports filtering by project using one of:
+      project_id (UUID), project_handle, or project_name.
+    parameters:
+      - name: project_id
+        in: query
+        description: Optional project UUID. If provided, results are restricted to this project.
+        schema:
+          type: string
+          format: uuid
+      - name: project_handle
+        in: query
+        description: Optional exact project handle (kebab-case). Ignored if project_id is provided.
+        schema:
+          type: string
+      - name: project_name
+        in: query
+        description: Optional exact project name match (case-insensitive). Ignored if project_id is provided.
+        schema:
+          type: string
+      - name: type
+        in: query
+        description: Filter by memory type
+        schema:
+          $ref: ../components/schemas.yaml#/MemoryType
+      - name: status
+        in: query
+        description: Filter by status value. Requires 'type' to be provided.
+        schema:
+          type: string
+      - name: tag
+        in: query
+        description: Filter by tag name
+        schema:
+          type: string
+      - name: handle
+        in: query
+        description: Filter by exact memory handle
+        schema:
+          type: string
+      - name: name
+        in: query
+        description: Filter by exact memory title
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Full-text search query. Searches in memory content/chunks and/or tags depending on search_mode.
+        schema:
+          type: string
+      - name: search_mode
+        in: query
+        description: Search mode. 'all' searches content and tags; 'content' searches only content; 'tags' searches only tags
+        schema:
+          type: string
+          enum:
+            - all
+            - content
+            - tags
+          default: all
+      - name: limit
+        in: query
+        description: Number of items per page
+        schema:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+      - name: offset
+        in: query
+        description: Number of items to skip (for pagination)
+        schema:
+          type: integer
+          default: 0
+          minimum: 0
+      - name: pinned
+        in: query
+        description: >-
+          Filter by pinned status. true returns only pinned memories, false returns only unpinned. When omitted, returns
+          all memories with pinned sorted first.
+        schema:
+          type: boolean
+    responses:
+      '200':
+        description: Paginated list of memories across projects
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - memories
+                - pagination
+              properties:
+                memories:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemoryWithProject
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+MemoriesById:
+  get:
+    operationId: getMemory
+    tags:
+      - memories
+    summary: Get memory by UUID (global)
+    description: Retrieve a single memory by UUID including its project handle/name
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: Memory found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/MemoryGlobalSingle
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdRelations:
+  get:
+    operationId: listMemoryRelations
+    tags:
+      - relations
+    summary: Get relations for a memory (flat format)
+    description: |
+      Retrieve all relations for a specific memory in flat format.
+      The `relation_type` is contextual: forward when this memory is the source, inverse when it's the target.
+      The `relation_label` provides a human-readable label for the contextual direction.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: Relations found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relations:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/FlatRelation
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+MemoriesByIdRelationsGraph:
+  get:
+    operationId: getMemoryGraph
+    tags:
+      - relations
+    summary: Get memory relation graph (via memory path)
+    description: >-
+      Traverse the memory relation graph bidirectionally starting from a specific memory. Same behavior as
+      /api/relations/memory/{memoryId}/graph.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: depth
+        in: query
+        description: Maximum traversal depth
+        schema:
+          type: integer
+          default: 2
+          minimum: 1
+      - name: compact
+        in: query
+        description: Return compact nodes (default true)
+        schema:
+          type: boolean
+      - name: max_nodes
+        in: query
+        description: Maximum number of nodes to return (default 200)
+        schema:
+          type: integer
+          minimum: 1
+      - name: max_edges
+        in: query
+        description: Maximum number of edges to return (default 400)
+        schema:
+          type: integer
+          minimum: 1
+      - name: format
+        in: query
+        description: "Output format: json (default) for structured data, text for agent-readable summary"
+        schema:
+          type: string
+          enum: [json, text]
+          default: json
+    responses:
+      '200':
+        description: Graph traversal complete
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodes:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: ../components/schemas.yaml#/Memory
+                      - type: object
+                        properties:
+                          depth:
+                            type: integer
+                          parent_type:
+                            type: string
+                            description: Parent type name if applicable
+                edges:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemoryRelation
+                truncated:
+                  type: object
+                  properties:
+                    nodes:
+                      type: boolean
+                    edges:
+                      type: boolean
+                max_depth:
+                  type: integer
+                  description: Maximum depth reached in the traversal
+          text/plain:
+            schema:
+              type: string
+              description: Agent-friendly text summary (when format=text)
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+MemoriesByIdExport:
+  get:
+    operationId: exportMemory
+    tags:
+      - memories
+    summary: Export a memory in a specified format
+    description: >
+      Export a memory as Markdown, Slack mrkdwn, or DOCX. Returns the memory content only (no metadata).
+
+      - **markdown**: Returns content as `text/markdown` with attachment disposition
+
+      - **slack**: Returns content converted to Slack mrkdwn as `text/plain` (for clipboard)
+
+      - **docx**: Returns a Word document binary as
+      `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: format
+        in: query
+        required: true
+        description: Export format
+        schema:
+          type: string
+          enum:
+            - markdown
+            - docx
+            - slack
+            - csv
+            - xlsx
+    responses:
+      '200':
+        description: Exported content
+        content:
+          text/markdown:
+            schema:
+              type: string
+              description: Markdown content (when format=markdown)
+          text/plain:
+            schema:
+              type: string
+              description: Slack mrkdwn content (when format=slack)
+          text/csv:
+            schema:
+              type: string
+              description: Raw CSV data (when format=csv)
+          application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+            schema:
+              type: string
+              format: binary
+              description: DOCX binary (when format=docx)
+          application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+            schema:
+              type: string
+              format: binary
+              description: XLSX binary (when format=xlsx)
+      '400':
+        description: Invalid format or UUID
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdSaveToDrive:
+  post:
+    operationId: saveMemoryToDrive
+    tags:
+      - memories
+    summary: Save memory to Google Drive sync folder
+    description: |
+      Exports a memory as Markdown (default) or DOCX and writes it to the configured
+      `drive.syncFolder` setting path. The filename is derived from the memory handle or title
+      (kebab-case). Overwrites existing files (idempotent).
+
+      Requires the `drive.syncFolder` setting to be configured via `PATCH /api/settings`.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: format
+        in: query
+        required: false
+        description: File format to save (defaults to markdown)
+        schema:
+          type: string
+          enum:
+            - markdown
+            - docx
+          default: markdown
+      - name: subfolder
+        in: query
+        required: false
+        description: Optional subfolder within the drive folder (e.g., project handle for organization)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: File saved successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                  description: Full path to the saved file
+                filename:
+                  type: string
+                  description: Name of the saved file
+      '400':
+        description: Setting not configured, folder not found, or invalid input
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '500':
+        description: Write failure
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdOutline:
+  get:
+    operationId: getMemoryOutline
+    tags:
+      - memories
+    summary: Get memory section outline
+    description: |
+      Returns the markdown section structure of a memory with direct content for each
+      section by default. Each section includes the heading text, level (1-6),
+      character positions (start/end), and the text content directly under that heading.
+      Set `include_content=false` for structure only (headings and positions without text).
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: include_content
+        in: query
+        description: Include direct text content for each section (default true). Set false for structure only.
+        schema:
+          type: boolean
+          default: true
+    responses:
+      '200':
+        description: Memory outline with section structure
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  description: Memory title
+                sections:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      heading:
+                        type: string
+                        description: Heading text (without
+                      level:
+                        type: integer
+                        minimum: 1
+                        maximum: 6
+                        description: Heading level (1 for h1, 2 for h2, etc.)
+                      start:
+                        type: integer
+                        description: Character offset where section starts
+                      end:
+                        type: integer
+                        description: Character offset where section ends
+                      content:
+                        type: string
+                        description: Direct text content under this heading (excluded when include_content=false)
+                total_length:
+                  type: integer
+                  description: Total length of memory content in characters
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+MemoriesByIdSectionsById:
+  get:
+    operationId: getMemorySection
+    tags:
+      - memories
+    summary: Get a specific section by heading
+    description: |
+      Fetch a specific section of a memory by its heading text. The heading match
+      is case-insensitive. By default, includes all nested subsections. Set
+      `include_subsections=false` to get only the direct content under the heading.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: heading
+        in: path
+        required: true
+        description: Exact heading text (without
+        schema:
+          type: string
+        example: Technical%20Design
+      - name: include_subsections
+        in: query
+        schema:
+          type: boolean
+          default: true
+        description: Whether to include nested subsections in the response
+    responses:
+      '200':
+        description: Section content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id:
+                  type: string
+                  format: uuid
+                heading:
+                  type: string
+                  description: Heading text as found in the document
+                level:
+                  type: integer
+                  minimum: 1
+                  maximum: 6
+                  description: Heading level
+                content:
+                  type: string
+                  description: Section content including the heading line
+                start:
+                  type: integer
+                  description: Character offset where section starts
+                end:
+                  type: integer
+                  description: Character offset where section ends
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        description: Memory or section not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  patch:
+    operationId: updateMemorySection
+    tags:
+      - memories
+    summary: Update a specific section
+    description: |
+      Update a specific section of a memory without affecting other sections.
+      The heading line is preserved; only the content under it is replaced.
+      Content is automatically re-chunked if the memory grows large.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: heading
+        in: path
+        required: true
+        description: Exact heading text (without
+        schema:
+          type: string
+        example: Technical%20Design
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              content:
+                type: string
+                description: New content for the section (heading will be preserved)
+              new_heading:
+                type: string
+                description: Optional new heading text to replace the existing heading
+              index:
+                type: integer
+                description: Which occurrence to target if heading appears multiple times (0-based, default 0)
+              replace_subsections:
+                type: boolean
+                description: >
+                  If true, replace the entire section including all child subsections.
+                  Default false (only replaces direct content, preserving subsections).
+                default: false
+            required:
+              - content
+    responses:
+      '200':
+        description: Section updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/CompactMutationMemory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        description: Memory or section not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdComments:
+  get:
+    operationId: listMemoryComments
+    tags:
+      - comments
+    summary: List comments for a memory
+    description: |
+      Returns paginated comments for a memory. Supports ordering by created_at
+      and filtering by status (active, orphaned, resolved).
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+        description: Number of results per page
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+        description: Number of results to skip
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+          default: asc
+        description: Sort order by created_at
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - orphaned
+            - resolved
+        description: Filter by comment status
+    responses:
+      '200':
+        description: Paginated list of comments
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comments:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Comment
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteAllMemoryComments
+    tags:
+      - comments
+    summary: Delete comments for a memory
+    description: |
+      Delete comments for a memory. Provide status to delete a subset, or set confirm=true to delete all.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - orphaned
+            - resolved
+        description: Delete comments by status
+      - name: confirm
+        in: query
+        schema:
+          type: string
+          enum:
+            - 'true'
+        description: Required to delete all comments when status is omitted
+    responses:
+      '200':
+        description: Comment deletion result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted_count:
+                  type: integer
+      '400':
+        description: Invalid input (missing status without confirm, invalid status)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  post:
+    operationId: createMemoryComment
+    tags:
+      - comments
+    summary: Create a comment on a memory
+    description: |
+      Create a new comment. Content is required. Optionally anchor the comment
+      to specific text in the memory content using anchor_text with prefix/suffix
+      for disambiguation when the same text appears multiple times.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateCommentInput
+    responses:
+      '201':
+        description: Comment created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  $ref: ../components/schemas.yaml#/Comment
+      '400':
+        description: Invalid input (missing or empty content, content too long)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdCommentsById:
+  patch:
+    operationId: updateMemoryComment
+    tags:
+      - comments
+    summary: Update a comment
+    description: |
+      Partially update a comment. At least one field must be provided.
+      Can update content, anchor fields, or status.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - $ref: ../components/parameters.yaml#/CommentId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateCommentInput
+    responses:
+      '200':
+        description: Comment updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  $ref: ../components/schemas.yaml#/Comment
+      '400':
+        description: Invalid input (empty update body, invalid status)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Comment not found (or belongs to different memory)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteMemoryComment
+    tags:
+      - comments
+    summary: Delete a comment
+    description: Permanently delete a comment from a memory.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - $ref: ../components/parameters.yaml#/CommentId
+    responses:
+      '204':
+        description: Comment deleted
+      '404':
+        description: Comment not found (or belongs to different memory)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdSnapshots:
+  get:
+    operationId: listMemorySnapshots
+    tags:
+      - snapshots
+    summary: List memory snapshots
+    description: |
+      List all content snapshots for a memory. Snapshots are immutable captures
+      of memory content created manually via save button or automatically during
+      external sync. Each snapshot includes preserved comments from that point in time.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: List of snapshots
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id:
+                  type: string
+                  format: uuid
+                current_snapshot:
+                  type: integer
+                  description: The currently active snapshot number
+                snapshots:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SnapshotListItem
+                total:
+                  type: integer
+      '400':
+        description: Invalid memoryId (not a UUID)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdSnapshotsById:
+  get:
+    operationId: getMemorySnapshot
+    tags:
+      - snapshots
+    summary: Get snapshot content
+    description: |
+      Retrieve the content and comments of a specific snapshot. For the current
+      snapshot, returns live content and comments. For historical snapshots,
+      returns the preserved content and comments from when the snapshot was created.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Snapshot number (1-based)
+    responses:
+      '200':
+        description: Snapshot content
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SnapshotDetail
+      '400':
+        description: Invalid memoryId or snapshotNumber
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or snapshot not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteMemorySnapshot
+    tags:
+      - snapshots
+    summary: Delete a snapshot
+    description: |
+      Delete a snapshot from history. If deleting the current snapshot,
+      content is restored from the previous snapshot. Cannot delete the
+      only remaining snapshot.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+        description: Snapshot number (1-based)
+    responses:
+      '200':
+        description: Snapshot deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted_snapshot:
+                  type: integer
+                current_snapshot:
+                  type: integer
+                  description: Current snapshot number (after deletion)
+                new_current_snapshot:
+                  type: integer
+                  description: New current snapshot (if current was deleted)
+                message:
+                  type: string
+      '400':
+        description: Cannot delete the only snapshot
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or snapshot not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdSnapshotsByIdRestore:
+  post:
+    operationId: restoreMemorySnapshot
+    tags:
+      - snapshots
+    summary: Restore a historical snapshot as current
+    description: |
+      Restore a historical snapshot's content as the current memory content.
+      Creates a safety snapshot of the current state (source: pre-restore) before
+      restoring. Comments are left untouched. Chunks are regenerated from the
+      restored content. Snapshot numbering moves forward (never rewinds).
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '200':
+        description: Snapshot restored successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                restored_from_snapshot:
+                  type: integer
+                  description: The snapshot number that was restored
+                safety_snapshot:
+                  type: integer
+                  description: Snapshot number where previous state was saved
+                new_current_snapshot:
+                  type: integer
+                  description: New current snapshot number
+                message:
+                  type: string
+      '400':
+        description: Snapshot is already current or invalid
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or snapshot not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdSnapshotsDiff:
+  get:
+    operationId: diffMemorySnapshots
+    tags:
+      - snapshots
+    summary: Compare two memory snapshots
+    description: |
+      Returns a structured line-level diff between any two snapshots.
+      Use snapshot numbers or "current" to reference the live content.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Source snapshot number or "current"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Target snapshot number or "current"
+      - name: context
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 3
+        description: |
+          Number of unchanged lines to show around each change (like git diff -U).
+          Defaults to 3. Large unchanged sections are replaced with skip markers
+          showing the number of omitted lines.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 20
+        description: |
+          Max number of change chunks to return. Default 20.
+          Set to 0 to return all changes (full diff).
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        description: Number of change chunks to skip. Use with limit for pagination.
+    responses:
+      '200':
+        description: Structured diff between the two snapshots with pagination
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SnapshotDiffResponse
+      '400':
+        description: Invalid or missing parameters
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or snapshot not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdMetadata:
+  get:
+    operationId: listMemoryMetadata
+    tags:
+      - metadata
+    summary: List metadata for a memory
+    description: Retrieve all metadata values set for a specific memory.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: List of metadata values
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      field:
+                        type: string
+                        description: Metadata field name
+                        example: export-image-theme
+                      value:
+                        type: string
+                        description: The stored value
+                        example: dark
+                      value_type:
+                        type: string
+                        description: The data type of the value
+                        example: string
+                      description:
+                        type: string
+                        description: Description of the metadata field
+      '400':
+        description: Invalid memoryId (not a UUID)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoriesByIdMetadataById:
+  put:
+    operationId: replaceMemoryMetadata
+    tags:
+      - metadata
+    summary: Set a metadata value
+    description: |
+      Set or update a metadata value for a memory. The field must be a defined
+      metadata field for the 'memory' entity type. Creates the value if it doesn't
+      exist, updates if it does.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: field
+        in: path
+        required: true
+        description: |
+          The metadata field name (e.g., 'export-image-theme').
+          Export-related fields include:
+          - export-image-theme
+          - export-diagram-scale (legacy Kroki PNG scale, 1–4)
+          - export-png-render-scale (Playwright SVG→PNG render scale, 1–4)
+          - export-png-display-scale-percent (DOCX display size percent, 10–300)
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - value
+            properties:
+              value:
+                type: string
+                description: The value to set
+                example: light
+    responses:
+      '200':
+        description: Metadata value set
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                field:
+                  type: string
+                value:
+                  type: string
+                value_type:
+                  type: string
+      '400':
+        description: Invalid memoryId or missing value
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or metadata field not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteMemoryMetadata
+    tags:
+      - metadata
+    summary: Remove a metadata value
+    description: Delete a metadata value from a memory.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: field
+        in: path
+        required: true
+        description: The metadata field name to remove
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Metadata value removed (or didn't exist)
+      '400':
+        description: Invalid memoryId
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory or metadata field definition not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error

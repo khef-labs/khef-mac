@@ -1,0 +1,137 @@
+/* ============ Page Header ============ */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+}
+
+/* ============ Breadcrumb ============ */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.breadcrumbLink {
+  color: var(--fg);
+  opacity: 0.6;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  padding: 2px 0;
+}
+
+.breadcrumbLink:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.breadcrumbSep {
+  margin: 0 6px;
+  color: var(--fg);
+  opacity: 0.25;
+  font-size: var(--text-xs);
+  user-select: none;
+}
+
+.breadcrumbCurrent {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* ============ Title row ============ */
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ============ Actions ============ */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.action:hover {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--fg) 20%, transparent);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.actionActive {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.actionIconOnly {
+  padding: 6px;
+}
+
+.actionIconOnly span {
+  display: none;
+}
+
+/* ============ Accessibility ============ */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

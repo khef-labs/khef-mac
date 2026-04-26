@@ -1,0 +1,21 @@
+-- Default status values for each memory type (first status with sort_order = 0)
+-- This is a reference - the application logic will use these when creating new memories
+
+-- Memory Type -> Default Status Mapping:
+-- user-note -> transient
+-- assistant-note -> transient
+-- project-note -> transient
+-- user-todo -> open
+-- assistant-todo -> open
+-- decision -> proposed
+-- api -> draft
+-- reference -> active
+-- assistant-rule -> active
+-- knowledge -> current (parent fallback)
+-- commands -> unverified (knowledge child)
+-- context -> current (knowledge child)
+-- pattern -> proposed (knowledge child)
+
+-- Note: The application will query for the status with sort_order = 0 for each memory type
+-- to automatically set the default status when creating a new memory.
+-- Child types fall back to their parent's statuses if they don't have their own.

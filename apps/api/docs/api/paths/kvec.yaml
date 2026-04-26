@@ -1,0 +1,324 @@
+KvecCollections:
+  get:
+    operationId: listKvecCollections
+    tags:
+      - kvec
+    summary: List all kvec collections with stats
+    description: >
+      Returns all vector collections with aggregated statistics including file count, chunk count, repo count,
+      total size, and last upload timestamp. Uses the `kvec.collection_stats` materialized view.
+    responses:
+      '200':
+        description: Collection list with stats
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collections:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KvecCollection
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+KvecCollectionsByName:
+  get:
+    operationId: getKvecCollection
+    tags:
+      - kvec
+    summary: Get a single collection by name
+    description: Returns collection details and aggregated statistics.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name (e.g., 'kvec-source', 'khef-sessions')
+    responses:
+      '200':
+        description: Collection detail
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collection:
+                  $ref: ../components/schemas.yaml#/KvecCollection
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameRepos:
+  get:
+    operationId: listKvecRepos
+    tags:
+      - kvec
+    summary: List repos in a collection
+    description: >
+      Returns all git repositories tracked in a collection with file counts, snapshot counts, and last upload
+      timestamp.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+    responses:
+      '200':
+        description: Repo list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repos:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KvecRepo
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameReposById:
+  delete:
+    operationId: deleteKvecRepo
+    tags:
+      - kvec
+    summary: Delete a repo and all its tracked files
+    description: >
+      Deletes a repository and all associated tracked files and chunks from the collection via cascade.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Repo UUID
+    responses:
+      '204':
+        description: Repo deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameFiles:
+  get:
+    operationId: listKvecFiles
+    tags:
+      - kvec
+    summary: List files in a collection (paginated, filterable)
+    description: >
+      Returns tracked files with chunk stats, repo info, and latest snapshot commit data. Supports filtering
+      by repo name, language, file status, and path search (ILIKE). Uses a LATERAL subquery for efficient
+      latest-snapshot resolution.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+      - name: repo
+        in: query
+        schema:
+          type: string
+        description: Filter by repo name
+      - name: language
+        in: query
+        schema:
+          type: string
+        description: Filter by programming language
+      - name: status
+        in: query
+        schema:
+          type: string
+        description: Filter by file status
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Search file paths (ILIKE match)
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+          maximum: 200
+        description: Max files per page
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+        description: Pagination offset
+    responses:
+      '200':
+        description: Paginated file list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KvecFile
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteKvecFilesByCollection
+    tags:
+      - kvec
+    summary: Delete all tracked files in a collection
+    description: >
+      Deletes all tracked files and their chunks from the specified collection. The collection remains intact.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+    responses:
+      '200':
+        description: Delete result
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BulkDeleteKvecFilesResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameFilesByChannel:
+  delete:
+    operationId: deleteKvecFilesByChannel
+    tags:
+      - kvec
+    summary: Delete tracked files in a collection by channel
+    description: >
+      Deletes tracked files and their chunks from the specified collection where
+      `metadata.channel` matches the provided channel value.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+      - name: channel
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Channel name to match against `metadata.channel`
+    responses:
+      '200':
+        description: Delete result
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BulkDeleteKvecFilesResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameFilesById:
+  delete:
+    operationId: deleteKvecFile
+    tags:
+      - kvec
+    summary: Delete a tracked file
+    description: >
+      Deletes a single tracked file and its chunks from the collection. The file must belong to the
+      specified collection.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Tracked file UUID
+    responses:
+      '204':
+        description: File deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameFilesBulkDelete:
+  post:
+    operationId: bulkDeleteKvecFiles
+    tags:
+      - kvec
+    summary: Delete multiple tracked files
+    description: >
+      Deletes multiple tracked files and their chunks from the collection in one request.
+      Only files belonging to the specified collection are deleted.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/BulkDeleteKvecFilesBody
+    responses:
+      '200':
+        description: Bulk delete result
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BulkDeleteKvecFilesResponse
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KvecCollectionsByNameLanguages:
+  get:
+    operationId: listKvecLanguages
+    tags:
+      - kvec
+    summary: Get language distribution for a collection
+    description: >
+      Returns a count of tracked files per programming language in the collection, sorted by count descending.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Collection name
+    responses:
+      '200':
+        description: Language counts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                languages:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KvecLanguageCount
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

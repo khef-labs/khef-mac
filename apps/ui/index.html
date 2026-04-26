@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png?v=2" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Khef</title>
+    <style>
+      .splash {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 9999;
+        background: #0B1220;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        transition: opacity 1.2s ease-out;
+      }
+      .splash.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .splash.hidden {
+        display: none;
+      }
+      .splash-btn {
+        position: relative;
+        z-index: 10000;
+        margin-top: 2.5rem;
+        padding: 0.75rem 2rem;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #0B1220;
+        background: #5B8FD4;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .splash-btn:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+      }
+      .splash-logo {
+        width: 140px;
+        height: 140px;
+        animation: splashFloat 3s ease-in-out infinite;
+        filter: drop-shadow(0 0 30px rgba(91, 143, 212, 0.3));
+      }
+      .splash-title {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 2rem;
+        font-weight: 300;
+        letter-spacing: 0.15em;
+        color: #e8eaed;
+        margin-top: 3rem;
+      }
+      .splash-tagline {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 1rem;
+        color: #7a8599;
+        margin-top: 0.75rem;
+        letter-spacing: 0.05em;
+      }
+      .splash-ripple-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .splash-ripple {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border: 1px solid #5B8FD4;
+        border-radius: 50%;
+        opacity: 0;
+        animation: splashRipple 12s ease-out infinite;
+      }
+      .splash-ripple:nth-child(1) { animation-delay: 0s; }
+      .splash-ripple:nth-child(2) { animation-delay: 3s; }
+      .splash-ripple:nth-child(3) { animation-delay: 6s; }
+      .splash-ripple:nth-child(4) { animation-delay: 9s; }
+      @keyframes splashRipple {
+        0% {
+          width: 160px;
+          height: 160px;
+          opacity: 0.35;
+        }
+        100% {
+          width: 800px;
+          height: 800px;
+          opacity: 0;
+        }
+      }
+      @keyframes splashFade {
+        to { opacity: 0; visibility: hidden; }
+      }
+      @keyframes splashFloat {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-8px); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash" id="splash">
+      <div class="splash-ripple-container">
+        <div class="splash-ripple"></div>
+        <div class="splash-ripple"></div>
+        <div class="splash-ripple"></div>
+        <div class="splash-ripple"></div>
+        <img src="/logo.svg" alt="" class="splash-logo" />
+      </div>
+      <div class="splash-title">KHEF</div>
+      <div class="splash-tagline">Shared knowledge and purpose</div>
+      <button class="splash-btn" id="splash-btn">Get Started</button>
+    </div>
+    <div id="app"></div>
+    <script>
+      // Show splash only once — reads from consolidated khef-state store
+      (function() {
+        var storeKey = 'khef-state';
+        var splash = document.getElementById('splash');
+        var btn = document.getElementById('splash-btn');
+
+        function getStore() {
+          try { return JSON.parse(localStorage.getItem(storeKey) || '{}'); } catch(e) { return {}; }
+        }
+
+        if (getStore().splashSeen) {
+          splash.classList.add('hidden');
+        } else {
+          btn.addEventListener('click', function() {
+            var s = getStore();
+            s.splashSeen = true;
+            localStorage.setItem(storeKey, JSON.stringify(s));
+            splash.classList.add('fade-out');
+            setTimeout(function() {
+              splash.classList.add('hidden');
+            }, 1200);
+          });
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

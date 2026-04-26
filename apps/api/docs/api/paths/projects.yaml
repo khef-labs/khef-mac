@@ -1,0 +1,422 @@
+Projects:
+  get:
+    operationId: listProjects
+    tags:
+      - projects
+    summary: List all projects
+    description: Retrieve all projects ordered by creation date (newest first). Optionally filter by project handle or name.
+    parameters:
+      - name: name
+        in: query
+        description: Filter projects by exact name match
+        schema:
+          type: string
+        example: khef
+      - name: handle
+        in: query
+        description: Filter projects by exact handle (kebab-case)
+        schema:
+          type: string
+        example: khef
+      - name: q
+        in: query
+        description: Case-insensitive partial match across handle, name, and display_name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of projects
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projects:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Project
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createProject
+    tags:
+      - projects
+    summary: Create a new project
+    description: Creates a new project with a name and optional description
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateProjectInput
+    responses:
+      '201':
+        description: Project created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  $ref: ../components/schemas.yaml#/Project
+      '400':
+        description: Invalid input
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsById:
+  get:
+    operationId: getProject
+    tags:
+      - projects
+    summary: Get project by UUID
+    description: >-
+      Retrieve a single project by its UUID (UUID-only path parameter). Use GET /api/projects?handle=... to resolve by
+      handle.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    responses:
+      '200':
+        description: Project found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  $ref: ../components/schemas.yaml#/Project
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  put:
+    operationId: replaceProject
+    tags:
+      - projects
+    summary: Replace project
+    description: Full project replacement. Name is required. Handle is immutable and cannot be changed.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/FullProjectInput
+    responses:
+      '200':
+        description: Project updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  $ref: ../components/schemas.yaml#/Project
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  patch:
+    operationId: updateProject
+    tags:
+      - projects
+    summary: Update project
+    description: Partial update of project fields. Handle is immutable and cannot be changed.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateProjectInput
+    responses:
+      '200':
+        description: Project updated successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  $ref: ../components/schemas.yaml#/Project
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteProject
+    tags:
+      - projects
+    summary: Delete project
+    description: Delete a project and all associated memories (cascade delete)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    responses:
+      '204':
+        description: Project deleted successfully
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdSessionContext:
+  get:
+    operationId: getProjectSessionContext
+    tags:
+      - projects
+    summary: Get session context
+    description: >-
+      Get all session context for a project in one call — project info, active todos, recent decisions, patterns, and
+      context memories.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectIdPath
+    responses:
+      '200':
+        description: Session context
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionContext
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdGraph:
+  get:
+    operationId: getProjectGraph
+    tags:
+      - projects
+    summary: Get project graph
+    description: >-
+      Get all memories in a project with their inter-relations for graph visualization. Returns nodes and edges suitable
+      for rendering. Use format=text for an agent-friendly summary with directional arrows and stats.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: max_nodes
+        in: query
+        description: Maximum number of nodes to return
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+      - name: max_edges
+        in: query
+        description: Maximum number of edges to return
+        schema:
+          type: integer
+          default: 200
+          minimum: 1
+      - name: compact
+        in: query
+        description: Return compact nodes with content_excerpt (default true)
+        schema:
+          type: boolean
+          default: true
+      - name: format
+        in: query
+        description: "Output format: json (default) for structured data, text for agent-readable summary"
+        schema:
+          type: string
+          enum: [json, text]
+          default: json
+      - name: type
+        in: query
+        description: Filter by memory type (e.g., decision, pattern, context)
+        schema:
+          type: string
+      - name: tag
+        in: query
+        description: Filter by tag name (case-insensitive)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Project graph data
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodes:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: ../components/schemas.yaml#/Memory
+                      - type: object
+                        properties:
+                          parent_type:
+                            type: string
+                            description: Parent type name (e.g., knowledge) if applicable
+                edges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                        format: uuid
+                      target:
+                        type: string
+                        format: uuid
+                      relation_type:
+                        type: string
+                truncated:
+                  type: boolean
+                  description: Whether results were truncated by max_nodes or max_edges limits
+                total_nodes:
+                  type: integer
+                  description: Total number of memories in the project
+                total_edges:
+                  type: integer
+                  description: Number of edges returned
+          text/plain:
+            schema:
+              type: string
+              description: Agent-friendly text summary (when format=text)
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdGraphHealth:
+  get:
+    operationId: getProjectGraphHealth
+    tags:
+      - projects
+    summary: Get graph health
+    description: >-
+      Analyze the knowledge graph health for a project. Returns orphan memories, relation type distribution,
+      connectivity stats, and connected component analysis.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    responses:
+      '200':
+        description: Graph health summary
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/GraphHealth
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdConfigs:
+  get:
+    operationId: listProjectConfigs
+    tags:
+      - configs
+    summary: List project configs
+    description: List project/local configurations for a specific project and assistant
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: assistant
+        in: query
+        description: Filter by assistant handle
+        schema:
+          type: string
+      - name: scope
+        in: query
+        description: Filter by config scope (project/local only)
+        schema:
+          type: string
+          enum:
+            - project
+            - local
+      - name: type
+        in: query
+        description: Filter by config type
+        schema:
+          type: string
+          enum:
+            - settings
+            - instructions
+            - rules
+            - knowledge
+            - mcp
+    responses:
+      '200':
+        description: List of configs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configs:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ProjectAssistantConfig
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createProjectConfig
+    tags:
+      - configs
+    summary: Create project config
+    description: Create a new project/local configuration for a project and assistant
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ProjectConfigCreate
+    responses:
+      '201':
+        description: Config created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: ../components/schemas.yaml#/ProjectAssistantConfig
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdConfigsDiscover:
+  post:
+    operationId: discoverProjectConfigs
+    tags:
+      - configs
+    summary: Discover project configs
+    description: Force re-discovery of project configurations from disk for all assistants
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    responses:
+      '200':
+        description: Discovery results per assistant
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                discovered:
+                  type: object
+                  description: Results keyed by assistant handle
+                  additionalProperties:
+                    type: object
+                    properties:
+                      imported:
+                        type: integer
+                        description: Number of new configs discovered
+                      updated:
+                        type: integer
+                        description: Number of existing configs updated
+                      unchanged:
+                        type: integer
+                        description: Number of configs unchanged
+      '400':
+        description: Project has no path configured
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

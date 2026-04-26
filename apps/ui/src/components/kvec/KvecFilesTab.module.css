@@ -1,0 +1,320 @@
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Filter bar */
+
+.filterBar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+
+  & input {
+    width: 100%;
+    padding: var(--space-2) var(--space-3) var(--space-2) 32px;
+    font-size: var(--text-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--fg);
+
+    &::placeholder {
+      color: var(--muted);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+  }
+}
+
+.searchIcon {
+  position: absolute;
+  left: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.clearButton {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  line-height: 1;
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+.filterSelect {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  min-width: 120px;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+
+/* Selection bar */
+
+.selectionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: var(--text-sm);
+}
+
+.selectionDeleteButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--error) 60%, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-2);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    background: color-mix(in srgb, var(--error) 16%, transparent);
+  }
+}
+
+/* Table */
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+
+  & th {
+    text-align: left;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  & td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--fg);
+    vertical-align: middle;
+  }
+
+  & tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  & tbody tr:hover {
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+  }
+}
+
+.selectCell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.checkboxInput {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.pathCell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.monoCell {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.numCell {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.dateCell {
+  white-space: nowrap;
+  color: var(--muted);
+  width: 1%;
+}
+
+.errorDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--error);
+  margin-right: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.commitCell {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  width: 1%;
+}
+
+.branchName {
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.commitHash {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.rowDeleteButton {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    opacity: 1;
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+  }
+}
+
+/* Paths info */
+
+.pathsInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* Pagination */
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-2);
+}
+
+.paginationInfo {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.paginationButtons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.paginationButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+}
+
+/* Loading / Empty */
+
+.loading {
+  color: var(--muted);
+  padding: var(--space-4);
+}
+
+.emptyTab {
+  color: var(--muted);
+  padding: var(--space-4);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .filterBar {
+    flex-direction: column;
+  }
+
+  .searchInput {
+    min-width: unset;
+  }
+}

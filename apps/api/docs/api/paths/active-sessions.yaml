@@ -1,0 +1,146 @@
+ActiveSessions:
+  get:
+    operationId: listActiveSessions
+    tags:
+      - active-sessions
+    summary: List active sessions from cache
+    description: >
+      Returns cached active sessions with joined assistant, project, and transcript metadata. The cache is kept fresh by
+      a background scanner (10s interval) that validates PIDs, checks fuser on task dirs, and scans JSONL mtime.
+    parameters:
+      - name: assistant
+        in: query
+        schema:
+          type: string
+        description: Filter by assistant handle (e.g., 'claude-code')
+      - name: project_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+        description: Filter by project UUID
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - inactive
+          default: active
+        description: Filter by session status
+    responses:
+      '200':
+        description: List of cached active sessions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ActiveSession
+                count:
+                  type: integer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+ActiveSessionsScan:
+  post:
+    operationId: scanActiveSessions
+    tags:
+      - active-sessions
+    summary: Trigger OS scan and refresh cache
+    description: |
+      Runs a full three-tier detection scan: validates registered PIDs via kill -0,
+      runs fuser on ~/.claude/tasks/ directories, and checks JSONL file mtime.
+      Updates the active_sessions cache table and returns the refreshed list.
+    responses:
+      '200':
+        description: Scan completed, cache refreshed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ActiveSession
+                count:
+                  type: integer
+                scanned_count:
+                  type: integer
+                  description: Number of sessions detected by OS scan
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+ActiveSessionsHeartbeat:
+  post:
+    operationId: heartbeatActiveSession
+    tags:
+      - active-sessions
+    summary: Register or refresh an active session via heartbeat
+    description: |
+      Called by the UserPromptSubmit hook to register sessions as active.
+      Accepts the Claude process PID (from $PPID in the hook) for liveness tracking.
+      If another active session has the same PID (e.g., after /clear), that session's
+      PID is cleared and it is marked inactive.
+      Derives project_dir from file_path and resolves project association.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - session_id
+              - file_path
+            properties:
+              session_id:
+                type: string
+                format: uuid
+                description: Session file UUID
+              file_path:
+                type: string
+                description: Absolute path to the session JSONL file
+              pid:
+                type: integer
+                description: Claude Code process PID (from $PPID in the hook)
+    responses:
+      '204':
+        description: Heartbeat registered successfully
+      '400':
+        description: Missing required fields
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+ActiveSessionsBySessionIdById:
+  get:
+    operationId: getActiveSessionBySessionId
+    tags:
+      - active-sessions
+    summary: Lookup active session by session UUID
+    description: Returns a single active session by its JSONL file UUID (the task directory name).
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Session file UUID (matches task directory name)
+    responses:
+      '200':
+        description: Active session found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session:
+                  $ref: ../components/schemas.yaml#/ActiveSession
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

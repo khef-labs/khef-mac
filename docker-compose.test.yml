@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ${TEST_POSTGRES_CONTAINER:-khef-test}
+    shm_size: '256mb'
+    environment:
+      POSTGRES_USER: ${TEST_POSTGRES_USER:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-trust}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-khef_test}
+    ports:
+      - "127.0.0.1:${TEST_POSTGRES_PORT:-5434}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEST_POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

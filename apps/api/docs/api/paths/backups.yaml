@@ -1,0 +1,138 @@
+Backups:
+  get:
+    operationId: listBackups
+    tags:
+      - backups
+    summary: List backup files
+    description: >
+      Returns backup files from the configured backup directory, sorted newest first.
+      Reads the `backup.location` setting to determine the directory.
+    responses:
+      '200':
+        description: List of backup files
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backups:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/BackupFile
+                directory:
+                  type: string
+                  description: Resolved absolute path of the backup directory
+              required:
+                - backups
+                - directory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createBackup
+    tags:
+      - backups
+    summary: Create a new backup
+    description: >
+      Triggers a database backup using the backup shell script. The backup is saved
+      to the configured backup directory. Returns the created backup file metadata.
+    responses:
+      '201':
+        description: Backup created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backup:
+                  $ref: ../components/schemas.yaml#/BackupFile
+                  nullable: true
+                output:
+                  type: string
+                  description: Script output
+              required:
+                - output
+      '500':
+        description: Backup failed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+BackupsByIdRestore:
+  post:
+    operationId: restoreBackup
+    tags:
+      - backups
+    summary: Restore database from a backup file
+    description: >
+      Restores the database from the specified backup file. Creates a safety backup
+      before restoring. Terminates existing connections, drops and recreates the
+      database, then pipes the backup SQL. Runs migrations after restore.
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^khef_\d{8}_\d{6}\.sql(\.gz)?$'
+        description: Backup filename to restore from
+    responses:
+      '200':
+        description: Restore completed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/RestoreResponse
+      '400':
+        description: Invalid backup filename
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '500':
+        description: Restore failed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                detail:
+                  type: string
+                safety_backup:
+                  type: string
+                  nullable: true
+
+BackupsById:
+  delete:
+    operationId: deleteBackup
+    tags:
+      - backups
+    summary: Delete a backup file
+    description: >
+      Deletes a backup file by filename. Validates the filename matches the expected
+      pattern (`khef_YYYYMMDD_HHMMSS.sql` or `.sql.gz`) to prevent path traversal.
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^khef_\d{8}_\d{6}\.sql(\.gz)?$'
+        description: Backup filename (e.g., khef_20260215_120000.sql.gz)
+    responses:
+      '204':
+        description: Backup deleted
+      '400':
+        description: Invalid backup filename
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

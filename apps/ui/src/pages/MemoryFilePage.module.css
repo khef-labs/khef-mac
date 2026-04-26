@@ -1,0 +1,411 @@
+.page {
+  padding: var(--space-6);
+  max-width: var(--page-max-width, 900px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 100%;
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+/* Back link */
+
+/* Header */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.extBadge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--primary-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+}
+
+.filePath {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Snapshot dropdown */
+.snapshotSelect {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-width: 80px;
+}
+
+.snapshotSelect:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.snapshotSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.snapshotSelectOld {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* Restore button with text */
+.restoreButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.restoreButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.restoreButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toolbar icon buttons */
+.toolbarIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toolbarIconButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.toolbarIconButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Edit mode controls */
+.editControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.modeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+}
+
+.toggleButton {
+  padding: 4px 10px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toggleButton:hover {
+  color: var(--fg);
+}
+
+.toggleButtonActive {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* Content area */
+.contentWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  min-height: 300px;
+}
+
+.contentEditing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.contentTextarea {
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: 1.7;
+  background: transparent;
+  border: none;
+  field-sizing: content;
+  resize: none;
+}
+
+.contentTextarea:focus {
+  outline: none;
+}
+
+/* Markdown rendered content */
+.contentMarkdown {
+  font-size: var(--text-base);
+  color: var(--fg);
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+
+.contentMarkdown > :first-child {
+  margin-top: 0;
+}
+
+.contentMarkdown > :last-child {
+  margin-bottom: 0;
+}
+
+.contentMarkdown h1 {
+  font-size: var(--font-2xl);
+  font-weight: 600;
+  margin: var(--space-6) 0 var(--space-4) 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.contentMarkdown h2 {
+  font-size: var(--font-xl);
+  font-weight: 600;
+  margin: var(--space-5) 0 var(--space-3) 0;
+}
+
+.contentMarkdown h3 {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  margin: var(--space-4) 0 var(--space-2) 0;
+}
+
+.contentMarkdown h4 {
+  font-size: var(--font-base);
+  font-weight: 600;
+  margin: var(--space-3) 0 var(--space-2) 0;
+}
+
+.contentMarkdown p {
+  margin: var(--space-3) 0;
+}
+
+.contentMarkdown ul,
+.contentMarkdown ol {
+  margin: var(--space-3) 0;
+  padding-left: var(--space-6);
+}
+
+.contentMarkdown li {
+  margin: var(--space-1) 0;
+}
+
+.contentMarkdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg);
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-sm);
+}
+
+.contentMarkdown pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  overflow-x: auto;
+  margin: var(--space-4) 0;
+}
+
+.contentMarkdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.contentMarkdown blockquote {
+  border-left: 3px solid var(--accent);
+  margin: var(--space-4) 0;
+  padding-left: var(--space-4);
+  color: var(--muted);
+}
+
+.contentMarkdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-4) 0;
+}
+
+.contentMarkdown th,
+.contentMarkdown td {
+  border: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+}
+
+.contentMarkdown th {
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.contentMarkdown a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.contentMarkdown a:hover {
+  text-decoration: underline;
+}
+
+.contentMarkdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--space-6) 0;
+}
+
+/* Save error */
+.saveError {
+  color: var(--error);
+  font-size: var(--text-sm);
+  padding: var(--space-2);
+  background-color: color-mix(in srgb, var(--error) 10%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* Action buttons (Save / Cancel) */
+.actionButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.cancelButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--fg);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelButton:hover:not(:disabled) {
+  border-color: var(--fg);
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.saveButton {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--accent-fg);
+  background-color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.saveButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.saveButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -1,0 +1,301 @@
+/* GeminiChatOptions — compact toolbar between textarea and controls */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ===== Chip row ===== */
+
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-1) var(--space-3) 0;
+}
+
+.chipGroup {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+
+  &:hover:not(:disabled) {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--fg) 25%, var(--border));
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.chipActive {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+
+  &:hover:not(:disabled) {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, var(--bg));
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  }
+}
+
+/* Dot indicator when system instructions have content but panel is closed */
+.chipHasContent {
+  position: relative;
+}
+
+.contentDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-left: 1px;
+}
+
+/* ===== Budget toggle (attached to Thinking chip) ===== */
+
+.budgetToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-left: none;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.budgetToggleOpen {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+}
+
+/* When an attached button is present, remove right radius from the chip */
+.chipGroup .chip {
+  border-radius: var(--radius-full);
+}
+
+.chipGroup:has(.budgetToggle) .chip,
+.chipGroup:has(.chipClear) .chip {
+  border-radius: var(--radius-full) 0 0 var(--radius-full);
+  border-right: none;
+}
+
+/* ===== Chip clear button (attached to System chip) ===== */
+
+.chipClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  width: 22px;
+  padding: 0;
+  font-family: inherit;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 12%, var(--bg));
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.budgetValue {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Budget dropdown ===== */
+
+.budgetDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-1);
+  animation: dropIn 120ms ease-out;
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.budgetLabel {
+  padding: var(--space-1) var(--space-2);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.budgetOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--bg);
+  }
+}
+
+.budgetOptionActive {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+}
+
+.budgetTokens {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== System instructions panel ===== */
+
+.systemPanel {
+  position: relative;
+  padding: var(--space-2) var(--space-3) 0;
+  animation: panelReveal 150ms ease-out;
+}
+
+@keyframes panelReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.systemTextarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 200px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  field-sizing: content;
+  resize: vertical;
+  transition: border-color var(--transition-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  &::placeholder {
+    color: var(--muted);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.clearBtn {
+  position: absolute;
+  top: calc(var(--space-2) + 4px);
+  right: calc(var(--space-3) + 6px);
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    color: var(--fg);
+    border-color: color-mix(in srgb, var(--fg) 25%, var(--border));
+  }
+}

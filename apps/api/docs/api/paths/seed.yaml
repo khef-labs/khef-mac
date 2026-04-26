@@ -1,0 +1,47 @@
+Seed:
+  post:
+    operationId: runSeed
+    tags:
+      - seed
+    summary: Run database seeds
+    description: |
+      Run database seeds (memory types, statuses, definitions, memories, prompts, relations).
+      Optionally scoped to a single project. Seeds are idempotent — safe to re-run.
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              project:
+                type: string
+                description: Optional project handle to seed only that project (e.g., 'khef', 'user'). Omit to seed all projects.
+    responses:
+      '200':
+        description: Seed completed successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: success
+                project:
+                  type: string
+                  description: Project handle if scoped, absent if all projects seeded
+      '500':
+        description: Seed failed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                  example: Seed failed
+                message:
+                  type: string
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

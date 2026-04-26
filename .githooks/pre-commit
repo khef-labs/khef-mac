@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Ensure MCP server build is up-to-date before committing
+echo "[pre-commit] Building MCP server..."
+npm --prefix mcp-server run --silent build
+
+# If the build produced changes, fail the commit so the developer re-stages
+if ! git diff --quiet -- mcp-server/build; then
+  echo "[pre-commit] MCP build output changed. Please stage updated files and commit again." >&2
+  git status --short mcp-server/build || true
+  exit 1
+fi
+
+exit 0
+

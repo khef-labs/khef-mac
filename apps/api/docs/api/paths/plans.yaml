@@ -1,0 +1,324 @@
+AssistantsByIdPlans:
+  get:
+    operationId: listPlans
+    tags:
+      - plans
+    summary: List all plans
+    description: |
+      List all plans for an assistant with auto-discovery from disk.
+      Plans are imported on first access and new versions are created when content changes.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+            - date
+            - name
+          default: date
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+          default: desc
+    responses:
+      '200':
+        description: List of plans with current version info
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plans:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/PlanSummary
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdPlansById:
+  get:
+    operationId: getPlan
+    tags:
+      - plans
+    summary: Get a specific plan
+    description: Get a plan with its current version content
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename (e.g., 'fizzy-snuggling-liskov.md')
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Plan with content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  $ref: ../components/schemas.yaml#/Plan
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updatePlan
+    tags:
+      - plans
+    summary: Update plan metadata
+    description: Update plan metadata (status, project_id) without affecting versions
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PlanUpdate
+    responses:
+      '200':
+        description: Updated plan
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  $ref: ../components/schemas.yaml#/Plan
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deletePlan
+    tags:
+      - plans
+    summary: Delete a plan
+    description: Delete a plan from disk (if exists) and database (including all versions)
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Plan deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdPlansByIdVersions:
+  get:
+    operationId: listPlanVersions
+    tags:
+      - plans
+    summary: List all versions of a plan
+    description: Get version history for a plan (newest first)
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of versions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/PlanVersionSummary
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdPlansByIdVersionsById:
+  get:
+    operationId: getPlanVersion
+    tags:
+      - plans
+    summary: Get a specific version
+    description: Get a specific version of a plan with full content
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename
+        schema:
+          type: string
+      - name: version
+        in: path
+        required: true
+        description: Version number (1-based)
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '200':
+        description: Plan version with content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  $ref: ../components/schemas.yaml#/PlanVersion
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deletePlanVersion
+    tags:
+      - plans
+    summary: Delete a specific version
+    description: |
+      Delete a specific version of a plan. Cannot delete the only remaining version.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: filename
+        in: path
+        required: true
+        description: Plan filename
+        schema:
+          type: string
+      - name: version
+        in: path
+        required: true
+        description: Version number (1-based)
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '204':
+        description: Version deleted successfully
+      '400':
+        description: Invalid request or cannot delete only version
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+PlansByIdExport:
+  get:
+    operationId: exportPlan
+    tags:
+      - plans
+    summary: Export plan content
+    description: |
+      Export a plan's content in various formats.
+      - `markdown`: Returns markdown with YAML frontmatter (title, status, project, dates)
+      - `slack`: Returns Slack-formatted mrkdwn text
+      - `docx`: Returns a Word document
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Plan UUID
+        schema:
+          type: string
+          format: uuid
+      - name: format
+        in: query
+        required: true
+        description: Export format
+        schema:
+          type: string
+          enum:
+            - markdown
+            - slack
+            - docx
+    responses:
+      '200':
+        description: Exported content
+        content:
+          text/markdown:
+            schema:
+              type: string
+            example: |
+              ---
+              title: "My Plan"
+              status: active
+              ---
+              # My Plan
+              ...
+          text/plain:
+            schema:
+              type: string
+            example: |-
+              *My Plan*
+              ...
+          application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+            schema:
+              type: string
+              format: binary
+      '400':
+        description: Invalid format parameter
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

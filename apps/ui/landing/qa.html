@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khef — Q&A</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0B1220;
+      --bg-card: #111827;
+      --fg: #e8eaed;
+      --muted: #7a8599;
+      --accent: #5B8FD4;
+      --border: rgba(91, 143, 212, 0.15);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .qa {
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .qa h2 {
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .qa p {
+      font-size: 0.95rem;
+      color: var(--fg);
+      margin-bottom: 0.5rem;
+    }
+
+    .qa ul {
+      margin-left: 1.25rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .qa li {
+      margin-bottom: 0.25rem;
+    }
+
+    .category {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin: 2rem 0 1rem 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    strong {
+      color: var(--fg);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>KHEF Q&A</h1>
+      <p class="tagline">Anticipated questions and reasoning</p>
+    </header>
+
+    <div class="category">Why Build This?</div>
+
+    <div class="qa">
+      <h2>"Why not just use Notion / Confluence / a wiki?"</h2>
+      <p><strong>Short:</strong> Wikis aren't AI-native. They can't be queried by Claude mid-conversation.</p>
+      <ul>
+        <li>No MCP integration — AI can't read/write to Notion during a coding session</li>
+        <li>No structured memory types — everything is just "a page"</li>
+        <li>No knowledge graph — can't traverse relationships between decisions</li>
+        <li>Wikis document <em>what</em>, not <em>why</em> — decisions need rationale</li>
+        <li>Wikis decay — Khef is written during work, not after</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why not just write better documentation?"</h2>
+      <p><strong>Short:</strong> Docs are read by humans, memories are read by AI <em>and</em> humans.</p>
+      <ul>
+        <li>Docs require discipline to maintain — memories are created as you work</li>
+        <li>AI can't query your docs mid-conversation (no MCP tools for Confluence)</li>
+        <li>Docs don't capture decision rationale or rejected alternatives</li>
+        <li>Khef's structured types (decision, pattern, context) enforce useful formats</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Isn't this just another notes app?"</h2>
+      <p><strong>Short:</strong> Notes apps don't have MCP tools, knowledge graphs, or polymorphic status systems.</p>
+      <ul>
+        <li>50+ MCP tools let Claude Code and Codex CLI read/write memories</li>
+        <li>Knowledge graph with 11 relation types connects memories</li>
+        <li>Status workflows per memory type (decisions, todos, patterns)</li>
+        <li>Agent rules sync to CLAUDE.md / AGENTS.md automatically</li>
+      </ul>
+    </div>
+
+    <div class="category">Tech Stack</div>
+
+    <div class="qa">
+      <h2>"Why PostgreSQL instead of MongoDB / a document DB?"</h2>
+      <p><strong>Short:</strong> Memories are relational. The knowledge graph needs joins. Postgres has everything.</p>
+      <ul>
+        <li>Knowledge graph = relations = foreign keys + joins</li>
+        <li>Full-text search built-in (tsvector, GIN indexes)</li>
+        <li>pgvector for semantic search — no separate vector DB needed</li>
+        <li>ACID transactions for consistent state</li>
+        <li>Battle-tested, great tooling, everyone knows it</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why pgvector vs a dedicated vector DB like Pinecone?"</h2>
+      <p><strong>Short:</strong> Simpler ops, co-located data, good enough for this scale.</p>
+      <ul>
+        <li>One less service to run and maintain</li>
+        <li>Vector embeddings live next to the memories they reference</li>
+        <li>For thousands of memories, pgvector performance is fine</li>
+        <li>Can still use Chroma or Qdrant if you want — it's configurable</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why Fastify over Express?"</h2>
+      <p><strong>Short:</strong> Faster, better TypeScript support, built-in validation.</p>
+      <ul>
+        <li>~2x faster than Express in benchmarks</li>
+        <li>First-class TypeScript support</li>
+        <li>JSON Schema validation built-in</li>
+        <li>Plugin architecture keeps code organized</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why Preact over React?"</h2>
+      <p><strong>Short:</strong> Same API, 3KB instead of 40KB, fast enough for a dashboard.</p>
+      <ul>
+        <li>API-compatible with React (same hooks, same patterns)</li>
+        <li>Much smaller bundle size</li>
+        <li>This is a developer tool, not a complex app — Preact is plenty</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why self-hosted instead of SaaS?"</h2>
+      <p><strong>Short:</strong> Your code context is sensitive. Your data stays on your machine.</p>
+      <ul>
+        <li>No data leaving your network — important for enterprise</li>
+        <li>Save and remember without fear of judgement — we're all more forgetful than we let on</li>
+        <li>Works offline — no dependency on external services</li>
+        <li>No vendor lock-in — you own the data and can export anytime</li>
+        <li>Customizable — add your own memory types, integrations</li>
+        <li>Could become SaaS later, but self-hosted is the right default</li>
+      </ul>
+    </div>
+
+    <div class="category">Design Decisions</div>
+
+    <div class="qa">
+      <h2>"Why Markdown for content?"</h2>
+      <p><strong>Short:</strong> Markdown is the best language for AI/human collaboration.</p>
+      <ul>
+        <li>Human-readable and writable — no special tooling needed</li>
+        <li>AI models understand and generate it natively</li>
+        <li>Universal export/import — Notion, Obsidian, GitHub, wikis all support it</li>
+        <li>Portable — your content isn't locked in a proprietary format</li>
+        <li>Supports code blocks, diagrams (mermaid), tables — everything devs need</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why structured memory types instead of free-form notes?"</h2>
+      <p><strong>Short:</strong> Structure enables workflows. Decisions have different lifecycles than todos.</p>
+      <ul>
+        <li>Each type has its own status workflow (proposed→accepted, open→done)</li>
+        <li>Agents can filter by type ("show me all accepted decisions")</li>
+        <li>UI can render type-specific views (kanban for todos, timeline for decisions)</li>
+        <li>Forces useful structure without being rigid — content is still markdown</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why a knowledge graph instead of just tags?"</h2>
+      <p><strong>Short:</strong> Tags are flat. Relations capture <em>how</em> things connect.</p>
+      <ul>
+        <li>"Pattern X <em>implements</em> Decision Y" is richer than both having tag "auth"</li>
+        <li>Can traverse: "show me everything this decision depends on"</li>
+        <li>Graph health analysis finds orphan memories</li>
+        <li>11 relation types cover most knowledge relationships</li>
+        <li>It's optional — as useful as you make it, or don't use it at all</li>
+        <li>You still benefit from a rich store of searchable (and semantically searchable) knowledge</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why MCP instead of just a REST API?"</h2>
+      <p><strong>Short:</strong> MCP is how Claude Code and Codex CLI integrate with tools.</p>
+      <ul>
+        <li>MCP is the standard protocol for AI tool integration</li>
+        <li>Tools appear natively in Claude/Codex — no copy-paste</li>
+        <li>REST API exists too — MCP server calls it internally</li>
+        <li>Best of both: AI-native + human-accessible</li>
+      </ul>
+    </div>
+
+    <div class="category">Practical Concerns</div>
+
+    <div class="qa">
+      <h2>"How does this scale?"</h2>
+      <p><strong>Short:</strong> PostgreSQL scales fine. This isn't big data — it's knowledge.</p>
+      <ul>
+        <li>10,000 memories ≈ 500,000 lines of searchable knowledge — years of documentation</li>
+        <li>Storage is trivial: 100K memories ≈ 100MB</li>
+        <li>pgvector handles up to ~1M vectors efficiently</li>
+        <li>Full-text search is fast with GIN indexes</li>
+        <li>The limit isn't technical — it's cognitive</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"What happens if you lose your data?"</h2>
+      <p><strong>Short:</strong> It happened to me. I recovered from session transcripts.</p>
+      <ul>
+        <li>Claude in auto mode destroyed my Docker volume — a month of memories gone</li>
+        <li>Thought all was lost, then realized: session transcripts had everything</li>
+        <li>Claude read the sessions and used MCP tools to recreate the memories</li>
+        <li>Lesson: sessions are a backup, not just history — and MCP makes recovery possible</li>
+        <li>Session embedding/search is now implemented — your conversations are searchable</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"What about security?"</h2>
+      <p><strong>Short:</strong> Self-hosted, localhost by default, no external dependencies.</p>
+      <ul>
+        <li>Runs on localhost — not exposed to internet by default</li>
+        <li>No cloud services required — fully air-gapped capable</li>
+        <li>Data stays in your PostgreSQL instance</li>
+        <li>Auth can be added via Fastify plugins if needed</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"What if Claude/Codex add their own memory?"</h2>
+      <p><strong>Short:</strong> Great — Khef will integrate. This is complementary, not competing.</p>
+      <ul>
+        <li>Built-in memory will likely be per-assistant, not shared</li>
+        <li>Khef works across Claude AND Codex simultaneously</li>
+        <li>You control the data and structure</li>
+        <li>Can export/migrate if something better comes along</li>
+      </ul>
+    </div>
+
+    <div class="qa">
+      <h2>"Why should I trust this? It's a side project."</h2>
+      <p><strong>Short:</strong> I've been using it daily for weeks. It works.</p>
+      <ul>
+        <li>Dogfooding — I use it for all my projects including this one</li>
+        <li>Simple stack — nothing exotic, easy to maintain</li>
+        <li>Self-hosted — you control the data</li>
+        <li>Worst case: export your data and move on</li>
+      </ul>
+    </div>
+
+    <footer style="text-align: center; margin-top: 2.5rem; color: var(--muted); font-size: 0.85rem;">
+      khef.ai — <a href="features.html" style="color: var(--accent); text-decoration: none;">Features</a> · <a href="architecture.html" style="color: var(--accent); text-decoration: none;">Architecture</a>
+    </footer>
+  </div>
+</body>
+</html>

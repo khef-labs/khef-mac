@@ -1,0 +1,406 @@
+ProjectsByIdMemoryTypes:
+  get:
+    operationId: listProjectMemoryTypes
+    tags:
+      - projects
+    summary: List memory types for a project
+    description: Retrieve memory types and their statuses along with usage counts for a specific project.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    responses:
+      '200':
+        description: List of memory types for the project
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project_id:
+                  type: string
+                  format: uuid
+                project_handle:
+                  type: string
+                memory_types:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        $ref: ../components/schemas.yaml#/MemoryType
+                      description:
+                        type: string
+                      usage_count:
+                        type: integer
+                      statuses:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                            display_name:
+                              type: string
+                            description:
+                              type: string
+                            sort_order:
+                              type: integer
+      '404':
+        description: Project not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+ProjectsByIdMemoryTypesByIdStatuses:
+  get:
+    operationId: listProjectMemoryTypeStatuses
+    tags:
+      - projects
+    summary: List status usage for a project memory type
+    description: Retrieve statuses for a specific memory type scoped to a project, including usage counts per status.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: type
+        in: path
+        required: true
+        description: Memory type
+        schema:
+          $ref: ../components/schemas.yaml#/MemoryType
+    responses:
+      '200':
+        description: Status usage for the memory type in the project
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project_id:
+                  type: string
+                  format: uuid
+                project_handle:
+                  type: string
+                type:
+                  $ref: ../components/schemas.yaml#/MemoryType
+                statuses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      display_name:
+                        type: string
+                      description:
+                        type: string
+                      sort_order:
+                        type: integer
+                      usage_count:
+                        type: integer
+      '404':
+        description: Project or memory type not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoryTypes:
+  get:
+    operationId: listMemoryTypes
+    tags:
+      - memory-types
+    summary: List all memory types with their statuses
+    description: Retrieve all memory types with built_in flag, memory counts, and available status values
+    responses:
+      '200':
+        description: List of memory types with their available statuses
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_types:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        example: decision
+                      description:
+                        type: string
+                      built_in:
+                        type: boolean
+                        description: Whether this is a built-in type (protected from deletion/rename)
+                      memory_count:
+                        type: integer
+                        description: Number of memories using this type
+                      parent_type:
+                        type: string
+                        description: Parent type name (for hierarchical types)
+                      children:
+                        type: array
+                        items:
+                          type: string
+                        description: Child type names (for parent types)
+                      statuses:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: string
+                            display_name:
+                              type: string
+                            description:
+                              type: string
+                            sort_order:
+                              type: integer
+                            inherited:
+                              type: boolean
+                              description: Whether this status is inherited from parent type
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createMemoryType
+    tags:
+      - memory-types
+    summary: Create a custom memory type
+    description: Create a new custom memory type with optional statuses. Type name must be kebab-case.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              name:
+                type: string
+                pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
+                minLength: 2
+                maxLength: 50
+                description: Type name in kebab-case (e.g., 'pr-review')
+                example: pr-review
+              description:
+                type: string
+                description: Description of what this type is for
+                example: Pull request reviews and feedback
+              statuses:
+                type: array
+                description: Custom statuses for this type. Defaults to single 'active' status if not provided.
+                items:
+                  type: object
+                  required:
+                    - value
+                  properties:
+                    value:
+                      type: string
+                      description: Status value (kebab-case or snake_case)
+                      example: open
+                    display_name:
+                      type: string
+                      description: Human-readable display name
+                      example: Open
+                    description:
+                      type: string
+                      description: Description of this status
+                    sort_order:
+                      type: integer
+                      description: Display order (lower = first)
+    responses:
+      '201':
+        description: Memory type created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/MemoryTypeDetail
+      '400':
+        description: Invalid name format or status values
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '409':
+        description: Type name already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+MemoryTypesById:
+  get:
+    operationId: getMemoryType
+    tags:
+      - memory-types
+    summary: Get a memory type
+    description: >-
+      Retrieve a single memory type by name or UUID. Returns full details including statuses, parent/children, and
+      memory count.
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Type name or UUID
+    responses:
+      '200':
+        description: Memory type details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_type:
+                  $ref: ../components/schemas.yaml#/MemoryTypeDetail
+      '404':
+        description: Memory type not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  patch:
+    operationId: updateMemoryType
+    tags:
+      - memory-types
+    summary: Update a memory type
+    description: Update a memory type's name or description. Built-in types can only update description.
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Type name or UUID
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
+                minLength: 2
+                maxLength: 50
+                description: New type name (only for custom types)
+              description:
+                type: string
+                description: New description
+    responses:
+      '200':
+        description: Memory type updated
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/MemoryTypeDetail
+      '400':
+        description: Invalid name format or no updates provided
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '403':
+        description: Cannot rename built-in type
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory type not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '409':
+        description: New name already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteMemoryType
+    tags:
+      - memory-types
+    summary: Delete a custom memory type
+    description: Delete a custom memory type. Cannot delete built-in types or types with existing memories.
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Type name or UUID
+    responses:
+      '204':
+        description: Memory type deleted
+      '403':
+        description: Cannot delete built-in type
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: Memory type not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '409':
+        description: Cannot delete type with existing memories
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                memory_count:
+                  type: integer
+                  description: Number of memories using this type
+MemoryTypesByIdStatuses:
+  get:
+    operationId: listMemoryTypeStatuses
+    tags:
+      - memory-types
+    summary: Get available statuses for a memory type
+    description: Retrieve the valid status values for a specific memory type
+    parameters:
+      - name: type
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Type name or UUID
+    responses:
+      '200':
+        description: List of available statuses for the memory type
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_type:
+                  $ref: ../components/schemas.yaml#/MemoryType
+                description:
+                  type: string
+                statuses:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                        example: in_progress
+                      display_name:
+                        type: string
+                        example: In Progress
+                      description:
+                        type: string
+                      sort_order:
+                        type: integer
+      '404':
+        description: Memory type not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error

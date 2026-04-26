@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ${POSTGRES_CONTAINER:-khef}
+    shm_size: '256mb'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-trust}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-khef}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5532}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kroki:
+    image: yuzutech/kroki
+    container_name: khef-kroki
+    depends_on:
+      - kroki-mermaid
+    environment:
+      - KROKI_MERMAID_HOST=kroki-mermaid
+    ports:
+      - "127.0.0.1:${KROKI_PORT:-8100}:8000"
+
+  kroki-mermaid:
+    image: yuzutech/kroki-mermaid
+    container_name: khef-kroki-mermaid
+    expose:
+      - "8002"
+
+  redis:
+    image: redis:7-alpine
+    container_name: khef-redis
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6399}:6379"
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres_data:

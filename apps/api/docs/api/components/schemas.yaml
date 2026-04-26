@@ -1,0 +1,4178 @@
+SourceCodeResult:
+  type: object
+  properties:
+    file_path:
+      type: string
+      description: Relative file path within the repository
+    content:
+      type: string
+      description: Matched code chunk content
+    score:
+      type: number
+      format: float
+      description: Cosine similarity score (0-1)
+    language:
+      type: string
+      nullable: true
+      description: Detected programming language
+    chunk_index:
+      type: integer
+      description: Index of the chunk within the file
+    metadata:
+      type: object
+      nullable: true
+      description: Additional chunk metadata (repo/branch/commit identifiers when available)
+      properties:
+        repoName:
+          type: string
+          description: Repository name (UI-friendly key)
+        repo:
+          type: string
+          description: Repository name (legacy/alternate key)
+        branch:
+          type: string
+          description: Git branch name for the indexed snapshot
+        commitHash:
+          type: string
+          description: Full commit hash for the indexed snapshot (UI-friendly key)
+        commit:
+          type: string
+          description: Full commit hash (legacy/alternate key)
+    context_before:
+      type: array
+      description: Neighboring chunks before the matched chunk (present when context > 0)
+      items:
+        type: object
+        properties:
+          chunk_index:
+            type: integer
+          content:
+            type: string
+    context_after:
+      type: array
+      description: Neighboring chunks after the matched chunk (present when context > 0)
+      items:
+        type: object
+        properties:
+          chunk_index:
+            type: integer
+          content:
+            type: string
+  required:
+    - file_path
+    - content
+    - score
+    - chunk_index
+
+SourceCodeFacetsResponse:
+  type: object
+  properties:
+    repos:
+      type: array
+      description: Distinct indexed repository names in the kvec-source collection
+      items:
+        type: string
+    languages:
+      type: array
+      description: Distinct indexed languages (optionally filtered by repo)
+      items:
+        type: string
+    branches:
+      type: array
+      description: Distinct indexed branches (optionally filtered by repo)
+      items:
+        type: string
+  required:
+    - repos
+    - languages
+    - branches
+
+CommitSearchResult:
+  type: object
+  properties:
+    sha:
+      type: string
+      description: Full commit SHA hash
+    short_sha:
+      type: string
+      description: Short commit SHA hash
+    message:
+      type: string
+      description: Commit subject line
+    author:
+      type: string
+      description: Commit author name
+    date:
+      type: string
+      description: Commit date (ISO 8601)
+    repo:
+      type: string
+      description: Repository name
+    score:
+      type: number
+      format: float
+      description: Cosine similarity score (0-1)
+    content:
+      type: string
+      description: Full embedded commit text
+  required:
+    - sha
+    - short_sha
+    - message
+    - author
+    - date
+    - score
+
+ActiveSession:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Cache row UUID
+    session_id:
+      type: string
+      format: uuid
+      description: Session file UUID (= task directory name)
+    assistant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+          example: claude-code
+        name:
+          type: string
+          example: Claude Code
+    project:
+      nullable: true
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        name:
+          type: string
+    file_path:
+      type: string
+      description: Absolute path to the .jsonl session file
+    project_dir:
+      type: string
+      nullable: true
+      description: Encoded project directory name under ~/.claude/projects/
+    pid:
+      type: integer
+      nullable: true
+      description: Claude Code process PID (from heartbeat hook or fuser detection)
+    status:
+      type: string
+      enum:
+        - active
+        - inactive
+    last_seen_at:
+      type: string
+      format: date-time
+      nullable: true
+    first_seen_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+      nullable: true
+    updated_at:
+      type: string
+      format: date-time
+      nullable: true
+    transcript:
+      nullable: true
+      type: object
+      description: Joined metadata from synced sessions table (null if not synced)
+      properties:
+        synced_session_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        summary:
+          type: string
+          nullable: true
+        message_count:
+          type: integer
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+GitCommit:
+  type: object
+  properties:
+    sha:
+      type: string
+      description: Full commit SHA (40 chars)
+    short_sha:
+      type: string
+      description: Short commit SHA (7 chars)
+    message:
+      type: string
+      description: Commit message (first line)
+    author:
+      type: string
+      description: Commit author name
+    date:
+      type: string
+      format: date-time
+      description: Commit date (ISO 8601)
+  required:
+    - sha
+    - short_sha
+    - message
+    - author
+    - date
+DiffStats:
+  type: object
+  properties:
+    files:
+      type: integer
+      description: Number of files changed
+    insertions:
+      type: integer
+      description: Lines added
+    deletions:
+      type: integer
+      description: Lines removed
+  required:
+    - files
+    - insertions
+    - deletions
+DiffResult:
+  type: object
+  properties:
+    diff:
+      type: string
+      description: Unified diff content
+    stats:
+      $ref: '#/DiffStats'
+    refs:
+      type: object
+      properties:
+        branch:
+          type: string
+        commit_sha:
+          type: string
+          nullable: true
+        parent_sha:
+          type: string
+          nullable: true
+  required:
+    - diff
+    - stats
+    - refs
+WorkingDiffResult:
+  type: object
+  description: Working tree diff with staged, unstaged, and combined views
+  properties:
+    staged:
+      type: object
+      properties:
+        diff:
+          type: string
+          description: Staged changes diff (index vs HEAD)
+        stats:
+          $ref: '#/DiffStats'
+      required:
+        - diff
+        - stats
+    unstaged:
+      type: object
+      properties:
+        diff:
+          type: string
+          description: Unstaged changes diff (working tree vs index)
+        stats:
+          $ref: '#/DiffStats'
+      required:
+        - diff
+        - stats
+    combined:
+      type: object
+      properties:
+        diff:
+          type: string
+          description: Combined diff (working tree vs HEAD)
+        stats:
+          $ref: '#/DiffStats'
+      required:
+        - diff
+        - stats
+    refs:
+      type: object
+      properties:
+        branch:
+          type: string
+        commit_sha:
+          type: string
+          nullable: true
+          description: Always null for working tree
+        parent_sha:
+          type: string
+          description: HEAD commit SHA
+      required:
+        - branch
+        - parent_sha
+  required:
+    - staged
+    - unstaged
+    - combined
+    - refs
+DiffRecord:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    project_id:
+      type: string
+      format: uuid
+    branch:
+      type: string
+    commit_sha:
+      type: string
+      nullable: true
+      description: Commit SHA (null for working tree)
+    parent_sha:
+      type: string
+      nullable: true
+    path:
+      type: string
+      nullable: true
+      description: Optional path filter
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - project_id
+    - branch
+    - created_at
+Project:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Project unique identifier
+    name:
+      type: string
+      description: Project name (internal identifier)
+    handle:
+      type: string
+      pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+      description: Human-readable URL-safe handle (kebab-case, unique, immutable)
+      example: khef
+    display_name:
+      type: string
+      description: Display name for UI
+      example: Khef
+    description:
+      type: string
+      nullable: true
+      description: Optional project description
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+  required:
+    - id
+    - name
+    - handle
+    - display_name
+    - created_at
+    - updated_at
+CreateProjectInput:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Project name (used to auto-generate handle if not provided)
+      example: My Project
+    handle:
+      type: string
+      pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+      description: Optional custom handle (kebab-case). If not provided, auto-generated from name.
+      example: my-project
+    display_name:
+      type: string
+      description: Optional display name. If not provided, defaults to name.
+      example: My Awesome Project
+    description:
+      type: string
+      description: Optional project description
+  required:
+    - name
+UpdateProjectInput:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Project name (internal identifier)
+    display_name:
+      type: string
+      description: Display name for UI
+    description:
+      type: string
+      description: Optional project description
+  description: Partial project update. Handle is immutable.
+FullProjectInput:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Project name (internal identifier)
+    display_name:
+      type: string
+      description: Display name for UI
+    description:
+      type: string
+      description: Optional project description
+  required:
+    - name
+  description: Full project replacement. Handle is immutable.
+Memory:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Memory unique identifier
+    project_id:
+      type: string
+      format: uuid
+      description: Parent project ID
+    handle:
+      type: string
+      pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+      description: Human-readable memory handle (kebab-case, unique per project)
+      example: mem-1
+    title:
+      type: string
+      maxLength: 200
+      description: Memory title
+    content:
+      type: string
+      description: Memory content (auto-chunked if >2000 chars)
+    memory_type_id:
+      type: string
+      format: uuid
+      description: Memory type ID (foreign key to memory_types table)
+    type:
+      $ref: '#/MemoryType'
+      description: Memory type name (populated via JOIN)
+    parent_type:
+      type: string
+      nullable: true
+      description: >-
+        Parent type name for knowledge hierarchy (e.g., 'knowledge' for commands/context/pattern children). Null for
+        root types.
+    parent_type_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: Parent type ID (foreign key to memory_types table). Null for root types.
+    status_id:
+      type: string
+      format: uuid
+      description: Status ID (foreign key to memory_type_statuses table)
+    status:
+      type: string
+      description: Status value (populated via JOIN, e.g., 'in_progress', 'done', 'active')
+    status_updated_at:
+      type: string
+      format: date-time
+      description: When the status was last updated
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+    updated_at:
+      type: string
+      format: date-time
+      description: Last update timestamp
+  required:
+    - id
+    - project_id
+    - handle
+    - title
+    - content
+    - memory_type_id
+    - created_at
+    - updated_at
+CompactMutationMemory:
+  type: object
+  description: >-
+    Minimal memory response returned by default from create/update/append mutations. Use `?compact=false` for full
+    response.
+  properties:
+    id:
+      type: string
+      format: uuid
+    handle:
+      type: string
+    status:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - handle
+    - created_at
+    - updated_at
+MemoryWithProject:
+  allOf:
+    - $ref: '#/Memory'
+    - type: object
+      properties:
+        project:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            handle:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - handle
+            - name
+MemoryGlobalSingle:
+  allOf:
+    - $ref: '#/Memory'
+    - type: object
+      properties:
+        project_handle:
+          type: string
+        project_name:
+          type: string
+CreateMemoryInput:
+  type: object
+  properties:
+    handle:
+      type: string
+      pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+      description: Required memory handle (kebab-case, unique per project)
+      example: mem-42
+    title:
+      type: string
+      maxLength: 200
+      description: Memory title (unique within project)
+    content:
+      type: string
+      description: Memory content
+    type:
+      $ref: '#/MemoryType'
+    tags:
+      type: array
+      items:
+        type: string
+      description: Optional tags for the memory
+  required:
+    - handle
+    - title
+    - content
+    - type
+UpdateMemoryInput:
+  type: object
+  properties:
+    handle:
+      type: string
+      pattern: ^[a-z0-9]+(-[a-z0-9]+)*$
+      description: Updated handle (kebab-case, unique within project)
+    title:
+      type: string
+      maxLength: 200
+      description: Updated memory title (unique within project)
+    content:
+      type: string
+      description: Updated memory content
+    type:
+      $ref: '#/MemoryType'
+    parent_type:
+      type: string
+      description: Optional parent type name to disambiguate scoped subtypes (e.g., 'google-doc' with type 'design-doc')
+    status:
+      type: string
+      description: Optional status value (must be valid for the memory type)
+    tags:
+      type: array
+      items:
+        type: string
+      description: Replace all tags (pass empty array to remove all)
+  description: Partial memory update. Use the status endpoints to manage status.
+FullMemoryInput:
+  type: object
+  properties:
+    title:
+      type: string
+      maxLength: 200
+      description: Memory title (unique within project)
+    content:
+      type: string
+      description: Memory content
+    type:
+      $ref: '#/MemoryType'
+    parent_type:
+      type: string
+      description: Optional parent type name to disambiguate scoped subtypes (e.g., 'google-doc' with type 'design-doc')
+    tags:
+      type: array
+      items:
+        type: string
+      description: Replace all tags (pass empty array to remove all)
+  required:
+    - title
+    - content
+    - type
+  description: Full memory replacement. Use PATCH for partial updates.
+MemoryType:
+  type: string
+  enum:
+    - user-note
+    - assistant-note
+    - project-note
+    - user-todo
+    - assistant-todo
+    - decision
+    - command
+    - context
+    - api
+    - pattern
+    - reference
+    - assistant-rule
+    - diagram
+    - csv
+    - knowledge
+    - commands
+  description: >-
+    Type of memory. 'knowledge' is a parent type with 'commands', 'context', and 'pattern' as children. Filtering by
+    'knowledge' returns all knowledge-family memories. Custom types can also be created.
+MemoryTypeDetail:
+  type: object
+  description: Full memory type details including statuses and metadata
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Type UUID
+    type:
+      type: string
+      description: Type name
+      example: pr-review
+    description:
+      type: string
+      description: Description of the type
+    built_in:
+      type: boolean
+      description: Whether this is a built-in (protected) type
+    memory_count:
+      type: integer
+      description: Number of memories using this type
+    parent_type:
+      type: string
+      description: Parent type name (for hierarchical types)
+    children:
+      type: array
+      items:
+        type: string
+      description: Child type names (for parent types)
+    statuses:
+      type: array
+      items:
+        type: object
+        properties:
+          value:
+            type: string
+            example: open
+          display_name:
+            type: string
+            example: Open
+          description:
+            type: string
+          sort_order:
+            type: integer
+          inherited:
+            type: boolean
+            description: Whether this status is inherited from parent type
+MemoryRelation:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Relation unique identifier
+    source_memory_id:
+      type: string
+      format: uuid
+      description: Source memory ID
+    target_memory_id:
+      type: string
+      format: uuid
+      description: Target memory ID
+    relation_type:
+      $ref: '#/RelationType'
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+  required:
+    - id
+    - source_memory_id
+    - target_memory_id
+    - relation_type
+    - created_at
+CreateRelationInput:
+  type: object
+  properties:
+    source_memory_id:
+      type: string
+      format: uuid
+      description: Source memory ID
+    target_memory_id:
+      type: string
+      format: uuid
+      description: Target memory ID
+    relation_type:
+      $ref: '#/RelationType'
+  required:
+    - source_memory_id
+    - target_memory_id
+    - relation_type
+RelationType:
+  type: string
+  enum:
+    - relates_to
+    - contradicts
+    - supports
+    - depends_on
+    - follows_from
+    - references
+    - supersedes
+    - implements
+    - blocks
+    - extends
+    - duplicates
+  description: Forward relation type between memories
+ContextualRelationType:
+  type: string
+  description: Relation type that can be forward or inverse depending on context
+  enum:
+    - relates_to
+    - contradicts
+    - supports
+    - depends_on
+    - follows_from
+    - references
+    - supersedes
+    - implements
+    - blocks
+    - extends
+    - duplicates
+    - is_supported_by
+    - is_contradicted_by
+    - is_depended_on_by
+    - is_followed_by
+    - is_referenced_by
+    - is_superseded_by
+    - is_implemented_by
+    - is_blocked_by
+    - is_extended_by
+    - is_duplicated_by
+RelationTypeInfo:
+  type: object
+  properties:
+    value:
+      $ref: '#/RelationType'
+    forward_label:
+      type: string
+      description: Human-readable label for forward direction
+    inverse_value:
+      type: string
+      description: Inverse relation type value
+    inverse_label:
+      type: string
+      description: Human-readable label for inverse direction
+  required:
+    - value
+    - forward_label
+    - inverse_value
+    - inverse_label
+FlatRelation:
+  type: object
+  description: Relation with contextual type and related memory details
+  properties:
+    id:
+      type: string
+      format: uuid
+    relation_type:
+      $ref: '#/ContextualRelationType'
+    relation_label:
+      type: string
+      description: Human-readable label for the relation direction
+    created_at:
+      type: string
+      format: date-time
+    related_memory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        title:
+          type: string
+        type:
+          $ref: '#/MemoryType'
+        status:
+          type: string
+        project_id:
+          type: string
+          format: uuid
+        project_handle:
+          type: string
+        project_name:
+          type: string
+        parent_type:
+          type: string
+          nullable: true
+          description: Parent type if this memory belongs to a type hierarchy (e.g., "knowledge" for commands/context/pattern)
+  required:
+    - id
+    - relation_type
+    - relation_label
+    - created_at
+    - related_memory
+Tag:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Tag unique identifier
+    name:
+      type: string
+      description: Tag name
+    created_at:
+      type: string
+      format: date-time
+      description: Creation timestamp
+  required:
+    - id
+    - name
+    - created_at
+PaginationMetadata:
+  type: object
+  properties:
+    total_count:
+      type: integer
+      description: Total number of items matching the query
+      example: 42
+    limit:
+      type: integer
+      description: Number of items per page
+      example: 20
+    offset:
+      type: integer
+      description: Number of items skipped
+      example: 0
+    has_more:
+      type: boolean
+      description: Whether there are more items beyond the current page
+      example: true
+  required:
+    - total_count
+    - limit
+    - offset
+    - has_more
+SnapshotListItem:
+  type: object
+  description: Summary info for a snapshot in the list view
+  properties:
+    id:
+      type: string
+      format: uuid
+    snapshot_number:
+      type: integer
+      description: Snapshot number (1-based, sequential)
+    content_hash:
+      type: string
+      description: SHA-256 hash of content at snapshot time
+    source:
+      type: string
+      nullable: true
+      description: How snapshot was created (manual, external-sync)
+    created_at:
+      type: string
+      format: date-time
+    is_current:
+      type: boolean
+      description: Whether this is the currently active snapshot
+    has_comments:
+      type: boolean
+      description: Whether the snapshot has preserved comments
+  required:
+    - id
+    - snapshot_number
+    - content_hash
+    - created_at
+    - is_current
+    - has_comments
+SnapshotDetail:
+  type: object
+  description: Full snapshot content and comments
+  properties:
+    memory_id:
+      type: string
+      format: uuid
+    snapshot_number:
+      type: integer
+    content:
+      type: string
+      description: Memory content at snapshot time
+    content_hash:
+      type: string
+      description: SHA-256 hash of content (historical snapshots only)
+    source:
+      type: string
+      nullable: true
+      description: How snapshot was created
+    created_at:
+      type: string
+      format: date-time
+      description: When snapshot was created (historical only)
+    is_current:
+      type: boolean
+      description: Whether viewing the current snapshot
+    comments:
+      type: array
+      description: Comments preserved at snapshot time (or live comments for current)
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            format: uuid
+          content:
+            type: string
+          anchor_text:
+            type: string
+            nullable: true
+          anchor_prefix:
+            type: string
+            nullable: true
+          anchor_suffix:
+            type: string
+            nullable: true
+          status:
+            type: string
+          author:
+            type: string
+          parent_comment_id:
+            type: string
+            format: uuid
+            nullable: true
+          created_at:
+            type: string
+            format: date-time
+  required:
+    - memory_id
+    - snapshot_number
+    - content
+    - is_current
+    - comments
+SnapshotDiffChange:
+  type: object
+  description: A single diff chunk (added, removed, unchanged, or skipped lines)
+  properties:
+    type:
+      type: string
+      enum: [add, remove, equal, skip]
+      description: Change type. "skip" indicates omitted unchanged lines when context is applied.
+    value:
+      type: string
+      description: The text content of this chunk (empty string for skip chunks)
+    lines_skipped:
+      type: integer
+      description: Number of lines omitted (only present for skip chunks)
+  required:
+    - type
+    - value
+SnapshotDiffResponse:
+  type: object
+  description: Structured line-level diff between two snapshots
+  properties:
+    memory_id:
+      type: string
+      format: uuid
+    from:
+      type: object
+      properties:
+        snapshot_number:
+          type: integer
+        source:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - snapshot_number
+        - created_at
+    to:
+      type: object
+      properties:
+        snapshot_number:
+          type: integer
+        source:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - snapshot_number
+        - created_at
+    changes:
+      type: array
+      items:
+        $ref: '#/SnapshotDiffChange'
+    stats:
+      type: object
+      properties:
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        unchanged:
+          type: integer
+      required:
+        - additions
+        - deletions
+        - unchanged
+    pagination:
+      type: object
+      description: Pagination metadata for the changes array
+      properties:
+        total_changes:
+          type: integer
+          description: Total number of change chunks in the full diff
+        limit:
+          type: integer
+          description: Max chunks returned (0 means all)
+        offset:
+          type: integer
+          description: Number of chunks skipped
+        has_more:
+          type: boolean
+          description: Whether more chunks are available
+      required:
+        - total_changes
+        - limit
+        - offset
+        - has_more
+  required:
+    - memory_id
+    - from
+    - to
+    - changes
+    - stats
+    - pagination
+GeminiConversation:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    title:
+      type: string
+      nullable: true
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+    project_handle:
+      type: string
+    project_name:
+      type: string
+    message_count:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - created_at
+    - updated_at
+GeminiResponsePart:
+  type: object
+  properties:
+    type:
+      type: string
+      enum:
+        - text
+        - file
+    text:
+      type: string
+      description: Present when type is "text"
+    fileId:
+      type: string
+      format: uuid
+      description: Present when type is "file". Use GET /api/files/{fileId} to retrieve.
+    mimeType:
+      type: string
+      description: Present when type is "file" (e.g. image/png, audio/wav)
+  required:
+    - type
+GeminiMessage:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    conversation_id:
+      type: string
+      format: uuid
+    prompt_id:
+      type: string
+      format: uuid
+      nullable: true
+    prompt_text:
+      type: string
+    response:
+      type: string
+      nullable: true
+      description: Text-only response (always populated for backward compatibility)
+    response_parts:
+      type: array
+      nullable: true
+      description: Structured response parts when multimodal content is present. Null for text-only responses.
+      items:
+        $ref: '#/GeminiResponsePart'
+    model:
+      type: string
+    input_tokens:
+      type: integer
+      nullable: true
+    output_tokens:
+      type: integer
+      nullable: true
+    error:
+      type: string
+      nullable: true
+    grounding:
+      $ref: '#/GeminiGrounding'
+    thinking:
+      $ref: '#/GeminiThinking'
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - conversation_id
+    - prompt_text
+    - model
+    - created_at
+GeminiThinking:
+  type: object
+  nullable: true
+  description: Chain-of-thought reasoning from Gemini 2.5+ thinking mode
+  properties:
+    text:
+      type: string
+      description: The model's internal reasoning text
+    tokenCount:
+      type: integer
+      description: Number of tokens used for thinking
+GeminiGrounding:
+  type: object
+  nullable: true
+  properties:
+    searchQueries:
+      type: array
+      items:
+        type: string
+    sources:
+      type: array
+      items:
+        type: object
+        properties:
+          uri:
+            type: string
+          title:
+            type: string
+Error:
+  type: object
+  properties:
+    error:
+      type: string
+      description: Error message
+  required:
+    - error
+Assistant:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    handle:
+      type: string
+      description: Assistant handle (e.g., 'claude-code')
+    name:
+      type: string
+      description: Display name
+    description:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - handle
+    - name
+    - created_at
+    - updated_at
+AssistantCommand:
+  type: object
+  properties:
+    assistant_handle:
+      type: string
+      description: Assistant handle (e.g., 'claude-code')
+    type:
+      type: string
+      enum:
+        - command
+        - skill
+        - prompt
+    scope:
+      type: string
+      enum:
+        - user
+        - project
+    name:
+      type: string
+    description:
+      type: string
+      nullable: true
+    content:
+      type: string
+    file_path:
+      type: string
+    hash:
+      type: string
+  required:
+    - assistant_handle
+    - type
+    - scope
+    - name
+    - content
+    - file_path
+    - hash
+AssistantCommandCreate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    content:
+      type: string
+    scope:
+      type: string
+      enum:
+        - user
+        - project
+    type:
+      type: string
+      enum:
+        - command
+        - skill
+        - prompt
+      description: command/skill for claude-code, prompt for codex-cli
+    project:
+      type: string
+      description: Project ID/handle/name (required for project scope)
+  required:
+    - name
+    - content
+    - scope
+    - type
+AssistantCommandUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    content:
+      type: string
+    expected_hash:
+      type: string
+    force:
+      type: boolean
+Config:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    scope:
+      type: string
+      enum:
+        - system
+        - global
+        - project
+        - local
+    type:
+      type: string
+      enum:
+        - settings
+        - instructions
+        - rules
+        - knowledge
+        - mcp
+    path:
+      type: string
+    format:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+    content:
+      type: string
+    file_hash:
+      type: string
+      nullable: true
+    version:
+      type: integer
+    auto_sync:
+      type: boolean
+    readonly:
+      type: boolean
+    is_import:
+      type: boolean
+      description: Whether this config was imported via an @ directive in a parent config
+    parent_config_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the parent config that references this import via @ directive
+    last_synced_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - scope
+    - type
+    - path
+    - format
+    - content
+    - version
+    - auto_sync
+    - readonly
+    - is_import
+    - created_at
+    - updated_at
+ConfigImport:
+  type: object
+  description: Lightweight reference to an imported child config
+  properties:
+    id:
+      type: string
+      format: uuid
+    path:
+      type: string
+    scope:
+      type: string
+      enum:
+        - system
+        - global
+        - project
+        - local
+    format:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+    is_import:
+      type: boolean
+  required:
+    - id
+    - path
+    - scope
+    - format
+    - is_import
+ConfigSnapshotSummary:
+  type: object
+  description: Summary of a config snapshot (without content)
+  properties:
+    snapshot_number:
+      type: integer
+    size:
+      type: integer
+      nullable: true
+    content_hash:
+      type: string
+    content_type:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+      nullable: true
+    source:
+      type: string
+      enum:
+        - manual
+        - import
+        - pre-sync
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - snapshot_number
+    - content_hash
+    - source
+    - created_at
+ConfigSnapshot:
+  type: object
+  description: Full config snapshot including content
+  properties:
+    id:
+      type: string
+      format: uuid
+    snapshot_number:
+      type: integer
+    content:
+      type: string
+    content_hash:
+      type: string
+    content_type:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+      nullable: true
+    content_json:
+      type: object
+      nullable: true
+      description: Parsed JSON content (only for json content_type)
+    source:
+      type: string
+      enum:
+        - manual
+        - import
+        - pre-sync
+    size:
+      type: integer
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - snapshot_number
+    - content
+    - content_hash
+    - source
+    - created_at
+McpServerInput:
+  type: object
+  description: Input for creating/updating an MCP server
+  properties:
+    type:
+      type: string
+      enum:
+        - stdio
+        - sse
+    command:
+      type: string
+      description: Command to run (required for stdio type)
+    args:
+      type: array
+      items:
+        type: string
+    url:
+      type: string
+      description: Server URL (required for sse type)
+    env:
+      type: object
+      additionalProperties:
+        type: string
+  required:
+    - type
+McpServerConfig:
+  type: object
+  description: MCP server configuration as stored in config
+  properties:
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+        - stdio
+        - sse
+    command:
+      type: string
+    args:
+      type: array
+      items:
+        type: string
+    url:
+      type: string
+    env:
+      type: object
+      additionalProperties:
+        type: string
+  required:
+    - name
+    - type
+AssistantConfig:
+  allOf:
+    - $ref: '#/Config'
+    - type: object
+      properties:
+        assistant:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            handle:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - handle
+            - name
+        imports:
+          type: array
+          description: Child configs imported via @ directives (only present on GET single config)
+          items:
+            $ref: '#/ConfigImport'
+      required:
+        - assistant
+ProjectAssistantConfig:
+  allOf:
+    - $ref: '#/Config'
+    - type: object
+      properties:
+        project:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            handle:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - handle
+            - name
+        assistant:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            handle:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - handle
+            - name
+      required:
+        - project
+        - assistant
+AssistantConfigCreate:
+  type: object
+  properties:
+    scope:
+      type: string
+      enum:
+        - system
+        - global
+      description: Config scope (user-wide only)
+    type:
+      type: string
+      enum:
+        - settings
+        - instructions
+        - rules
+        - knowledge
+        - mcp
+      description: Config type
+    path:
+      type: string
+      description: Full resolved path
+    format:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+    content:
+      type: string
+      description: Config content
+    auto_sync:
+      type: boolean
+      description: Auto-sync to system file on save
+  required:
+    - scope
+    - type
+    - path
+    - format
+    - content
+ProjectConfigCreate:
+  type: object
+  properties:
+    assistant:
+      type: string
+      description: Assistant handle (e.g., 'claude-code')
+    scope:
+      type: string
+      enum:
+        - project
+        - local
+      description: Config scope (project/local only)
+    type:
+      type: string
+      enum:
+        - settings
+        - instructions
+        - rules
+        - knowledge
+        - mcp
+      description: Config type
+    path:
+      type: string
+      description: Full resolved path
+    format:
+      type: string
+      enum:
+        - json
+        - markdown
+        - toml
+    content:
+      type: string
+      description: Config content
+    auto_sync:
+      type: boolean
+      description: Auto-sync to system file on save
+  required:
+    - assistant
+    - scope
+    - type
+    - path
+    - format
+    - content
+ConfigUpdate:
+  type: object
+  properties:
+    content:
+      type: string
+    auto_sync:
+      type: boolean
+ConfigSyncStatus:
+  type: object
+  properties:
+    status:
+      type: string
+      enum:
+        - in_sync
+        - external_changes
+        - not_synced
+        - file_missing
+    db_hash:
+      type: string
+      nullable: true
+    file_hash:
+      type: string
+      nullable: true
+    message:
+      type: string
+      nullable: true
+  required:
+    - status
+ConfigSyncResult:
+  type: object
+  properties:
+    status:
+      type: string
+      example: synced
+    path:
+      type: string
+    hash:
+      type: string
+  required:
+    - status
+    - path
+    - hash
+ConfigSyncConflict:
+  type: object
+  properties:
+    error:
+      type: string
+      example: External changes detected
+    status:
+      type: string
+      example: conflict
+    db_hash:
+      type: string
+    file_hash:
+      type: string
+    options:
+      type: array
+      items:
+        type: string
+      example:
+        - force
+        - import
+  required:
+    - error
+    - status
+    - db_hash
+    - file_hash
+    - options
+SessionContext:
+  type: object
+  properties:
+    project:
+      $ref: '#/Project'
+    todos:
+      type: object
+      properties:
+        recently_created:
+          type: array
+          items:
+            $ref: '#/MemorySummary'
+        in_progress:
+          type: array
+          items:
+            $ref: '#/MemorySummary'
+        recently_completed:
+          type: array
+          items:
+            $ref: '#/MemorySummary'
+    recent_decisions:
+      type: array
+      items:
+        $ref: '#/MemorySummary'
+    recent_patterns:
+      type: array
+      items:
+        $ref: '#/MemorySummary'
+    recent_context:
+      type: array
+      items:
+        $ref: '#/MemorySummary'
+MemorySummary:
+  type: object
+  description: Lightweight memory representation without content
+  properties:
+    id:
+      type: string
+      format: uuid
+    project_id:
+      type: string
+      format: uuid
+    title:
+      type: string
+    type:
+      $ref: '#/MemoryType'
+    parent_type:
+      type: string
+      nullable: true
+      description: Parent type name for knowledge hierarchy children
+    status:
+      type: string
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+GraphHealth:
+  type: object
+  properties:
+    project_id:
+      type: string
+      format: uuid
+    project_handle:
+      type: string
+    summary:
+      type: object
+      properties:
+        total_memories:
+          type: integer
+        orphan_count:
+          type: integer
+        connected_count:
+          type: integer
+        total_relations:
+          type: integer
+        connection_rate:
+          type: integer
+          description: Percentage of memories with at least one relation
+        components_count:
+          type: integer
+        isolated_component_count:
+          type: integer
+        largest_component_size:
+          type: integer
+    orphan_memories:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            format: uuid
+          title:
+            type: string
+          type:
+            type: string
+    relation_types:
+      type: array
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+          count:
+            type: integer
+    memory_type_stats:
+      type: array
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+          total:
+            type: integer
+          with_relations:
+            type: integer
+          orphan_count:
+            type: integer
+    cross_project:
+      type: object
+      properties:
+        edges:
+          type: integer
+        internal_edges:
+          type: integer
+        ratio:
+          type: integer
+KnowledgeResponse:
+  type: object
+  properties:
+    project_id:
+      type: string
+      format: uuid
+    project_handle:
+      type: string
+    commands:
+      nullable: true
+      type: object
+      allOf:
+        - $ref: '#/KnowledgeMemory'
+    context:
+      type: array
+      items:
+        $ref: '#/KnowledgeMemory'
+    patterns:
+      type: array
+      items:
+        $ref: '#/KnowledgeMemory'
+KnowledgeMemory:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    handle:
+      type: string
+    title:
+      type: string
+    content:
+      type: string
+    updated_at:
+      type: string
+      format: date-time
+FileUploadResponse:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    url:
+      type: string
+      description: Relative URL to serve the file
+    filename:
+      type: string
+      description: Original filename
+    mime_type:
+      type: string
+    size:
+      type: integer
+      description: File size in bytes
+    project_id:
+      type: string
+      format: uuid
+    created_at:
+      type: string
+      format: date-time
+FileInfo:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    url:
+      type: string
+    filename:
+      type: string
+    mime_type:
+      type: string
+    size:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+McpServer:
+  type: object
+  properties:
+    name:
+      type: string
+    type:
+      type: string
+      enum:
+        - stdio
+        - http
+    command:
+      type: string
+      nullable: true
+    args:
+      type: array
+      items:
+        type: string
+      nullable: true
+    url:
+      type: string
+      nullable: true
+    env:
+      type: object
+      additionalProperties:
+        type: string
+      nullable: true
+    status:
+      type: string
+Agent:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    model:
+      type: string
+      enum:
+        - sonnet
+        - opus
+        - haiku
+        - inherit
+    tools:
+      type: array
+      items:
+        type: string
+    disallowedTools:
+      type: array
+      items:
+        type: string
+    permissionMode:
+      type: string
+      enum:
+        - default
+        - acceptEdits
+        - dontAsk
+        - bypassPermissions
+        - plan
+    skills:
+      type: array
+      items:
+        type: string
+    prompt:
+      type: string
+    filePath:
+      type: string
+AgentCreate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    model:
+      type: string
+      enum:
+        - sonnet
+        - opus
+        - haiku
+        - inherit
+    tools:
+      type: array
+      items:
+        type: string
+    disallowedTools:
+      type: array
+      items:
+        type: string
+    permissionMode:
+      type: string
+      enum:
+        - default
+        - acceptEdits
+        - dontAsk
+        - bypassPermissions
+        - plan
+    skills:
+      type: array
+      items:
+        type: string
+    prompt:
+      type: string
+  required:
+    - name
+    - description
+    - prompt
+AgentUpdate:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    model:
+      type: string
+      enum:
+        - sonnet
+        - opus
+        - haiku
+        - inherit
+    tools:
+      type: array
+      items:
+        type: string
+    disallowedTools:
+      type: array
+      items:
+        type: string
+    permissionMode:
+      type: string
+      enum:
+        - default
+        - acceptEdits
+        - dontAsk
+        - bypassPermissions
+        - plan
+    skills:
+      type: array
+      items:
+        type: string
+    prompt:
+      type: string
+Comment:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    memory_id:
+      type: string
+      format: uuid
+    content:
+      type: string
+      description: Comment text (max 5000 chars)
+    author:
+      type: string
+      description: Comment author - 'user' for humans, or assistant handle (e.g., 'claude-code', 'codex-cli')
+      default: user
+    parent_comment_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: Parent comment ID for replies (null for top-level comments). Only 1 level of nesting allowed.
+    anchor_text:
+      type: string
+      nullable: true
+      description: Text excerpt from memory content (max 500 chars). Null for unanchored comments.
+    anchor_prefix:
+      type: string
+      nullable: true
+      description: Context before anchor_text for disambiguation (max 128 chars)
+    anchor_suffix:
+      type: string
+      nullable: true
+      description: Context after anchor_text for disambiguation (max 128 chars)
+    anchor_path:
+      type: string
+      nullable: true
+      description: File path for diff comments (e.g., "src/routes/git.ts")
+    anchor_line:
+      type: integer
+      nullable: true
+      description: Line index in the diff for diff comments
+    status:
+      type: string
+      enum:
+        - active
+        - orphaned
+        - resolved
+      description: Comment status
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - memory_id
+    - content
+    - author
+    - status
+    - created_at
+    - updated_at
+CreateCommentInput:
+  type: object
+  properties:
+    content:
+      type: string
+      description: Comment text (required, max 5000 chars)
+    author:
+      type: string
+      description: Comment author - 'user' (default) for humans, or assistant handle (e.g., 'claude-code', 'codex-cli')
+      default: user
+    parent_comment_id:
+      type: string
+      format: uuid
+      description: Parent comment ID to create a reply. Only 1 level of nesting allowed (replies cannot have replies).
+    anchor_text:
+      type: string
+      description: Text excerpt from memory content to anchor the comment to (max 500 chars)
+    anchor_prefix:
+      type: string
+      description: Context before anchor_text for disambiguation (max 128 chars)
+    anchor_suffix:
+      type: string
+      description: Context after anchor_text for disambiguation (max 128 chars)
+    anchor_path:
+      type: string
+      description: File path for diff comments (e.g., "src/routes/git.ts")
+    anchor_line:
+      type: integer
+      description: Line index in the diff for diff comments
+  required:
+    - content
+UpdateCommentInput:
+  type: object
+  properties:
+    content:
+      type: string
+      description: Updated comment text (max 5000 chars)
+    anchor_text:
+      type: string
+      description: Updated anchor text excerpt
+    anchor_prefix:
+      type: string
+      description: Updated anchor prefix
+    anchor_suffix:
+      type: string
+      description: Updated anchor suffix
+    anchor_path:
+      type: string
+      description: Updated file path for diff comments
+    anchor_line:
+      type: integer
+      description: Updated line index for diff comments
+    status:
+      type: string
+      enum:
+        - active
+        - orphaned
+        - resolved
+      description: Updated comment status
+  description: At least one field is required
+PlanSummary:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    filename:
+      type: string
+      description: Plan filename (e.g., 'fizzy-snuggling-liskov.md')
+    file_path:
+      type: string
+      nullable: true
+      description: Filesystem path (null if file deleted)
+    title:
+      type: string
+      description: Plan title extracted from content
+    current_version:
+      type: integer
+      description: Current version number
+    version_count:
+      type: integer
+      description: Total number of versions
+    status:
+      type: string
+      enum:
+        - active
+        - archived
+        - completed
+        - abandoned
+    has_file:
+      type: boolean
+      description: Whether the file exists on disk
+    size:
+      type: integer
+      nullable: true
+      description: File size in bytes
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - filename
+    - title
+    - current_version
+    - version_count
+    - status
+    - has_file
+    - created_at
+    - updated_at
+Plan:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    filename:
+      type: string
+    file_path:
+      type: string
+      nullable: true
+    title:
+      type: string
+    content:
+      type: string
+      description: Plan content (markdown)
+    current_version:
+      type: integer
+    version_count:
+      type: integer
+    status:
+      type: string
+      enum:
+        - active
+        - archived
+        - completed
+        - abandoned
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: Associated khef project (optional)
+    has_file:
+      type: boolean
+    size:
+      type: integer
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - filename
+    - title
+    - content
+    - current_version
+    - version_count
+    - status
+    - has_file
+    - created_at
+    - updated_at
+PlanVersionSummary:
+  type: object
+  properties:
+    version:
+      type: integer
+    title:
+      type: string
+    size:
+      type: integer
+      nullable: true
+    file_hash:
+      type: string
+      description: SHA-256 hash of content
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - version
+    - title
+    - file_hash
+    - created_at
+PlanVersion:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    version:
+      type: integer
+    title:
+      type: string
+    content:
+      type: string
+    size:
+      type: integer
+      nullable: true
+    file_hash:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - version
+    - title
+    - content
+    - file_hash
+    - created_at
+PlanUpdate:
+  type: object
+  properties:
+    status:
+      type: string
+      enum:
+        - active
+        - archived
+        - completed
+        - abandoned
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+      description: Associate with a khef project (or null to unlink)
+MemoryFileSummary:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    filename:
+      type: string
+    file_path:
+      type: string
+      nullable: true
+    current_snapshot:
+      type: integer
+      description: Current snapshot number
+    snapshot_count:
+      type: integer
+      description: Total number of snapshots
+    has_file:
+      type: boolean
+    is_main:
+      type: boolean
+      description: True if filename is MEMORY.md
+    size:
+      type: integer
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - filename
+    - current_snapshot
+    - snapshot_count
+    - has_file
+    - is_main
+MemoryFile:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    filename:
+      type: string
+    file_path:
+      type: string
+      nullable: true
+    content:
+      type: string
+    current_snapshot:
+      type: integer
+      description: Current snapshot number
+    snapshot_count:
+      type: integer
+      description: Total number of snapshots
+    has_file:
+      type: boolean
+    is_main:
+      type: boolean
+    size:
+      type: integer
+      nullable: true
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+    project_name:
+      type: string
+      nullable: true
+    project_dir:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - filename
+    - content
+    - current_snapshot
+    - snapshot_count
+    - has_file
+    - is_main
+    - project_dir
+MemoryFileSnapshotSummary:
+  type: object
+  properties:
+    snapshot_number:
+      type: integer
+    size:
+      type: integer
+      nullable: true
+    file_hash:
+      type: string
+      description: SHA-256 hash of content
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - snapshot_number
+    - file_hash
+    - created_at
+MemoryFileSnapshot:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    snapshot_number:
+      type: integer
+    content:
+      type: string
+    size:
+      type: integer
+      nullable: true
+    file_hash:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - snapshot_number
+    - content
+    - file_hash
+    - created_at
+SessionProject:
+  type: object
+  properties:
+    dir_name:
+      type: string
+      description: Directory name (e.g., "-Users-roger-projects-khef")
+    decoded_path:
+      type: string
+      description: Best-effort decoded filesystem path
+    session_count:
+      type: integer
+      description: Number of session files
+    total_size:
+      type: integer
+      description: Total bytes in directory
+    last_modified:
+      type: string
+      format: date-time
+      description: Most recent session modification time
+    matched_project:
+      type: object
+      nullable: true
+      description: Matched khef project (if any)
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+        name:
+          type: string
+  required:
+    - dir_name
+    - decoded_path
+    - session_count
+    - total_size
+    - last_modified
+SessionFile:
+  type: object
+  properties:
+    id:
+      type: string
+      description: Session UUID or agent-hex identifier
+    size:
+      type: integer
+      description: File size in bytes
+    last_modified:
+      type: string
+      format: date-time
+    has_companion:
+      type: boolean
+      description: Whether a companion directory exists
+    companion_size:
+      type: integer
+      description: Companion directory size in bytes (if present)
+    summary:
+      type: string
+      nullable: true
+      description: Session summary text (from first JSONL entry)
+    leaf_uuid:
+      type: string
+      nullable: true
+      description: Leaf UUID from summary entry
+    search_excerpt:
+      type: string
+      nullable: true
+      description: Excerpt from matching content (only present when q search param is used)
+  required:
+    - id
+    - size
+    - last_modified
+    - has_companion
+SessionEntry:
+  type: object
+  properties:
+    type:
+      type: string
+      description: Entry type (summary, user, assistant, file-history-snapshot)
+    uuid:
+      type: string
+    timestamp:
+      type: string
+      format: date-time
+  additionalProperties: true
+  required:
+    - type
+SyncedSession:
+  type: object
+  description: A session transcript synced to PostgreSQL
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Database row ID
+    session_id:
+      type: string
+      format: uuid
+      description: Original file-based session UUID
+    assistant:
+      type: object
+      properties:
+        handle:
+          type: string
+        name:
+          type: string
+    project:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        handle:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+    name:
+      type: string
+      nullable: true
+      description: Session name (if set)
+    summary:
+      type: string
+      nullable: true
+      description: Session summary from JSONL first entry
+    message_count:
+      type: integer
+      nullable: true
+    file_size:
+      type: integer
+      description: JSONL file size in bytes
+    file_path:
+      type: string
+    chunk_count:
+      type: integer
+      description: Number of content chunks
+    started_at:
+      type: string
+      format: date-time
+      nullable: true
+    ended_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    search_excerpt:
+      type: string
+      nullable: true
+      description: Excerpt from matching chunk content (only present when q search param is used)
+  required:
+    - id
+    - session_id
+    - assistant
+    - file_size
+    - file_path
+    - chunk_count
+    - created_at
+    - updated_at
+SyncedSessionChunk:
+  type: object
+  description: A content chunk from a synced session
+  properties:
+    chunk_index:
+      type: integer
+    content:
+      type: string
+    message_count:
+      type: integer
+      nullable: true
+  required:
+    - chunk_index
+    - content
+SyncedSessionSearchResult:
+  type: object
+  description: A search result from full-text session content search
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Session database row ID
+    session_id:
+      type: string
+      format: uuid
+    assistant_handle:
+      type: string
+    project_handle:
+      type: string
+      nullable: true
+    name:
+      type: string
+      nullable: true
+    summary:
+      type: string
+      nullable: true
+    chunk_index:
+      type: integer
+    excerpt:
+      type: string
+      description: Highlighted excerpt with <<>> markers around matches
+    rank:
+      type: number
+      format: float
+      description: Full-text search relevance rank
+  required:
+    - id
+    - session_id
+    - assistant_handle
+    - chunk_index
+    - excerpt
+    - rank
+SessionSummary:
+  type: object
+  description: Current AI-generated session summary
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Snapshot UUID
+    content:
+      type: string
+      description: Summary content (markdown)
+    assistant_handle:
+      type: string
+      description: Assistant that generated this summary
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - content
+    - assistant_handle
+    - created_at
+    - updated_at
+SessionSummarySnapshot:
+  type: object
+  description: Lightweight snapshot metadata (no content)
+  properties:
+    id:
+      type: string
+      format: uuid
+    assistant_handle:
+      type: string
+      description: Assistant that generated this snapshot
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - assistant_handle
+    - created_at
+SessionSummarySnapshotDetail:
+  type: object
+  description: Full snapshot with content
+  properties:
+    id:
+      type: string
+      format: uuid
+    content:
+      type: string
+      description: Summary content (markdown)
+    assistant_handle:
+      type: string
+      description: Assistant that generated this snapshot
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - content
+    - assistant_handle
+    - created_at
+SessionSummaryResponse:
+  type: object
+  description: Session summary with snapshot history and job status
+  properties:
+    summary:
+      $ref: '#/SessionSummary'
+      nullable: true
+    snapshots:
+      type: array
+      items:
+        $ref: '#/SessionSummarySnapshot'
+      description: All snapshots for this session, newest first
+    job:
+      type: object
+      nullable: true
+      description: Latest job run info (present when active or when summary exists)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Job ID
+        run_id:
+          type: string
+          format: uuid
+          description: Job run ID
+        status:
+          type: string
+          enum:
+            - pending
+            - running
+            - completed
+            - failed
+        error:
+          type: string
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        step_progress:
+          type: object
+          nullable: true
+          properties:
+            total:
+              type: integer
+            completed:
+              type: integer
+KvecCollection:
+  type: object
+  description: A kvec vector collection with aggregated statistics
+  properties:
+    id:
+      type: string
+      format: uuid
+    name:
+      type: string
+      description: Collection name (e.g., 'kvec-source', 'khef-sessions')
+    description:
+      type: string
+      nullable: true
+    store_type:
+      type: string
+      description: Storage backend type (e.g., 'pgvector')
+    embedding_model:
+      type: string
+      nullable: true
+      description: Embedding model name
+    dimensions:
+      type: integer
+      nullable: true
+      description: Embedding vector dimensions
+    file_count:
+      type: integer
+      description: Total tracked files
+    total_chunks:
+      type: integer
+      description: Total chunks across all files
+    total_bytes:
+      type: integer
+      description: Total file size in bytes
+    repo_count:
+      type: integer
+      description: Number of distinct repos
+    last_upload:
+      type: string
+      format: date-time
+      nullable: true
+      description: Most recent file upload timestamp
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - name
+    - store_type
+    - file_count
+    - total_chunks
+    - total_bytes
+    - repo_count
+    - created_at
+KvecRepo:
+  type: object
+  description: A git repository tracked in a kvec collection
+  properties:
+    id:
+      type: string
+      format: uuid
+    collection_id:
+      type: string
+      format: uuid
+    name:
+      type: string
+      description: Repository name
+    root_path:
+      type: string
+      nullable: true
+      description: Absolute path to repo root on disk
+    remote_url:
+      type: string
+      nullable: true
+      description: Git remote URL
+    file_count:
+      type: integer
+      description: Number of tracked files in this repo
+    snapshot_count:
+      type: integer
+      description: Number of snapshots
+    last_upload:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - collection_id
+    - name
+    - file_count
+    - snapshot_count
+    - created_at
+KvecFile:
+  type: object
+  description: A tracked file in a kvec collection with chunk stats and latest snapshot info
+  properties:
+    id:
+      type: string
+      format: uuid
+    file_path:
+      type: string
+      description: Relative file path
+    content_hash:
+      type: string
+      nullable: true
+    file_size:
+      type: integer
+      nullable: true
+      description: File size in bytes
+    language:
+      type: string
+      nullable: true
+      description: Detected programming language
+    status:
+      type: string
+      description: Processing status (e.g., 'ready', 'error')
+    error_message:
+      type: string
+      nullable: true
+    uploaded_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    chunk_count:
+      type: integer
+      description: Number of chunks for this file
+    total_token_count:
+      type: integer
+      nullable: true
+      description: Total tokens across chunks
+    chunk_methods:
+      type: array
+      items:
+        type: string
+      nullable: true
+      description: Chunking methods used
+    repo_name:
+      type: string
+      nullable: true
+      description: Parent repo name (null for non-repo collections)
+    branch:
+      type: string
+      nullable: true
+      description: Git branch from latest snapshot
+    commit_hash:
+      type: string
+      nullable: true
+      description: Git commit hash from latest snapshot
+  required:
+    - id
+    - file_path
+    - status
+    - uploaded_at
+    - updated_at
+    - chunk_count
+BulkDeleteKvecFilesBody:
+  type: object
+  description: Request body to bulk delete tracked files
+  properties:
+    ids:
+      type: array
+      description: Array of tracked file UUIDs to delete
+      items:
+        type: string
+        format: uuid
+      minItems: 1
+  required:
+    - ids
+BulkDeleteKvecFilesResponse:
+  type: object
+  description: Result of bulk deleting tracked files
+  properties:
+    deleted:
+      type: integer
+      description: Number of files deleted
+  required:
+    - deleted
+KvecLanguageCount:
+  type: object
+  description: Language file count in a collection
+  properties:
+    language:
+      type: string
+      description: Programming language name (or 'unknown')
+    count:
+      type: integer
+      description: Number of files with this language
+  required:
+    - language
+    - count
+
+# ── Job Definitions ──────────────────────────────────────────────
+JobDefinitionSummary:
+  type: object
+  description: Pipeline definition summary with step and job counts
+  properties:
+    id:
+      type: string
+      format: uuid
+    key:
+      type: string
+      description: Unique kebab-case identifier
+    name:
+      type: string
+    description:
+      type: string
+      nullable: true
+    is_system:
+      type: boolean
+      description: System definitions cannot be deleted
+    step_count:
+      type: integer
+    job_count:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - key
+    - name
+    - is_system
+    - step_count
+    - job_count
+    - created_at
+    - updated_at
+
+JobDefinitionStep:
+  type: object
+  description: A single step in a pipeline definition
+  properties:
+    id:
+      type: string
+      format: uuid
+    step_index:
+      type: integer
+      description: Execution order (0-based)
+    key:
+      type: string
+      description: Identifier for input wiring references
+    name:
+      type: string
+    step_type:
+      type: string
+      enum: [prompt, map_reduce, code]
+    assistant_handle:
+      type: string
+      nullable: true
+      description: Agent override (null inherits from job)
+    model:
+      type: string
+      nullable: true
+      description: Model for this step (e.g., claude-opus-4-7, gemini-2.5-pro). Null falls back to run-level model or backend default.
+    prompt_handle:
+      type: string
+      nullable: true
+      description: Reference to prompts table
+    input_source:
+      type: string
+      enum: [job_input, previous_step, template]
+    input_config:
+      type: object
+      description: Source-specific parameters (e.g., input_type, step_key, template)
+    config:
+      type: object
+      description: "Step-type-specific config. map_reduce: chunk_size, threshold, batch_prompt_handle, skip_synthesis, batch_timeout_ms (per-batch timeout override, falls back to step timeout_ms), synthesis_timeout_ms (synthesis-only timeout override, falls back to step timeout_ms). code: script_path (.ts/.tsx via tsx, .py via python3, others via node). Gemini steps: use_google_search, use_thinking (boolean), thinking_budget (number)"
+    timeout_ms:
+      type: integer
+      description: Step timeout in milliseconds. For map_reduce, applied per LLM call (each batch and synthesis independently) unless overridden by config.batch_timeout_ms / config.synthesis_timeout_ms.
+  required:
+    - step_index
+    - key
+    - name
+    - step_type
+    - input_source
+    - timeout_ms
+
+JobDefinitionInput:
+  type: object
+  description: Declared input requirement for a definition
+  properties:
+    id:
+      type: string
+      format: uuid
+    input_type:
+      type: string
+      description: Input type key (e.g., prompt, transcript, chunk_prompt)
+    format:
+      type: string
+      nullable: true
+      description: Content format hint from the input type (e.g., text, json, csv)
+    required:
+      type: boolean
+    description:
+      type: string
+      nullable: true
+    example:
+      type: string
+      nullable: true
+      description: Example content showing what a well-formed input looks like
+  required:
+    - input_type
+    - required
+
+JobDefinitionDetail:
+  type: object
+  description: Full definition with steps and input declarations
+  properties:
+    definition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_system:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - key
+        - name
+        - is_system
+        - created_at
+        - updated_at
+    steps:
+      type: array
+      items:
+        $ref: '#/JobDefinitionStep'
+    inputs:
+      type: array
+      items:
+        $ref: '#/JobDefinitionInput'
+  required:
+    - definition
+    - steps
+    - inputs
+
+CreateJobDefinitionBody:
+  type: object
+  properties:
+    key:
+      type: string
+      description: Unique lowercase kebab-case identifier
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    name:
+      type: string
+    description:
+      type: string
+    steps:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+          name:
+            type: string
+          step_type:
+            type: string
+            enum: [prompt, map_reduce, code]
+            default: prompt
+          assistant_handle:
+            type: string
+            nullable: true
+          model:
+            type: string
+            nullable: true
+            description: Model for this step (e.g., claude-opus-4-7, gemini-2.5-pro)
+          prompt_handle:
+            type: string
+            nullable: true
+          input_source:
+            type: string
+            enum: [job_input, previous_step, template]
+            default: job_input
+          input_config:
+            type: object
+          config:
+            type: object
+            description: "Step-type-specific config. map_reduce: chunk_size, threshold, batch_prompt_handle, skip_synthesis. code: script_path (.ts/.tsx via tsx, .py via python3, others via node). Gemini steps: use_google_search, use_thinking (boolean), thinking_budget (number)"
+          timeout_ms:
+            type: integer
+            default: 120000
+        required:
+          - key
+          - name
+    inputs:
+      type: array
+      items:
+        type: object
+        properties:
+          input_type:
+            type: string
+          required:
+            type: boolean
+            default: true
+          description:
+            type: string
+          example:
+            type: string
+            description: Example content showing what a well-formed input looks like
+        required:
+          - input_type
+  required:
+    - key
+    - name
+    - steps
+
+UpdateJobDefinitionBody:
+  type: object
+  properties:
+    name:
+      type: string
+    description:
+      type: string
+    steps:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+          name:
+            type: string
+          step_type:
+            type: string
+            enum: [prompt, map_reduce, code]
+          assistant_handle:
+            type: string
+            nullable: true
+          prompt_handle:
+            type: string
+            nullable: true
+          input_source:
+            type: string
+            enum: [job_input, previous_step, template]
+          input_config:
+            type: object
+          config:
+            type: object
+            description: "Step-type-specific config. map_reduce: chunk_size, threshold, batch_prompt_handle, skip_synthesis. code: script_path (.ts/.tsx via tsx, .py via python3, others via node). Gemini steps: use_google_search, use_thinking (boolean), thinking_budget (number)"
+          timeout_ms:
+            type: integer
+        required:
+          - key
+          - name
+    inputs:
+      type: array
+      items:
+        type: object
+        properties:
+          input_type:
+            type: string
+          required:
+            type: boolean
+          description:
+            type: string
+          example:
+            type: string
+            description: Example content showing what a well-formed input looks like
+        required:
+          - input_type
+
+KdagBackend:
+  type: object
+  description: Backend availability and model suggestions for kdag job execution
+  properties:
+    key:
+      type: string
+      description: Backend identifier (e.g., claude-code, codex-cli, gemini)
+    name:
+      type: string
+      description: Human-readable backend name
+    available:
+      type: boolean
+      description: Whether the backend CLI/API is available on this machine
+    reason:
+      type: string
+      description: Why the backend is unavailable (only present when available=false)
+    models:
+      type: array
+      description: Suggested model identifiers for this backend
+      items:
+        type: string
+  required:
+    - key
+    - name
+    - available
+    - models
+
+KdagInputType:
+  type: object
+  description: A registered input type for kdag pipeline definitions
+  properties:
+    id:
+      type: string
+      format: uuid
+    key:
+      type: string
+      description: Unique input type key (e.g., prompt, transcript, research_sources)
+    description:
+      type: string
+      nullable: true
+      description: Human-readable description of the input type
+    format:
+      type: string
+      nullable: true
+      description: "Content format hint: text, json, csv, markdown, url-list, code, xml"
+  required:
+    - id
+    - key
+
+CreateKdagInputTypeBody:
+  type: object
+  description: Body for registering a custom input type
+  properties:
+    key:
+      type: string
+      description: Unique key (lowercase letters, digits, hyphens, underscores; must start with a letter)
+    description:
+      type: string
+      description: Human-readable description
+    format:
+      type: string
+      description: "Content format hint: text, json, csv, markdown, url-list, code, xml"
+  required:
+    - key
+
+# ── Kdag Jobs ─────────────────────────────────────────────
+
+CreateKdagJobBody:
+  type: object
+  description: Create a kdag job for a pipeline definition
+  properties:
+    definition_key:
+      type: string
+      description: Pipeline definition key (e.g., 'session-summary', 'custom', 'chained-refinement')
+    job_type:
+      type: string
+      description: "Legacy job type key (auto-resolved: session_summary, custom). Prefer definition_key."
+    assistant_handle:
+      type: string
+      description: "Agent to execute the job (default: claude-code). Options: claude-code, gemini, codex-cli"
+    session_id:
+      type: string
+      description: Session UUID (required for session_summary jobs)
+    prompt_text:
+      type: string
+      description: Prompt text (required for custom jobs, optional override for session_summary)
+    system_prompt_text:
+      type: string
+      description: System prompt override (optional)
+    model:
+      type: string
+      description: Model override for execution
+    mode:
+      type: string
+      enum: [full, incremental]
+      description: "Session summary mode: full (default) or incremental (requires existing summary)"
+    inputs:
+      type: object
+      additionalProperties:
+        type: string
+      description: "Input values keyed by input type (e.g., { prompt: '...', transcript: '...' }). Used with definition_key."
+
+RunKdagJobBody:
+  type: object
+  description: Optional overrides when starting a job run
+  properties:
+    model:
+      type: string
+      description: Model override for this run
+    assistant_handle:
+      type: string
+      description: Switch the job's assistant before running
+    step_timeout_ms:
+      type: integer
+      description: "Override per-step timeout for all steps in this run (ms). Default: 120000"
+    cli_flags:
+      type: object
+      description: Additional CLI flags passed to the backend
+    queue:
+      type: boolean
+      description: "If true (default), queue the job when another is running. If false, return 409."
+      default: true
+
+RetryKdagJobBody:
+  type: object
+  description: Optional overrides when retrying a failed job
+  properties:
+    model:
+      type: string
+      description: Model override for the retry
+    assistant_handle:
+      type: string
+      description: Switch the job's assistant before retrying
+    step_timeout_ms:
+      type: integer
+      description: "Override per-step timeout for all steps in this retry (ms). Default: 120000"
+    queue:
+      type: boolean
+      description: "If true (default), queue the retry when another job is running. If false, return 409."
+      default: true
+
+KdagQueueState:
+  type: object
+  description: Current job queue state
+  properties:
+    running:
+      type: string
+      format: uuid
+      nullable: true
+      description: Currently running job ID, or null
+    queue:
+      type: array
+      items:
+        type: object
+        properties:
+          job_id:
+            type: string
+            format: uuid
+          run_id:
+            type: string
+            format: uuid
+          position:
+            type: integer
+            description: Queue position (1-based)
+        required:
+          - job_id
+          - run_id
+          - position
+  required:
+    - running
+    - queue
+
+KdagJobSummary:
+  type: object
+  description: Job summary with latest run status
+  properties:
+    id:
+      type: string
+      format: uuid
+    job_type:
+      type: string
+    definition_key:
+      type: string
+      nullable: true
+    definition_name:
+      type: string
+      nullable: true
+    requested_by:
+      type: string
+      nullable: true
+    assistant_handle:
+      type: string
+    project_handle:
+      type: string
+      nullable: true
+    project_name:
+      type: string
+      nullable: true
+    latest_run:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        model:
+          type: string
+          nullable: true
+        exit_code:
+          type: integer
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        step_count:
+          type: integer
+        steps_completed:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - job_type
+    - assistant_handle
+    - created_at
+
+KdagJobList:
+  type: object
+  properties:
+    jobs:
+      type: array
+      items:
+        $ref: '#/KdagJobSummary'
+    pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - total
+        - limit
+        - offset
+  required:
+    - jobs
+    - pagination
+
+KdagJobInput:
+  type: object
+  description: Job input (content omitted by default for large inputs)
+  properties:
+    id:
+      type: string
+      format: uuid
+    input_type:
+      type: string
+    content_length:
+      type: integer
+    content:
+      type: string
+      description: Input content (only included with include_content=true; transcript never included)
+    ref_type:
+      type: string
+      nullable: true
+    ref_id:
+      type: string
+      nullable: true
+  required:
+    - id
+    - input_type
+    - content_length
+
+KdagJobRun:
+  type: object
+  description: A single execution run of a job
+  properties:
+    id:
+      type: string
+      format: uuid
+    status:
+      type: string
+      enum: [pending, running, completed, failed]
+    model:
+      type: string
+      nullable: true
+    exit_code:
+      type: integer
+      nullable: true
+    error:
+      type: string
+      nullable: true
+    duration_ms:
+      type: integer
+      nullable: true
+    step_count:
+      type: integer
+    steps_completed:
+      type: integer
+    steps:
+      type: array
+      items:
+        $ref: '#/KdagJobStep'
+    output:
+      type: string
+      nullable: true
+      description: Final output text (only for completed runs)
+    started_at:
+      type: string
+      format: date-time
+      nullable: true
+    completed_at:
+      type: string
+      format: date-time
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - status
+    - step_count
+    - steps_completed
+    - steps
+    - created_at
+
+KdagJobStep:
+  type: object
+  description: Individual step execution record
+  properties:
+    id:
+      type: string
+      format: uuid
+    definition_step_index:
+      type: integer
+      description: Which definition step this belongs to
+    step_index:
+      type: integer
+      description: Local index within the definition step (0 for single steps, 0-N for map_reduce batches)
+    step_type:
+      type: string
+      description: Step key from the definition
+    status:
+      type: string
+      enum: [pending, running, completed, failed, canceled]
+    input_chars:
+      type: integer
+      nullable: true
+    input_text:
+      type: string
+      description: Full input text (only with include_content=true)
+    duration_ms:
+      type: integer
+      nullable: true
+    output_preview:
+      type: string
+      nullable: true
+      description: First 500 chars of output (default mode)
+    output_length:
+      type: integer
+      nullable: true
+    metadata:
+      type: object
+      nullable: true
+    created_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - definition_step_index
+    - step_index
+    - step_type
+    - status
+    - created_at
+
+KdagJobDetail:
+  type: object
+  description: Full job detail with inputs, runs, steps, and output
+  properties:
+    job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        job_type:
+          type: string
+        definition_key:
+          type: string
+          nullable: true
+        definition_name:
+          type: string
+          nullable: true
+        requested_by:
+          type: string
+          nullable: true
+        assistant_handle:
+          type: string
+        project_handle:
+          type: string
+          nullable: true
+        project_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - job_type
+        - assistant_handle
+        - created_at
+    inputs:
+      type: array
+      items:
+        $ref: '#/KdagJobInput'
+    runs:
+      type: array
+      items:
+        $ref: '#/KdagJobRun'
+    output:
+      type: string
+      nullable: true
+      description: Output from the latest completed run (top-level convenience field)
+  required:
+    - job
+    - inputs
+    - runs
+
+# ── Assistant Chat ────────────────────────────────────────
+
+AssistantChatTurn:
+  type: object
+  description: A single conversation turn (user or assistant message)
+  properties:
+    role:
+      type: string
+      enum: [user, assistant]
+    content:
+      type: string
+      maxLength: 100000
+  required:
+    - role
+    - content
+
+AssistantChatMessage:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    chat_id:
+      type: string
+      format: uuid
+    prompt_text:
+      type: string
+    response:
+      type: string
+      nullable: true
+    model:
+      type: string
+    input_tokens:
+      type: integer
+      nullable: true
+    output_tokens:
+      type: integer
+      nullable: true
+    error:
+      type: string
+      nullable: true
+    status:
+      type: string
+      enum: [pending, completed, failed]
+      description: Turn lifecycle status
+    grounding:
+      type: object
+      nullable: true
+      description: Google Search grounding metadata (Gemini only)
+      properties:
+        searchQueries:
+          type: array
+          items:
+            type: string
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              uri:
+                type: string
+              title:
+                type: string
+    thinking:
+      type: object
+      nullable: true
+      description: Thinking metadata (Gemini only)
+      properties:
+        text:
+          type: string
+        tokenCount:
+          type: integer
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - chat_id
+    - prompt_text
+    - status
+    - created_at
+    - updated_at
+
+AssistantChat:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    assistant_handle:
+      type: string
+    title:
+      type: string
+      nullable: true
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+    project_handle:
+      type: string
+      nullable: true
+    project_name:
+      type: string
+      nullable: true
+    source:
+      type: string
+      description: Origin channel (ui, mcp, api)
+    caller_handle:
+      type: string
+      nullable: true
+      description: Handle of the assistant that initiated an MCP chat (e.g., claude-code, codex-cli)
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+    messages:
+      type: array
+      description: Included when ?include_messages=true
+      items:
+        $ref: '#/AssistantChatMessage'
+    delegations:
+      type: object
+      description: >
+        Delegated child chats grouped by parent turn ID. Included when ?include_messages=true.
+        Keys are parent turn UUIDs, values are arrays of ChatDelegation objects.
+      additionalProperties:
+        type: array
+        items:
+          $ref: '#/ChatDelegation'
+  required:
+    - id
+    - assistant_handle
+    - created_at
+    - updated_at
+
+ChatDelegation:
+  type: object
+  description: A delegated child chat linked to a specific parent turn
+  properties:
+    chat:
+      $ref: '#/AssistantChat'
+    messages:
+      type: array
+      items:
+        $ref: '#/AssistantChatMessage'
+    delegated_handle:
+      type: string
+      description: Backend handle that was delegated to (e.g., 'gemini')
+  required:
+    - chat
+    - messages
+    - delegated_handle
+
+AssistantChatSummary:
+  type: object
+  properties:
+    id:
+      type: string
+      format: uuid
+    assistant_handle:
+      type: string
+    title:
+      type: string
+      nullable: true
+    project_id:
+      type: string
+      format: uuid
+      nullable: true
+    project_handle:
+      type: string
+      nullable: true
+    project_name:
+      type: string
+      nullable: true
+    source:
+      type: string
+      description: Origin channel (ui, mcp, api)
+    caller_handle:
+      type: string
+      nullable: true
+      description: Handle of the assistant that initiated an MCP chat
+    message_count:
+      type: integer
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - assistant_handle
+    - message_count
+    - created_at
+    - updated_at
+
+BackupFile:
+  type: object
+  description: A database backup file
+  properties:
+    filename:
+      type: string
+      description: Backup filename (e.g., khef_20260215_120000.sql.gz)
+    size:
+      type: integer
+      description: File size in bytes
+    size_human:
+      type: string
+      description: Human-readable file size (e.g., 1.2 MB)
+    created_at:
+      type: string
+      format: date-time
+      description: File modification timestamp
+    path:
+      type: string
+      description: Absolute file path
+  required:
+    - filename
+    - size
+    - size_human
+    - created_at
+    - path
+
+RestoreResponse:
+  type: object
+  description: Result of a database restore operation
+  properties:
+    success:
+      type: boolean
+    restored_from:
+      type: string
+      description: Filename that was restored
+    safety_backup:
+      type: string
+      nullable: true
+      description: Filename of the safety backup created before restore
+    message:
+      type: string
+      description: Human-readable summary of the restore operation
+  required:
+    - success
+    - restored_from
+    - safety_backup
+    - message
+
+# ── Slack ────────────────────────────────────────────────
+
+SlackIngestBody:
+  type: object
+  description: Request body for ingesting Slack markdown content
+  properties:
+    content:
+      type: string
+      description: Markdown content to ingest (### heading per message)
+    document_id:
+      type: string
+      description: Stable identifier for deduplication and deletion (e.g., 'general-2024-05')
+    metadata:
+      type: object
+      properties:
+        channel:
+          type: string
+          description: Slack channel name
+        workspace:
+          type: string
+          description: Slack workspace name
+        team:
+          type: string
+          description: Team or group name
+        topic:
+          type: string
+          description: Topic or thread subject
+        date_range:
+          type: string
+          description: Date range covered
+  required:
+    - content
+    - document_id
+
+SlackIngestResult:
+  type: object
+  description: Result of a Slack content ingestion
+  properties:
+    document_id:
+      type: string
+    chunks_created:
+      type: integer
+      description: Number of chunks created (0 if content was unchanged)
+    collection:
+      type: string
+      description: Collection name (slack-messages)
+  required:
+    - document_id
+    - chunks_created
+    - collection
+
+SlackSearchResult:
+  type: object
+  description: A matching Slack message chunk from semantic search
+  properties:
+    content:
+      type: string
+      description: Matched message chunk content
+    score:
+      type: number
+      format: float
+      description: Cosine similarity score (0-1)
+    document_id:
+      type: string
+      description: Source document identifier
+    chunk_index:
+      type: integer
+      description: Chunk index within the document
+    metadata:
+      type: object
+      nullable: true
+      description: Chunk and document metadata
+  required:
+    - content
+    - score
+    - document_id
+    - chunk_index
+
+SlackDocument:
+  type: object
+  description: An ingested Slack document in the collection
+  properties:
+    id:
+      type: string
+      format: uuid
+    document_id:
+      type: string
+      description: Document identifier (file_path in tracked_files)
+    content_hash:
+      type: string
+    file_size:
+      type: integer
+    language:
+      type: string
+      nullable: true
+    status:
+      type: string
+    metadata:
+      type: object
+      nullable: true
+    chunk_count:
+      type: integer
+    uploaded_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+  required:
+    - id
+    - document_id
+    - status
+    - chunk_count

@@ -1,0 +1,429 @@
+ConfigsById:
+  get:
+    operationId: getConfig
+    tags:
+      - configs
+    summary: Get config
+    description: Retrieve a specific configuration by ID (includes nested assistant info)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Config found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: ../components/schemas.yaml#/AssistantConfig
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateConfig
+    tags:
+      - configs
+    summary: Update config
+    description: Update a configuration (increments version if content changes)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ConfigUpdate
+    responses:
+      '200':
+        description: Config updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: ../components/schemas.yaml#/AssistantConfig
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteConfig
+    tags:
+      - configs
+    summary: Delete config
+    description: Delete a configuration and remove any assistant/project links
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Config deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdSync:
+  get:
+    operationId: getConfigSyncStatus
+    tags:
+      - configs
+    summary: Get sync status
+    description: Check if the config is in sync with the system file
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Sync status
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ConfigSyncStatus
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: syncConfigToFile
+    tags:
+      - configs
+    summary: Sync to file
+    description: Write config content to system file with force-with-lease semantics
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: force
+        in: query
+        description: Force sync even if external changes detected
+        schema:
+          type: boolean
+    responses:
+      '200':
+        description: Sync successful
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ConfigSyncResult
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: External changes detected
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ConfigSyncConflict
+ConfigsByIdImport:
+  post:
+    operationId: importConfigFromFile
+    tags:
+      - configs
+    summary: Import from system file
+    description: Import content from system file into database (increments version)
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Import successful
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: imported
+                path:
+                  type: string
+                config:
+                  $ref: ../components/schemas.yaml#/AssistantConfig
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdDiscoverImports:
+  post:
+    operationId: discoverConfigImports
+    tags:
+      - configs
+    summary: Discover and import @references
+    description: Parse @references from a config's content and import them as linked configs.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Discovery results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                discovered:
+                  type: integer
+                imported:
+                  type: integer
+                updated:
+                  type: integer
+                unchanged:
+                  type: integer
+                imports:
+                  type: array
+                  items:
+                    type: object
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdImports:
+  get:
+    operationId: listConfigImports
+    tags:
+      - configs
+    summary: Get imports for a config
+    description: Retrieve all child configs imported via @ directives in a parent config's markdown content.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: List of imported child configs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imports:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ConfigImport
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdSnapshots:
+  get:
+    operationId: listConfigSnapshots
+    tags:
+      - configs
+    summary: List config snapshots
+    description: Get all snapshots for a config with current snapshot number computed from MAX(snapshot_number).
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: List of snapshots with current snapshot number
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_snapshot:
+                  type: integer
+                  description: Current snapshot number (computed from MAX)
+                snapshots:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ConfigSnapshotSummary
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createConfigSnapshot
+    tags:
+      - configs
+    summary: Create config snapshot
+    description: >-
+      Create a new snapshot of the current config content. For JSON configs, validates and normalizes the content.
+      Always creates a new snapshot (force mode).
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: Snapshot created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot_number:
+                  type: integer
+      '400':
+        description: Invalid JSON content (for JSON configs)
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdSnapshotsById:
+  get:
+    operationId: getConfigSnapshot
+    tags:
+      - configs
+    summary: Get specific snapshot
+    description: Retrieve a specific snapshot by number including full content.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '200':
+        description: Snapshot details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot:
+                  $ref: ../components/schemas.yaml#/ConfigSnapshot
+      '400':
+        description: Invalid snapshot number
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteConfigSnapshot
+    tags:
+      - configs
+    summary: Delete snapshot
+    description: Delete a specific snapshot. Cannot delete the only remaining snapshot.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '204':
+        description: Snapshot deleted
+      '400':
+        description: Cannot delete the only remaining snapshot
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdSnapshotsByIdRestore:
+  post:
+    operationId: restoreConfigSnapshot
+    tags:
+      - configs
+    summary: Restore snapshot
+    description: >-
+      Restore a historical snapshot as current. Creates a safety snapshot of current content first. For JSON configs,
+      validates content before restoring.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: snapshotNumber
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '200':
+        description: Snapshot restored
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - restored
+                new_snapshot:
+                  type: integer
+                synced_to_disk:
+                  type: boolean
+      '400':
+        description: Invalid JSON in snapshot (for JSON configs)
+      '403':
+        description: Config is read-only
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdMcpServers:
+  get:
+    operationId: listConfigMcpServers
+    tags:
+      - configs
+    summary: List MCP servers
+    description: List all MCP servers configured in a JSON config (e.g., claude.json).
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+    responses:
+      '200':
+        description: List of MCP servers
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                servers:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/McpServerConfig
+      '400':
+        description: Config is not JSON format
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ConfigsByIdMcpServersById:
+  put:
+    operationId: replaceConfigMcpServer
+    tags:
+      - configs
+    summary: Add or update MCP server
+    description: Add a new MCP server or update an existing one in a JSON config. Creates pre/post modification snapshots.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: name
+        in: path
+        required: true
+        description: Server name (alphanumeric, underscore, hyphen)
+        schema:
+          type: string
+          pattern: ^[a-zA-Z0-9_-]+$
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/McpServerInput
+    responses:
+      '200':
+        description: Server added or updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - created
+                    - updated
+                server:
+                  type: string
+                config:
+                  $ref: ../components/schemas.yaml#/McpServerConfig
+      '400':
+        description: Invalid server name or config
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteConfigMcpServer
+    tags:
+      - configs
+    summary: Remove MCP server
+    description: Remove an MCP server from a JSON config. Creates pre/post modification snapshots.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ConfigId
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Server removed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - deleted
+                server:
+                  type: string
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

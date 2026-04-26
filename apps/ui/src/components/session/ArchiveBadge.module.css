@@ -1,0 +1,25 @@
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-alt, var(--bg-secondary, rgba(120, 120, 120, 0.08)));
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.badge > span:first-of-type {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.detail {
+  color: var(--text-muted);
+  font-weight: 400;
+}

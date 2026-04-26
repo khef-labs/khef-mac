@@ -1,0 +1,86 @@
+.menu {
+  position: fixed;
+  min-width: 200px;
+  max-width: 240px;
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 200;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+
+  &:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.backItem {
+  justify-content: flex-start;
+  color: var(--muted);
+  font-size: var(--text-xs);
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+.currentItem {
+  color: var(--accent);
+}
+
+.deleteItem {
+  color: var(--fg);
+
+  &:hover {
+    color: var(--error);
+    background: var(--error-bg, rgba(239, 68, 68, 0.1));
+  }
+}
+
+.chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.checkIcon {
+  flex-shrink: 0;
+}
+
+.dimIcon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
+}
+
+.scrollArea {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.loading {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}

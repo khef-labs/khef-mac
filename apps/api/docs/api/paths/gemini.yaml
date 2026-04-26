@@ -1,0 +1,395 @@
+GeminiStatus:
+  get:
+    operationId: getGeminiStatus
+    tags:
+      - gemini
+    summary: Check Gemini availability
+    description: Returns whether Gemini is properly configured (gcloud CLI, auth, project settings)
+    responses:
+      '200':
+        description: Gemini status
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                available:
+                  type: boolean
+                reason:
+                  type: string
+                project:
+                  type: string
+                location:
+                  type: string
+                model:
+                  type: string
+                account:
+                  type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+GeminiSettings:
+  get:
+    operationId: getGeminiSettings
+    tags:
+      - gemini
+    summary: Get Gemini settings
+    description: Returns current Gemini configuration (project, location, default model, optional account)
+    responses:
+      '200':
+        description: Gemini settings
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings:
+                  type: object
+                  properties:
+                    project:
+                      type: string
+                    location:
+                      type: string
+                    defaultModel:
+                      type: string
+                    account:
+                      type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+GeminiConversations:
+  get:
+    operationId: listGeminiConversations
+    tags:
+      - gemini
+    summary: List conversations
+    description: List Gemini conversations with optional project filter and pagination
+    parameters:
+      - name: project_id
+        in: query
+        schema:
+          type: string
+        description: Filter by project (accepts handle, name, or UUID)
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: List of conversations
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversations:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/GeminiConversation
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createGeminiConversation
+    tags:
+      - gemini
+    summary: Create conversation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+              project_id:
+                type: string
+                description: Project handle, name, or UUID
+    responses:
+      '201':
+        description: Conversation created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation:
+                  $ref: ../components/schemas.yaml#/GeminiConversation
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+GeminiConversationsById:
+  get:
+    operationId: getGeminiConversation
+    tags:
+      - gemini
+    summary: Get conversation with messages
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Conversation with messages
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation:
+                  allOf:
+                    - $ref: ../components/schemas.yaml#/GeminiConversation
+                    - type: object
+                      properties:
+                        messages:
+                          type: array
+                          items:
+                            $ref: ../components/schemas.yaml#/GeminiMessage
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateGeminiConversation
+    tags:
+      - gemini
+    summary: Update conversation
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+              project_id:
+                type: string
+                nullable: true
+    responses:
+      '200':
+        description: Conversation updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversation:
+                  $ref: ../components/schemas.yaml#/GeminiConversation
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteGeminiConversation
+    tags:
+      - gemini
+    summary: Delete conversation
+    description: Deletes a conversation and all its messages
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Conversation deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+GeminiConversationsByIdMessages:
+  post:
+    operationId: sendGeminiMessage
+    tags:
+      - gemini
+    summary: Send message and get response
+    description: >
+      Send a prompt to Gemini and store the response. When `contents` is provided, it is sent as the full conversation
+      history to the Gemini API, enabling multi-turn conversations. The `prompt_text` is always required for storage.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - prompt_text
+            properties:
+              prompt_text:
+                type: string
+                description: The user's prompt text (always stored in DB)
+              prompt_id:
+                type: string
+                format: uuid
+                description: Optional reference to a saved prompt
+              model:
+                type: string
+                description: Gemini model override
+              temperature:
+                type: number
+              max_output_tokens:
+                type: integer
+              use_google_search:
+                type: boolean
+                description: Enable Google Search grounding
+              use_thinking:
+                type: boolean
+                description: Enable chain-of-thought reasoning (Gemini 2.5+)
+              thinking_budget:
+                type: integer
+                description: Token budget for thinking (-1 dynamic, 0 disable, 1-32768 explicit cap)
+              contents:
+                type: array
+                description: >
+                  Full conversation history for multi-turn context. When provided, this is sent directly to the Gemini
+                  API instead of wrapping prompt_text in a single message.
+                items:
+                  type: object
+                  required:
+                    - role
+                    - parts
+                  properties:
+                    role:
+                      type: string
+                      enum:
+                        - user
+                        - model
+                    parts:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - text
+                        properties:
+                          text:
+                            type: string
+    responses:
+      '201':
+        description: Message created with Gemini response
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  $ref: ../components/schemas.yaml#/GeminiMessage
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '500':
+        description: Gemini API error (message is still stored with error field)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  $ref: ../components/schemas.yaml#/GeminiMessage
+                error:
+                  type: string
+GeminiConversationsByIdMessagesById:
+  delete:
+    operationId: deleteGeminiMessage
+    tags:
+      - gemini
+    summary: Delete a message
+    description: Delete an individual message from a conversation
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Message deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+GeminiGenerate:
+  post:
+    operationId: generateGeminiContent
+    tags:
+      - gemini
+    summary: One-shot generation
+    description: Generate content without conversation tracking
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - prompt_text
+            properties:
+              prompt_text:
+                type: string
+              model:
+                type: string
+              temperature:
+                type: number
+              max_output_tokens:
+                type: integer
+              use_google_search:
+                type: boolean
+              use_thinking:
+                type: boolean
+                description: Enable chain-of-thought reasoning (Gemini 2.5+)
+              thinking_budget:
+                type: integer
+                description: Token budget for thinking (-1 dynamic, 0 disable, 1-32768 explicit cap)
+    responses:
+      '200':
+        description: Generated content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                response:
+                  type: string
+                model:
+                  type: string
+                input_tokens:
+                  type: integer
+                output_tokens:
+                  type: integer
+                grounding:
+                  $ref: ../components/schemas.yaml#/GeminiGrounding
+                thinking:
+                  $ref: ../components/schemas.yaml#/GeminiThinking
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '500':
+        description: Gemini API error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error

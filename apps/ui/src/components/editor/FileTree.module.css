@@ -1,0 +1,243 @@
+.tree {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  font-size: var(--text-sm);
+  user-select: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: max-content;
+  min-width: 100%;
+  padding: 3px var(--space-2);
+  padding-left: calc(var(--space-2) + var(--depth, 0) * 16px);
+  cursor: pointer;
+  color: var(--fg);
+  border-radius: 0;
+  white-space: nowrap;
+  overflow: visible;
+  min-height: 26px;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--surface);
+  }
+}
+
+.itemDisabled {
+  opacity: 0.4;
+  cursor: default;
+
+  &:hover {
+    background: transparent;
+  }
+}
+
+.itemSelected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+}
+
+.itemModified .name::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.iconDir {
+  color: var(--accent);
+}
+
+.name {
+  overflow: visible;
+}
+
+.chevron {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: transform var(--transition-fast);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.empty {
+  padding: var(--space-4);
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+}
+
+/* Inline new file/folder input */
+.inlineInputWrap {
+  padding: 2px var(--space-2);
+  padding-left: calc(var(--space-2) + var(--depth, 0) * 16px + 16px);
+}
+
+.inlineInput {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.inlineField {
+  flex: 1;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  min-width: 0;
+}
+
+.inlineFieldError {
+  border-color: var(--error);
+}
+
+.inlineErrorMsg {
+  color: var(--error);
+  font-size: 11px;
+  margin-top: 2px;
+  padding-left: 20px;
+}
+
+/* Right-click context menu */
+.contextMenu {
+  position: fixed;
+  z-index: 200;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-1) 0;
+}
+
+.contextMenuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--surface);
+  }
+}
+
+.contextMenuDanger {
+  color: var(--error);
+
+  &:hover {
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+  }
+}
+
+.contextMenuDivider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
+}
+
+/* Confirmation modal (match Editor modal style pattern) */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.modal {
+  width: min(420px, calc(100vw - 2rem));
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-3);
+  padding: var(--space-4);
+}
+
+.modalTitle {
+  margin: 0 0 var(--space-2) 0;
+  font-size: var(--text-base);
+  color: var(--fg);
+}
+
+.modalMessage {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.modalBtn,
+.modalBtnDanger {
+  appearance: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.modalBtn {
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+
+  &:hover {
+    border-color: var(--fg);
+  }
+}
+
+.modalBtnDanger {
+  color: var(--error);
+  background: transparent;
+  border: 1px solid var(--error);
+
+  &:hover {
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+  }
+}

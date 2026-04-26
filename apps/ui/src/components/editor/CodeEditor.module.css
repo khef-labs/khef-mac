@@ -1,0 +1,24 @@
+.editor {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.editor :global(.cm-editor) {
+  height: 100%;
+  font-family: var(--font-mono);
+}
+
+.editor :global(.cm-editor.cm-focused) {
+  outline: none;
+}
+
+.editor :global(.cm-scroller) {
+  overflow: auto;
+}
+
+.editor :global(.cm-placeholder) {
+  color: var(--muted);
+  font-style: italic;
+}

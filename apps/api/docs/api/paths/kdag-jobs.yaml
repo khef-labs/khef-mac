@@ -1,0 +1,346 @@
+KdagJob:
+  post:
+    operationId: createKdagJob
+    tags:
+      - jobs
+    summary: Create a new job
+    description: >
+      Create a job for a pipeline definition with input values.
+      Accepts either `definition_key` (generic) or `job_type` (legacy: session_summary, custom).
+      For definition-driven jobs, provide `definition_key` and `inputs` map.
+      For session_summary jobs, provide `session_id` (transcript loaded automatically).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateKdagJobBody
+    responses:
+      '201':
+        description: Job created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    job_type:
+                      type: string
+                    definition_key:
+                      type: string
+                      nullable: true
+                    created_at:
+                      type: string
+                      format: date-time
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '409':
+        description: Duplicate run already exists (session_summary only)
+
+KdagJobById:
+  get:
+    operationId: getKdagJob
+    tags:
+      - jobs
+    summary: Get job detail with runs, steps, and output
+    description: >
+      Returns full job detail including inputs, all runs with steps, and output.
+      Use `include_content=true` to include full step input/output text (excluded by default
+      to reduce payload size). Transcript input content is never included.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Job UUID
+      - name: include_content
+        in: query
+        schema:
+          type: string
+          enum: ['true', 'false']
+          default: 'false'
+        description: Include full step input/output text
+    responses:
+      '200':
+        description: Job detail
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/KdagJobDetail
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KdagJobRun:
+  post:
+    operationId: runKdagJob
+    tags:
+      - jobs
+    summary: Start or queue a job
+    description: >
+      Starts executing a job or queues it if another is already running.
+      When queued, creates a run record with status 'queued' and returns the position.
+      The queued job auto-starts when the running job completes.
+      Set `queue=false` in the body to get a 409 instead of queuing.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Job UUID
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RunKdagJobBody
+    responses:
+      '202':
+        description: Execution started or queued
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [started, queued]
+                job_id:
+                  type: string
+                  format: uuid
+                run_id:
+                  type: string
+                  format: uuid
+                  description: Present when queued
+                position:
+                  type: integer
+                  description: Queue position (1-based), present when queued
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Another job is already running (only when queue=false)
+      '429':
+        description: Queue is full
+
+KdagJobCancel:
+  post:
+    operationId: cancelKdagJob
+    tags:
+      - jobs
+    summary: Cancel a running or queued job
+    description: >
+      Cancels a running or queued job. For running jobs, sends SIGTERM to the subprocess
+      and marks the run as failed. For queued jobs, removes from queue and marks the
+      queued run as failed. Response includes `was_queued` to indicate which case applied.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Job UUID
+    responses:
+      '200':
+        description: Job canceled
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                canceled:
+                  type: boolean
+                run_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                was_queued:
+                  type: boolean
+      '400':
+        description: No running or queued execution to cancel
+
+KdagJobRetry:
+  post:
+    operationId: retryKdagJob
+    tags:
+      - jobs
+    summary: Retry a failed job
+    description: >
+      Retries the latest failed run from where it left off (resumes from the failed step).
+      If another job is running, queues the retry automatically (set `queue=false` to get 409 instead).
+      Optionally switch the assistant or model for the retry.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Job UUID
+    requestBody:
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RetryKdagJobBody
+    responses:
+      '202':
+        description: Retry started or queued
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [retrying, queued]
+                job_id:
+                  type: string
+                  format: uuid
+                run_id:
+                  type: string
+                  format: uuid
+                position:
+                  type: integer
+                  description: Queue position (1-based), present when queued
+      '400':
+        description: No failed run to retry
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Another job is already running (only when queue=false)
+      '429':
+        description: Queue is full
+
+KdagJobs:
+  get:
+    operationId: listKdagJobs
+    tags:
+      - jobs
+    summary: List jobs with filters
+    description: >
+      Returns jobs with their latest run status. Supports filtering by
+      run status, project, and job type. Results ordered by creation date descending.
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [pending, running, completed, failed, queued]
+        description: Filter by latest run status
+      - name: project
+        in: query
+        schema:
+          type: string
+        description: Filter by project handle or name
+      - name: job_type
+        in: query
+        schema:
+          type: string
+        description: Filter by job type key (e.g., session_summary, custom)
+      - name: definition_key
+        in: query
+        schema:
+          type: string
+        description: Filter by pipeline definition key (e.g., session-summary, chained-refinement)
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: Job list with pagination
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/KdagJobList
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+KdagJobsById:
+  delete:
+    operationId: deleteKdagJob
+    tags:
+      - jobs
+    summary: Delete a job
+    description: >
+      Delete a job and all its runs, steps, inputs, and outputs (cascade).
+      Cannot delete a job with a running or queued execution.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Job UUID
+    responses:
+      '204':
+        description: Job deleted
+      '400':
+        description: Cannot delete a job with a running or queued execution
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+KdagJobTypes:
+  get:
+    operationId: listKdagJobTypes
+    tags:
+      - jobs
+    summary: List valid job types
+    description: >
+      Returns the registry of available job types (e.g., session_summary, custom).
+    responses:
+      '200':
+        description: Job type list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_types:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      description:
+                        type: string
+                    required:
+                      - key
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+KdagQueue:
+  get:
+    operationId: getKdagQueue
+    tags:
+      - jobs
+    summary: Get current queue state
+    description: >
+      Returns the currently running job (if any) and the list of queued jobs
+      with their positions.
+    responses:
+      '200':
+        description: Queue state
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/KdagQueueState
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

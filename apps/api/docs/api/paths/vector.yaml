@@ -1,0 +1,334 @@
+VectorSearch:
+  get:
+    operationId: searchVectors
+    tags:
+      - vector
+    summary: Semantic search across memories
+    description: >
+      Search memories using vector embeddings for semantic similarity. Returns matching memories ranked by similarity
+      score.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Search query text
+      - name: project_id
+        in: query
+        schema:
+          type: string
+        description: Filter by project UUID
+      - name: type
+        in: query
+        schema:
+          type: string
+        description: Filter by memory type
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 10
+        description: Max results to return
+      - name: compact
+        in: query
+        schema:
+          type: boolean
+          default: true
+        description: Return compact format with content_excerpt instead of full content
+    responses:
+      '200':
+        description: Semantic search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memories:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemorySummary
+                pagination:
+                  type: object
+                  properties:
+                    total_count:
+                      type: integer
+                    limit:
+                      type: integer
+                    offset:
+                      type: integer
+                    has_more:
+                      type: boolean
+      '400':
+        description: Missing required query parameter
+VectorSourceSearch:
+  get:
+    operationId: searchSourceCode
+    tags:
+      - vector
+    summary: Semantic search across indexed source code
+    description: >
+      Search source code files using vector embeddings for semantic similarity. Returns matching code chunks with file
+      paths, language, and similarity scores. Requires the kvec-source collection to be populated via the ingest script.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Natural language search query
+      - name: language
+        in: query
+        schema:
+          type: string
+        description: Filter by programming language (e.g., 'typescript', 'python')
+      - name: repo
+        in: query
+        schema:
+          type: string
+        description: Filter by repository name
+      - name: branch
+        in: query
+        schema:
+          type: string
+        description: Filter by git branch name
+      - name: commit
+        in: query
+        schema:
+          type: string
+        description: Filter by git commit hash
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 10
+        description: Max results to return
+      - name: min_score
+        in: query
+        schema:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0
+        description: Minimum similarity score threshold (0-1)
+      - name: context
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 3
+          default: 1
+        description: >
+          Number of neighboring chunks to include before and after each matched chunk for surrounding context.
+          When 0, only the matched chunk is returned. When > 0 (default 1), each result includes context_before
+          and context_after arrays with adjacent chunk content.
+    responses:
+      '200':
+        description: Source code search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SourceCodeResult
+                total_count:
+                  type: integer
+                  description: Number of results returned
+      '400':
+        description: Missing required query parameter
+      '404':
+        description: kvec-source collection not found
+
+VectorSourceFile:
+  get:
+    operationId: viewSourceCodeFile
+    tags:
+      - vector
+    summary: View a source file by indexed repo+path or absolute path
+    description: >
+      Reads a source file in one of two modes: (1) `repo` + repo-relative `path` against the kvec-source
+      collection, or (2) `abs_path` as an absolute path (leading `~` expanded; must resolve within $HOME).
+      Modes are mutually exclusive. By default reads working-tree contents from disk. When `ref` is provided,
+      reads the file at that ref via `git show <ref>:<path>` without touching the working tree. In abs_path
+      + ref mode the git root is auto-detected via `git rev-parse --show-toplevel` from the file's directory.
+      Optional 1-based start/end parameters return a line slice.
+    parameters:
+      - name: repo
+        in: query
+        schema:
+          type: string
+        description: Repo name as indexed in kvec-source. Required with `path`; mutually exclusive with `abs_path`.
+      - name: path
+        in: query
+        schema:
+          type: string
+        description: Repo-relative file path (must not start with '/' or contain '..'). Required with `repo`; mutually exclusive with `abs_path`.
+      - name: abs_path
+        in: query
+        schema:
+          type: string
+        description: Absolute file path (leading `~` is expanded to $HOME). Must resolve within $HOME. Mutually exclusive with `repo`+`path`.
+      - name: start
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+        description: 1-based start line (inclusive). Defaults to 1.
+      - name: end
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+        description: 1-based end line (inclusive). Defaults to end of file.
+      - name: ref
+        in: query
+        schema:
+          type: string
+        description: Optional git ref (branch, tag, or commit). When set, reads via `git show` instead of disk. Works with either mode; in abs_path mode the git root is auto-detected.
+    responses:
+      '200':
+        description: File content (or requested slice)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repo:
+                  type: string
+                  nullable: true
+                  description: Repo name (null when abs_path mode was used)
+                path:
+                  type: string
+                  description: Repo-relative path (repo mode) or absolute path (abs_path mode)
+                ref:
+                  type: string
+                  nullable: true
+                root_path:
+                  type: string
+                  nullable: true
+                  description: Repo root (null when abs_path mode is used without `ref`)
+                start:
+                  type: integer
+                end:
+                  type: integer
+                total_lines:
+                  type: integer
+                content:
+                  type: string
+      '400':
+        description: Invalid parameters (both modes supplied, neither supplied, bad line numbers, abs_path outside $HOME, path escapes repo root)
+      '404':
+        description: Repo not found in kvec-source, or file not found at the requested path/ref
+
+VectorSourceFacets:
+  get:
+    operationId: getSourceCodeFacets
+    tags:
+      - vector
+    summary: List source code search filter facets
+    description: >
+      Returns distinct repository, language, and branch values available in the indexed kvec-source collection.
+      Language and branch facets can be narrowed by repository name.
+    parameters:
+      - name: repo
+        in: query
+        schema:
+          type: string
+        description: Optional repository name to narrow language and branch facet values
+    responses:
+      '200':
+        description: Source code filter facets
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SourceCodeFacetsResponse
+      '404':
+        description: kvec-source collection not found
+
+VectorCommitsSearch:
+  get:
+    operationId: searchCommits
+    tags:
+      - vector
+    summary: Semantic search across indexed git commit messages
+    description: >
+      Search git commit messages using vector embeddings for semantic similarity. Returns matching commits ranked by
+      similarity score. Requires the kvec-commits collection to be populated via an embed job.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Natural language search query (e.g., 'retry logic', 'auth refactor')
+      - name: repo
+        in: query
+        schema:
+          type: string
+        description: Filter by repository name
+      - name: author
+        in: query
+        schema:
+          type: string
+        description: Filter by author name (case-insensitive partial match)
+      - name: since
+        in: query
+        schema:
+          type: string
+          format: date
+        description: Filter commits after this date (ISO 8601)
+      - name: until
+        in: query
+        schema:
+          type: string
+          format: date
+        description: Filter commits before this date (ISO 8601)
+      - name: branch
+        in: query
+        schema:
+          type: string
+        description: Filter by git branch name
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+        description: Max results to return
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+        description: Pagination offset
+      - name: min_score
+        in: query
+        schema:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0
+        description: Minimum similarity score threshold (0-1)
+    responses:
+      '200':
+        description: Commit search results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/CommitSearchResult
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '400':
+        description: Missing required query parameter
+      '404':
+        description: kvec-commits collection not found

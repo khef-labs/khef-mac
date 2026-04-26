@@ -1,0 +1,28 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: khef-prometheus
+    ports:
+      - "127.0.0.1:9190:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.enable-lifecycle'
+      - '--web.cors.origin=.*'
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: khef-postgres-exporter
+    ports:
+      - "127.0.0.1:9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres@host.docker.internal:5533/khef?sslmode=disable
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: khef-redis-exporter
+    ports:
+      - "127.0.0.1:9121:9121"
+    environment:
+      - REDIS_ADDR=redis://host.docker.internal:6399

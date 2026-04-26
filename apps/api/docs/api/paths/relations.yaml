@@ -1,0 +1,200 @@
+RelationTypes:
+  get:
+    operationId: listRelationTypes
+    tags:
+      - relations
+    summary: List all relation types
+    description: Returns all relation types with their forward and inverse values and labels
+    responses:
+      '200':
+        description: List of relation types
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relation_types:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/RelationTypeInfo
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+Relations:
+  post:
+    operationId: createRelation
+    tags:
+      - relations
+    summary: Create a relation between memories
+    description: |
+      Create a directed relation between two memories. Cross-project relations are allowed.
+      Both forward (e.g., `depends_on`) and inverse (e.g., `is_depended_on_by`) types are accepted.
+      Inverse types are mapped to their canonical forward form when stored.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateRelationInput
+    responses:
+      '201':
+        description: Relation created successfully
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relation:
+                  $ref: ../components/schemas.yaml#/MemoryRelation
+      '400':
+        description: Invalid input
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        description: One or both memories not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+RelationsMemoryById:
+  get:
+    operationId: listRelationsForMemory
+    tags:
+      - relations
+    summary: Get relations for a memory
+    description: |
+      Retrieve all relations for a specific memory in flat format.
+      The `relation_type` is contextual: forward when this memory is the source, inverse when it's the target.
+      The `relation_label` provides a human-readable label for the contextual direction.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+    responses:
+      '200':
+        description: Relations found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relations:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/FlatRelation
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+RelationsMemoryByIdGraph:
+  get:
+    operationId: getRelationGraph
+    tags:
+      - relations
+    summary: Get memory relation graph
+    description: >-
+      Traverse the memory relation graph bidirectionally starting from a specific memory. Follows both outgoing
+      relations (where memory is source) and incoming relations (where memory is target). Compact mode is enabled by
+      default and returns nodes with project metadata and `content_excerpt`. Use `compact=false` to include full
+      `content` and `depth`.
+    parameters:
+      - $ref: ../components/parameters.yaml#/MemoryId
+      - name: depth
+        in: query
+        description: Maximum traversal depth
+        schema:
+          type: integer
+          default: 2
+          minimum: 1
+      - name: compact
+        in: query
+        description: Return compact nodes (default true)
+        schema:
+          type: boolean
+      - name: max_nodes
+        in: query
+        description: Maximum number of nodes to return (default 200)
+        schema:
+          type: integer
+          minimum: 1
+      - name: max_edges
+        in: query
+        description: Maximum number of edges to return (default 400)
+        schema:
+          type: integer
+          minimum: 1
+    responses:
+      '200':
+        description: Graph traversal complete
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodes:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: ../components/schemas.yaml#/Memory
+                      - type: object
+                        properties:
+                          depth:
+                            type: integer
+                            description: Depth level in the graph
+                edges:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/MemoryRelation
+                max_depth:
+                  type: integer
+                  description: Maximum depth reached in the traversal
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+RelationsById:
+  patch:
+    operationId: updateRelation
+    tags:
+      - relations
+    summary: Update a relation type
+    description: Update the relation type of an existing relation. Accepts both forward and inverse types.
+    parameters:
+      - $ref: ../components/parameters.yaml#/RelationId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              relation_type:
+                $ref: ../components/schemas.yaml#/ContextualRelationType
+            required:
+              - relation_type
+    responses:
+      '200':
+        description: Relation updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                relation:
+                  $ref: ../components/schemas.yaml#/MemoryRelation
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteRelation
+    tags:
+      - relations
+    summary: Delete a relation
+    description: Delete a specific memory relation by ID
+    parameters:
+      - $ref: ../components/parameters.yaml#/RelationId
+    responses:
+      '204':
+        description: Relation deleted successfully
+      '404':
+        description: Relation not found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error

@@ -1,0 +1,231 @@
+ProjectsByIdKnowledge:
+  get:
+    operationId: getProjectKnowledge
+    tags:
+      - knowledge
+    summary: Get all project knowledge
+    description: Get all operational knowledge for a project in one call — commands, context memories, and pattern memories.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    responses:
+      '200':
+        description: Project knowledge
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/KnowledgeResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdKnowledgeCommands:
+  put:
+    operationId: replaceProjectCommands
+    tags:
+      - knowledge
+    summary: Set project commands
+    description: Upsert the project commands memory. Creates or updates a single memory with handle 'project-commands'.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              content:
+                type: string
+                description: Markdown content with commands grouped by category
+            required:
+              - content
+    responses:
+      '200':
+        description: Commands memory upserted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/KnowledgeMemory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdKnowledgeContextById:
+  put:
+    operationId: replaceProjectContext
+    tags:
+      - knowledge
+    summary: Set project context
+    description: Upsert a context memory by handle. The handle is auto-prefixed with 'ctx-' if not already.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: handle
+        in: path
+        required: true
+        description: Context handle (e.g., 'db-schema'). Auto-prefixed with 'ctx-'.
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                description: Human-readable title
+              content:
+                type: string
+                description: Context content (markdown)
+            required:
+              - title
+              - content
+    responses:
+      '200':
+        description: Context memory upserted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/KnowledgeMemory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteProjectContext
+    tags:
+      - knowledge
+    summary: Delete project context
+    description: Delete a context memory by handle.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: handle
+        in: path
+        required: true
+        description: Context handle (e.g., 'db-schema')
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Context deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdKnowledgePatternsById:
+  put:
+    operationId: replaceProjectPattern
+    tags:
+      - knowledge
+    summary: Set project pattern
+    description: Upsert a pattern memory by handle. The handle is auto-prefixed with 'pattern-' if not already.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: handle
+        in: path
+        required: true
+        description: Pattern handle (e.g., 'testing-workflow'). Auto-prefixed with 'pattern-'.
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                description: Human-readable title
+              content:
+                type: string
+                description: Pattern content — step-by-step workflow (markdown)
+            required:
+              - title
+              - content
+    responses:
+      '200':
+        description: Pattern memory upserted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory:
+                  $ref: ../components/schemas.yaml#/KnowledgeMemory
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteProjectPattern
+    tags:
+      - knowledge
+    summary: Delete project pattern
+    description: Delete a pattern memory by handle.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+      - name: handle
+        in: path
+        required: true
+        description: Pattern handle (e.g., 'testing-workflow')
+        schema:
+          type: string
+    responses:
+      '204':
+        description: Pattern deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+ProjectsByIdKnowledgeSync:
+  post:
+    operationId: syncProjectKnowledge
+    tags:
+      - knowledge
+    summary: Sync project knowledge to disk
+    description: |
+      Write project knowledge (commands, context, patterns) to a KF-PROJECT-KNOWLEDGE.md file
+      in the project directory and ensure CLAUDE.local.md imports it via `@./KF-PROJECT-KNOWLEDGE.md`.
+    parameters:
+      - $ref: ../components/parameters.yaml#/ProjectId
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              location:
+                type: string
+                description: Target directory path. If omitted, uses the project's configured path.
+    responses:
+      '200':
+        description: Sync results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: success
+                project:
+                  type: string
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      target:
+                        type: string
+                      action:
+                        type: string
+                        enum:
+                          - created
+                          - updated
+                          - unchanged
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

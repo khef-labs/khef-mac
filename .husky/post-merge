@@ -1,0 +1,12 @@
+# Auto-install deps and rebuild after pull/merge
+changed_files=$(git diff-tree --no-commit-id --name-only -r HEAD@{1} HEAD 2>/dev/null)
+
+# Install deps if any package-lock.json changed
+if echo "$changed_files" | grep -q "package-lock.json"; then
+  echo "Dependencies changed, running npm install..."
+  npm install && npm run install:all
+elif echo "$changed_files" | grep -q "^apps/api/mcp-server/src/"; then
+  # Only rebuild MCP if source changed (install:all already covers this when deps change)
+  echo "MCP server source changed, rebuilding..."
+  npm run mcp:build
+fi

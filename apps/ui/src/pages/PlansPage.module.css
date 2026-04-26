@@ -1,0 +1,177 @@
+.page {
+  padding: var(--space-6);
+  max-width: var(--page-max-width, 900px);
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: var(--space-6);
+}
+
+.projectLabel {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  opacity: 0.7;
+}
+
+.header h1 {
+  font-size: var(--font-2xl);
+  font-weight: 600;
+  margin: 0 0 var(--space-2) 0;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}
+
+.sortGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+}
+
+.sortGroup label {
+  color: var(--muted);
+}
+
+.sortGroup select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg);
+  font-size: var(--font-sm);
+}
+
+.loading,
+.error,
+.empty {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hint {
+  font-size: var(--font-sm);
+  opacity: 0.7;
+}
+
+.plansList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.planCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+  position: relative;
+}
+
+.planCard:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.planTitle {
+  font-size: var(--font-base);
+  font-weight: 500;
+  margin: 0;
+  color: var(--fg);
+}
+
+.planHandle {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.planPath {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+
+.planMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.metaItem {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding: 2px 8px;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.projectBadge {
+  font-size: var(--text-xs);
+  color: var(--primary);
+  padding: 2px 8px;
+  background: var(--primary-muted);
+  border-radius: var(--radius-sm);
+}
+
+.filename {
+  display: none;
+}
+
+.deleteButton {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.planCard:hover .deleteButton {
+  opacity: 0.6;
+}
+
+.deleteButton:hover {
+  opacity: 1 !important;
+  color: var(--error);
+  background: var(--error-bg, rgba(239, 68, 68, 0.1));
+}

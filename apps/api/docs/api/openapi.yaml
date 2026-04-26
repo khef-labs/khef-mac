@@ -1,0 +1,678 @@
+openapi: 3.0.3
+info:
+  title: khef API
+  description: Project memory API with PostgreSQL backend for tracking development decisions, context, and knowledge
+  version: 0.1.0
+  contact:
+    name: khef
+servers:
+  - url: http://localhost:3100
+    description: Local development server
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: projects
+    description: Project management
+  - name: memories
+    description: Project-scoped memory operations
+  - name: memory-types
+    description: Memory type and status discovery
+  - name: relations
+    description: Memory relation graph management
+  - name: tags
+    description: Tag operations
+  - name: assistants
+    description: Coding assistant configuration management
+  - name: configs
+    description: Config content, sync, and project-scoped variants
+  - name: knowledge
+    description: Project operational knowledge (commands, context, patterns)
+  - name: diagram
+    description: Diagram rendering via Kroki
+  - name: settings
+    description: App-wide settings
+  - name: files
+    description: File upload and serving
+  - name: rules
+    description: Assistant rule syncing
+  - name: comments
+    description: Memory comment operations
+  - name: snapshots
+    description: Memory content snapshots (versioning)
+  - name: metadata
+    description: Memory metadata operations (per-memory settings like export theme)
+  - name: sessions
+    description: Assistant session file management (filesystem-based)
+  - name: plans
+    description: Assistant plan file management with versioning
+  - name: assistant-memories
+    description: Assistant per-project memory file management with snapshots
+  - name: stats
+    description: System-wide statistics and metadata
+  - name: gemini
+    description: Gemini AI conversation and generation endpoints
+  - name: gcloud
+    description: gcloud CLI account and health helpers
+  - name: active-sessions
+    description: Active session detection via PID liveness, fuser, and mtime heuristics
+  - name: vector
+    description: Semantic vector search (memories and source code)
+  - name: synced-sessions
+    description: Synced session management (PostgreSQL-backed, full-text search, summaries)
+  - name: kvec
+    description: Kvec vector collection browsing and management
+  - name: assistant-chat
+    description: Unified assistant chat with persistent conversations (Claude, Codex, Gemini)
+  - name: job-definitions
+    description: Pipeline definition management (multi-step job orchestration)
+  - name: jobs
+    description: Job execution, monitoring, and lifecycle management
+  - name: slack
+    description: Slack message ingestion and semantic search
+  - name: backups
+    description: Database backup file management
+  - name: seed
+    description: Database seeding (memory types, statuses, definitions, memories)
+paths:
+  /health:
+    $ref: paths/health.yaml#/Health
+  /api/projects:
+    $ref: paths/projects.yaml#/Projects
+  /api/projects/{projectId}:
+    $ref: paths/projects.yaml#/ProjectsById
+  /api/projects/{projectId}/tags:
+    $ref: paths/tags.yaml#/ProjectsByIdTags
+  /api/projects/{projectId}/session-context:
+    $ref: paths/projects.yaml#/ProjectsByIdSessionContext
+  /api/projects/{projectId}/graph:
+    $ref: paths/projects.yaml#/ProjectsByIdGraph
+  /api/projects/{projectId}/graph-health:
+    $ref: paths/projects.yaml#/ProjectsByIdGraphHealth
+  /api/projects/{projectId}/configs:
+    $ref: paths/projects.yaml#/ProjectsByIdConfigs
+  /api/projects/{projectId}/configs/discover:
+    $ref: paths/projects.yaml#/ProjectsByIdConfigsDiscover
+  /api/projects/{projectId}/memory-types:
+    $ref: paths/memory-types.yaml#/ProjectsByIdMemoryTypes
+  /api/projects/{projectId}/memory-types/{type}/statuses:
+    $ref: paths/memory-types.yaml#/ProjectsByIdMemoryTypesByIdStatuses
+  /api/projects/{projectId}/memories:
+    $ref: paths/memories.yaml#/ProjectsByIdMemories
+  /api/projects/{projectId}/memories/{memoryId}:
+    $ref: paths/memories.yaml#/ProjectsByIdMemoriesById
+  /api/projects/{projectId}/memories/{memoryId}/suggestions:
+    $ref: paths/memories.yaml#/ProjectsByIdMemoriesByIdSuggestions
+  /api/projects/{projectId}/memories/{memoryId}/status:
+    $ref: paths/memories.yaml#/ProjectsByIdMemoriesByIdStatus
+  /api/projects/{projectId}/memories/{memoryId}/append:
+    $ref: paths/memories.yaml#/ProjectsByIdMemoriesByIdAppend
+  /api/projects/{projectId}/memories/export:
+    $ref: paths/memories.yaml#/ProjectsByIdMemoriesExport
+  /api/memories:
+    $ref: paths/memories.yaml#/Memories
+  /api/memories/{memoryId}:
+    $ref: paths/memories.yaml#/MemoriesById
+  /api/memories/{memoryId}/relations:
+    $ref: paths/memories.yaml#/MemoriesByIdRelations
+  /api/memories/{memoryId}/relations/graph:
+    $ref: paths/memories.yaml#/MemoriesByIdRelationsGraph
+  /api/memories/{memoryId}/export:
+    $ref: paths/memories.yaml#/MemoriesByIdExport
+  /api/memories/{memoryId}/save-to-drive:
+    $ref: paths/memories.yaml#/MemoriesByIdSaveToDrive
+  /api/memories/{memoryId}/outline:
+    $ref: paths/memories.yaml#/MemoriesByIdOutline
+  /api/memories/{memoryId}/sections/{heading}:
+    $ref: paths/memories.yaml#/MemoriesByIdSectionsById
+  /api/memories/{memoryId}/comments:
+    $ref: paths/memories.yaml#/MemoriesByIdComments
+  /api/memories/{memoryId}/comments/{commentId}:
+    $ref: paths/memories.yaml#/MemoriesByIdCommentsById
+  /api/memories/{memoryId}/snapshots:
+    $ref: paths/memories.yaml#/MemoriesByIdSnapshots
+  /api/memories/{memoryId}/snapshots/{snapshotNumber}:
+    $ref: paths/memories.yaml#/MemoriesByIdSnapshotsById
+  /api/memories/{memoryId}/snapshots/{snapshotNumber}/restore:
+    $ref: paths/memories.yaml#/MemoriesByIdSnapshotsByIdRestore
+  /api/memories/{memoryId}/snapshots/diff:
+    $ref: paths/memories.yaml#/MemoriesByIdSnapshotsDiff
+  /api/memories/{memoryId}/metadata:
+    $ref: paths/memories.yaml#/MemoriesByIdMetadata
+  /api/memories/{memoryId}/metadata/{field}:
+    $ref: paths/memories.yaml#/MemoriesByIdMetadataById
+  /api/memory-types:
+    $ref: paths/memory-types.yaml#/MemoryTypes
+  /api/memory-types/{type}:
+    $ref: paths/memory-types.yaml#/MemoryTypesById
+  /api/memory-types/{type}/statuses:
+    $ref: paths/memory-types.yaml#/MemoryTypesByIdStatuses
+  /api/relation-types:
+    $ref: paths/relations.yaml#/RelationTypes
+  /api/relations:
+    $ref: paths/relations.yaml#/Relations
+  /api/relations/memory/{memoryId}:
+    $ref: paths/relations.yaml#/RelationsMemoryById
+  /api/relations/memory/{memoryId}/graph:
+    $ref: paths/relations.yaml#/RelationsMemoryByIdGraph
+  /api/relations/{relationId}:
+    $ref: paths/relations.yaml#/RelationsById
+  /api/tags:
+    $ref: paths/tags.yaml#/Tags
+  /api/tags/{tagId}:
+    $ref: paths/tags.yaml#/TagsById
+  /api/tags/{name}/memories:
+    $ref: paths/tags.yaml#/TagsByIdMemories
+  /api/assistants:
+    $ref: paths/assistants.yaml#/Assistants
+  /api/assistants/{handle}:
+    $ref: paths/assistants.yaml#/AssistantsById
+  /api/assistants/{handle}/configs:
+    $ref: paths/assistants.yaml#/AssistantsByIdConfigs
+  /api/assistants/{handle}/discover:
+    $ref: paths/assistants.yaml#/AssistantsByIdDiscover
+  /api/assistants/{handle}/commands:
+    $ref: paths/assistants.yaml#/AssistantsByIdCommands
+  /api/assistants/{handle}/commands/{name}:
+    $ref: paths/assistants.yaml#/AssistantsByIdCommandsById
+  /api/assistants/{handle}/commands/sync:
+    $ref: paths/assistants.yaml#/AssistantsByIdCommandsSync
+  /api/configs/{id}:
+    $ref: paths/configs.yaml#/ConfigsById
+  /api/configs/{id}/sync:
+    $ref: paths/configs.yaml#/ConfigsByIdSync
+  /api/configs/{id}/import:
+    $ref: paths/configs.yaml#/ConfigsByIdImport
+  /api/configs/{id}/discover-imports:
+    $ref: paths/configs.yaml#/ConfigsByIdDiscoverImports
+  /api/configs/{id}/imports:
+    $ref: paths/configs.yaml#/ConfigsByIdImports
+  /api/configs/{id}/snapshots:
+    $ref: paths/configs.yaml#/ConfigsByIdSnapshots
+  /api/configs/{id}/snapshots/{snapshotNumber}:
+    $ref: paths/configs.yaml#/ConfigsByIdSnapshotsById
+  /api/configs/{id}/snapshots/{snapshotNumber}/restore:
+    $ref: paths/configs.yaml#/ConfigsByIdSnapshotsByIdRestore
+  /api/configs/{id}/mcp-servers:
+    $ref: paths/configs.yaml#/ConfigsByIdMcpServers
+  /api/configs/{id}/mcp-servers/{name}:
+    $ref: paths/configs.yaml#/ConfigsByIdMcpServersById
+  /api/initialize_session:
+    $ref: paths/health.yaml#/Initialize_session
+  /api/diagram/health:
+    $ref: paths/diagram.yaml#/DiagramHealth
+  /api/diagram/preview:
+    $ref: paths/diagram.yaml#/DiagramPreview
+  /api/settings:
+    $ref: paths/settings.yaml#/Settings
+  /api/settings/export:
+    $ref: paths/settings.yaml#/SettingsExport
+  /api/settings/runtime:
+    $ref: paths/settings.yaml#/SettingsRuntime
+  /api/stats:
+    $ref: paths/health.yaml#/Stats
+  /api/projects/{projectId}/knowledge:
+    $ref: paths/knowledge.yaml#/ProjectsByIdKnowledge
+  /api/projects/{projectId}/knowledge/commands:
+    $ref: paths/knowledge.yaml#/ProjectsByIdKnowledgeCommands
+  /api/projects/{projectId}/knowledge/context/{handle}:
+    $ref: paths/knowledge.yaml#/ProjectsByIdKnowledgeContextById
+  /api/projects/{projectId}/knowledge/patterns/{handle}:
+    $ref: paths/knowledge.yaml#/ProjectsByIdKnowledgePatternsById
+  /api/projects/{projectId}/knowledge/sync:
+    $ref: paths/knowledge.yaml#/ProjectsByIdKnowledgeSync
+  /api/projects/{projectId}/files:
+    $ref: paths/files.yaml#/ProjectsByIdFiles
+  /api/projects/{projectId}/files/{fileId}:
+    $ref: paths/files.yaml#/ProjectsByIdFilesById
+  /api/files/{id}:
+    $ref: paths/files.yaml#/FilesById
+  /api/files/migrate:
+    $ref: paths/files.yaml#/FilesMigrate
+  /api/assistants/{handle}/mcp-servers:
+    $ref: paths/mcp-servers.yaml#/AssistantsByIdMcpServers
+  /api/assistants/{handle}/mcp-servers/{name}:
+    $ref: paths/mcp-servers.yaml#/AssistantsByIdMcpServersById
+  /api/assistants/{handle}/agents:
+    $ref: paths/agents.yaml#/AssistantsByIdAgents
+  /api/assistants/{handle}/agents/{name}:
+    $ref: paths/agents.yaml#/AssistantsByIdAgentsById
+  /api/assistants/{handle}/agents/project/{projectId}:
+    $ref: paths/agents.yaml#/AssistantsByIdAgentsProjectById
+  /api/assistants/{handle}/agents/project/{projectId}/{name}:
+    $ref: paths/agents.yaml#/AssistantsByIdAgentsProjectByIdById
+  /api/assistants/{handle}/sessions:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessions
+  /api/assistants/{handle}/sessions/{projectDir}:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsById
+  /api/assistants/{handle}/sessions/{projectDir}/{sessionId}:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsByIdById
+  /api/assistants/{handle}/sessions/bulk-delete:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsBulkDelete
+  /api/assistants/{handle}/sessions/sync-embeddings:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsSyncEmbeddings
+  /api/assistants/{handle}/sessions/sync-embeddings/status:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsSyncEmbeddingsStatus
+  /api/assistants/{handle}/sessions/search:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsSearch
+  /api/assistants/{handle}/sessions/lookup/{sessionId}:
+    $ref: paths/sessions.yaml#/AssistantsByIdSessionsLookupById
+  /api/assistants/{handle}/plans:
+    $ref: paths/plans.yaml#/AssistantsByIdPlans
+  /api/assistants/{handle}/plans/{filename}:
+    $ref: paths/plans.yaml#/AssistantsByIdPlansById
+  /api/assistants/{handle}/plans/{filename}/versions:
+    $ref: paths/plans.yaml#/AssistantsByIdPlansByIdVersions
+  /api/assistants/{handle}/plans/{filename}/versions/{version}:
+    $ref: paths/plans.yaml#/AssistantsByIdPlansByIdVersionsById
+  /api/assistants/{handle}/memories:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemories
+  /api/assistants/{handle}/memories/{projectDir}:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemoriesById
+  /api/assistants/{handle}/memories/{projectDir}/{filename}:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemoriesByIdById
+  /api/assistants/{handle}/memories/{projectDir}/{filename}/snapshots:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemoriesByIdByIdSnapshots
+  /api/assistants/{handle}/memories/{projectDir}/{filename}/snapshots/{snapshot}:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemoriesByIdByIdSnapshotsById
+  /api/assistants/{handle}/memories/{projectDir}/{filename}/snapshots/{snapshot}/restore:
+    $ref: paths/assistant-memories.yaml#/AssistantsByIdMemoriesByIdByIdSnapshotsByIdRestore
+  /api/plans/{id}/export:
+    $ref: paths/plans.yaml#/PlansByIdExport
+  /api/rules/sync/project/{projectHandle}:
+    $ref: paths/rules.yaml#/RulesSyncProjectById
+  /api/mcp-servers/health:
+    $ref: paths/mcp-servers.yaml#/McpServersHealth
+  /api/projects/{projectId}/git/commits:
+    $ref: paths/diffs.yaml#/ProjectsByIdGitCommits
+  /api/projects/{projectId}/git/diff:
+    $ref: paths/diffs.yaml#/ProjectsByIdGitDiff
+  /api/projects/{projectId}/git/diff/working:
+    $ref: paths/diffs.yaml#/ProjectsByIdGitDiffWorking
+  /api/projects/{projectId}/diffs:
+    $ref: paths/diffs.yaml#/ProjectsByIdDiffs
+  /api/projects/{projectId}/diffs/by-commit/{sha}:
+    $ref: paths/diffs.yaml#/ProjectsByIdDiffsByCommitById
+  /api/projects/{projectId}/diffs/by-ref/{ref}:
+    $ref: paths/diffs.yaml#/ProjectsByIdDiffsByRefById
+  /api/projects/{projectId}/diffs/by-ref/{ref}/comments:
+    $ref: paths/diffs.yaml#/ProjectsByIdDiffsByRefByIdComments
+  /api/diffs/{diffId}:
+    $ref: paths/diffs.yaml#/DiffsById
+  /api/diffs/{diffId}/comments:
+    $ref: paths/diffs.yaml#/DiffsByIdComments
+  /api/diffs/{diffId}/comments/{commentId}:
+    $ref: paths/diffs.yaml#/DiffsByIdCommentsById
+  /api/gemini/status:
+    $ref: paths/gemini.yaml#/GeminiStatus
+  /api/gemini/settings:
+    $ref: paths/gemini.yaml#/GeminiSettings
+  /api/gemini/conversations:
+    $ref: paths/gemini.yaml#/GeminiConversations
+  /api/gemini/conversations/{id}:
+    $ref: paths/gemini.yaml#/GeminiConversationsById
+  /api/gemini/conversations/{id}/messages:
+    $ref: paths/gemini.yaml#/GeminiConversationsByIdMessages
+  /api/gemini/conversations/{id}/messages/{messageId}:
+    $ref: paths/gemini.yaml#/GeminiConversationsByIdMessagesById
+  /api/gemini/generate:
+    $ref: paths/gemini.yaml#/GeminiGenerate
+  /api/gcloud/accounts:
+    $ref: paths/gcloud.yaml#/GcloudAccounts
+  /api/gcloud/account:
+    $ref: paths/gcloud.yaml#/GcloudAccount
+  /api/gcloud/health:
+    $ref: paths/gcloud.yaml#/GcloudHealth
+  /api/active-sessions:
+    $ref: paths/active-sessions.yaml#/ActiveSessions
+  /api/active-sessions/scan:
+    $ref: paths/active-sessions.yaml#/ActiveSessionsScan
+  /api/active-sessions/heartbeat:
+    $ref: paths/active-sessions.yaml#/ActiveSessionsHeartbeat
+  /api/active-sessions/by-session-id/{sessionId}:
+    $ref: paths/active-sessions.yaml#/ActiveSessionsBySessionIdById
+  /api/vector/search:
+    $ref: paths/vector.yaml#/VectorSearch
+  /api/vector/source/search:
+    $ref: paths/vector.yaml#/VectorSourceSearch
+  /api/vector/source/file:
+    $ref: paths/vector.yaml#/VectorSourceFile
+  /api/vector/commits/search:
+    $ref: paths/vector.yaml#/VectorCommitsSearch
+  /api/sessions:
+    $ref: paths/synced-sessions.yaml#/SyncedSessions
+  /api/sessions/search:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsSearch
+  /api/sessions/{id}:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsById
+  /api/sessions/by-session-id/{sessionId}:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsBySessionId
+  /api/sessions/{id}/summary:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsByIdSummary
+  /api/sessions/{id}/summary/export:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsByIdSummaryExport
+  /api/sessions/{id}/summary/snapshots/{snapshotId}:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsByIdSummarySnapshotsById
+  /api/sessions/sync:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsSync
+  /api/sessions/sync/status:
+    $ref: paths/synced-sessions.yaml#/SyncedSessionsSyncStatus
+  /api/kvec/collections:
+    $ref: paths/kvec.yaml#/KvecCollections
+  /api/kvec/collections/{name}:
+    $ref: paths/kvec.yaml#/KvecCollectionsByName
+  /api/kvec/collections/{name}/repos:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameRepos
+  /api/kvec/collections/{name}/repos/{id}:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameReposById
+  /api/kvec/collections/{name}/files:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameFiles
+  /api/kvec/collections/{name}/files/by-channel/{channel}:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameFilesByChannel
+  /api/kvec/collections/{name}/files/{id}:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameFilesById
+  /api/kvec/collections/{name}/files/bulk-delete:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameFilesBulkDelete
+  /api/kvec/collections/{name}/languages:
+    $ref: paths/kvec.yaml#/KvecCollectionsByNameLanguages
+  /api/kdag/input-types:
+    $ref: paths/kdag-definitions.yaml#/KdagInputTypes
+  /api/kdag/backends:
+    $ref: paths/kdag-definitions.yaml#/KdagBackends
+  /api/kdag/definitions:
+    $ref: paths/kdag-definitions.yaml#/JobDefinitions
+  /api/kdag/definitions/{key}:
+    $ref: paths/kdag-definitions.yaml#/JobDefinitionsByKey
+  /api/kdag/job:
+    $ref: paths/kdag-jobs.yaml#/KdagJob
+  /api/kdag/job/{id}:
+    $ref: paths/kdag-jobs.yaml#/KdagJobById
+  /api/kdag/job/{id}/run:
+    $ref: paths/kdag-jobs.yaml#/KdagJobRun
+  /api/kdag/job/{id}/cancel:
+    $ref: paths/kdag-jobs.yaml#/KdagJobCancel
+  /api/kdag/job/{id}/retry:
+    $ref: paths/kdag-jobs.yaml#/KdagJobRetry
+  /api/kdag/queue:
+    $ref: paths/kdag-jobs.yaml#/KdagQueue
+  /api/kdag/jobs:
+    $ref: paths/kdag-jobs.yaml#/KdagJobs
+  /api/kdag/jobs/{id}:
+    $ref: paths/kdag-jobs.yaml#/KdagJobsById
+  /api/kdag/jobs/types:
+    $ref: paths/kdag-jobs.yaml#/KdagJobTypes
+  /api/assistants/{handle}/chat:
+    $ref: paths/assistant-chat.yaml#/AssistantsByIdChat
+  /api/assistants/{handle}/chats:
+    $ref: paths/assistant-chat.yaml#/AssistantsByIdChats
+  /api/assistants/{handle}/chats/{id}:
+    $ref: paths/assistant-chat.yaml#/AssistantsByIdChatsById
+  /api/assistants/{handle}/chats/{id}/messages:
+    $ref: paths/assistant-chat.yaml#/AssistantsByIdChatsByIdMessages
+  /api/assistants/{handle}/chats/{id}/messages/{messageId}:
+    $ref: paths/assistant-chat.yaml#/AssistantsByIdChatsByIdMessagesById
+  /api/chats:
+    $ref: paths/assistant-chat.yaml#/ChatsList
+  /api/chats/{id}:
+    $ref: paths/assistant-chat.yaml#/ChatsById
+  /api/chats/all:
+    $ref: paths/assistant-chat.yaml#/ChatsAll
+  /api/slack/ingest:
+    $ref: paths/slack.yaml#/SlackIngest
+  /api/slack/search:
+    $ref: paths/slack.yaml#/SlackSearch
+  /api/slack/documents:
+    $ref: paths/slack.yaml#/SlackDocuments
+  /api/slack/documents/{documentId}:
+    $ref: paths/slack.yaml#/SlackDocumentsById
+  /api/backups:
+    $ref: paths/backups.yaml#/Backups
+  /api/backups/{filename}:
+    $ref: paths/backups.yaml#/BackupsById
+  /api/backups/{filename}/restore:
+    $ref: paths/backups.yaml#/BackupsByIdRestore
+  /api/seed:
+    $ref: paths/seed.yaml#/Seed
+components:
+  parameters:
+    ProjectId:
+      $ref: components/parameters.yaml#/ProjectId
+    ProjectIdPath:
+      $ref: components/parameters.yaml#/ProjectIdPath
+    MemoryId:
+      $ref: components/parameters.yaml#/MemoryId
+    RelationId:
+      $ref: components/parameters.yaml#/RelationId
+    CommentId:
+      $ref: components/parameters.yaml#/CommentId
+    ConfigId:
+      $ref: components/parameters.yaml#/ConfigId
+    CompactMutation:
+      $ref: components/parameters.yaml#/CompactMutation
+  schemas:
+    SourceCodeResult:
+      $ref: components/schemas.yaml#/SourceCodeResult
+    CommitSearchResult:
+      $ref: components/schemas.yaml#/CommitSearchResult
+    ActiveSession:
+      $ref: components/schemas.yaml#/ActiveSession
+    GitCommit:
+      $ref: components/schemas.yaml#/GitCommit
+    DiffStats:
+      $ref: components/schemas.yaml#/DiffStats
+    DiffResult:
+      $ref: components/schemas.yaml#/DiffResult
+    WorkingDiffResult:
+      $ref: components/schemas.yaml#/WorkingDiffResult
+    DiffRecord:
+      $ref: components/schemas.yaml#/DiffRecord
+    Project:
+      $ref: components/schemas.yaml#/Project
+    CreateProjectInput:
+      $ref: components/schemas.yaml#/CreateProjectInput
+    UpdateProjectInput:
+      $ref: components/schemas.yaml#/UpdateProjectInput
+    FullProjectInput:
+      $ref: components/schemas.yaml#/FullProjectInput
+    Memory:
+      $ref: components/schemas.yaml#/Memory
+    CompactMutationMemory:
+      $ref: components/schemas.yaml#/CompactMutationMemory
+    MemoryWithProject:
+      $ref: components/schemas.yaml#/MemoryWithProject
+    MemoryGlobalSingle:
+      $ref: components/schemas.yaml#/MemoryGlobalSingle
+    CreateMemoryInput:
+      $ref: components/schemas.yaml#/CreateMemoryInput
+    UpdateMemoryInput:
+      $ref: components/schemas.yaml#/UpdateMemoryInput
+    FullMemoryInput:
+      $ref: components/schemas.yaml#/FullMemoryInput
+    MemoryType:
+      $ref: components/schemas.yaml#/MemoryType
+    MemoryTypeDetail:
+      $ref: components/schemas.yaml#/MemoryTypeDetail
+    MemoryRelation:
+      $ref: components/schemas.yaml#/MemoryRelation
+    CreateRelationInput:
+      $ref: components/schemas.yaml#/CreateRelationInput
+    RelationType:
+      $ref: components/schemas.yaml#/RelationType
+    ContextualRelationType:
+      $ref: components/schemas.yaml#/ContextualRelationType
+    RelationTypeInfo:
+      $ref: components/schemas.yaml#/RelationTypeInfo
+    FlatRelation:
+      $ref: components/schemas.yaml#/FlatRelation
+    Tag:
+      $ref: components/schemas.yaml#/Tag
+    PaginationMetadata:
+      $ref: components/schemas.yaml#/PaginationMetadata
+    SnapshotListItem:
+      $ref: components/schemas.yaml#/SnapshotListItem
+    SnapshotDetail:
+      $ref: components/schemas.yaml#/SnapshotDetail
+    SnapshotDiffChange:
+      $ref: components/schemas.yaml#/SnapshotDiffChange
+    SnapshotDiffResponse:
+      $ref: components/schemas.yaml#/SnapshotDiffResponse
+    GeminiConversation:
+      $ref: components/schemas.yaml#/GeminiConversation
+    GeminiResponsePart:
+      $ref: components/schemas.yaml#/GeminiResponsePart
+    GeminiMessage:
+      $ref: components/schemas.yaml#/GeminiMessage
+    GeminiGrounding:
+      $ref: components/schemas.yaml#/GeminiGrounding
+    GeminiThinking:
+      $ref: components/schemas.yaml#/GeminiThinking
+    KvecCollection:
+      $ref: components/schemas.yaml#/KvecCollection
+    KvecRepo:
+      $ref: components/schemas.yaml#/KvecRepo
+    KvecFile:
+      $ref: components/schemas.yaml#/KvecFile
+    BulkDeleteKvecFilesBody:
+      $ref: components/schemas.yaml#/BulkDeleteKvecFilesBody
+    BulkDeleteKvecFilesResponse:
+      $ref: components/schemas.yaml#/BulkDeleteKvecFilesResponse
+    KvecLanguageCount:
+      $ref: components/schemas.yaml#/KvecLanguageCount
+    KdagBackend:
+      $ref: components/schemas.yaml#/KdagBackend
+    KdagInputType:
+      $ref: components/schemas.yaml#/KdagInputType
+    CreateKdagInputTypeBody:
+      $ref: components/schemas.yaml#/CreateKdagInputTypeBody
+    KdagQueueState:
+      $ref: components/schemas.yaml#/KdagQueueState
+    AssistantChat:
+      $ref: components/schemas.yaml#/AssistantChat
+    AssistantChatSummary:
+      $ref: components/schemas.yaml#/AssistantChatSummary
+    AssistantChatMessage:
+      $ref: components/schemas.yaml#/AssistantChatMessage
+    AssistantChatTurn:
+      $ref: components/schemas.yaml#/AssistantChatTurn
+    ChatDelegation:
+      $ref: components/schemas.yaml#/ChatDelegation
+    SlackIngestBody:
+      $ref: components/schemas.yaml#/SlackIngestBody
+    SlackIngestResult:
+      $ref: components/schemas.yaml#/SlackIngestResult
+    SlackSearchResult:
+      $ref: components/schemas.yaml#/SlackSearchResult
+    SlackDocument:
+      $ref: components/schemas.yaml#/SlackDocument
+    Error:
+      $ref: components/schemas.yaml#/Error
+    Assistant:
+      $ref: components/schemas.yaml#/Assistant
+    AssistantCommand:
+      $ref: components/schemas.yaml#/AssistantCommand
+    AssistantCommandCreate:
+      $ref: components/schemas.yaml#/AssistantCommandCreate
+    AssistantCommandUpdate:
+      $ref: components/schemas.yaml#/AssistantCommandUpdate
+    Config:
+      $ref: components/schemas.yaml#/Config
+    ConfigImport:
+      $ref: components/schemas.yaml#/ConfigImport
+    ConfigSnapshotSummary:
+      $ref: components/schemas.yaml#/ConfigSnapshotSummary
+    ConfigSnapshot:
+      $ref: components/schemas.yaml#/ConfigSnapshot
+    McpServerInput:
+      $ref: components/schemas.yaml#/McpServerInput
+    McpServerConfig:
+      $ref: components/schemas.yaml#/McpServerConfig
+    AssistantConfig:
+      $ref: components/schemas.yaml#/AssistantConfig
+    ProjectAssistantConfig:
+      $ref: components/schemas.yaml#/ProjectAssistantConfig
+    AssistantConfigCreate:
+      $ref: components/schemas.yaml#/AssistantConfigCreate
+    ProjectConfigCreate:
+      $ref: components/schemas.yaml#/ProjectConfigCreate
+    ConfigUpdate:
+      $ref: components/schemas.yaml#/ConfigUpdate
+    ConfigSyncStatus:
+      $ref: components/schemas.yaml#/ConfigSyncStatus
+    ConfigSyncResult:
+      $ref: components/schemas.yaml#/ConfigSyncResult
+    ConfigSyncConflict:
+      $ref: components/schemas.yaml#/ConfigSyncConflict
+    SessionContext:
+      $ref: components/schemas.yaml#/SessionContext
+    MemorySummary:
+      $ref: components/schemas.yaml#/MemorySummary
+    GraphHealth:
+      $ref: components/schemas.yaml#/GraphHealth
+    KnowledgeResponse:
+      $ref: components/schemas.yaml#/KnowledgeResponse
+    KnowledgeMemory:
+      $ref: components/schemas.yaml#/KnowledgeMemory
+    FileUploadResponse:
+      $ref: components/schemas.yaml#/FileUploadResponse
+    FileInfo:
+      $ref: components/schemas.yaml#/FileInfo
+    McpServer:
+      $ref: components/schemas.yaml#/McpServer
+    Agent:
+      $ref: components/schemas.yaml#/Agent
+    AgentCreate:
+      $ref: components/schemas.yaml#/AgentCreate
+    AgentUpdate:
+      $ref: components/schemas.yaml#/AgentUpdate
+    Comment:
+      $ref: components/schemas.yaml#/Comment
+    CreateCommentInput:
+      $ref: components/schemas.yaml#/CreateCommentInput
+    UpdateCommentInput:
+      $ref: components/schemas.yaml#/UpdateCommentInput
+    PlanSummary:
+      $ref: components/schemas.yaml#/PlanSummary
+    Plan:
+      $ref: components/schemas.yaml#/Plan
+    PlanVersionSummary:
+      $ref: components/schemas.yaml#/PlanVersionSummary
+    PlanVersion:
+      $ref: components/schemas.yaml#/PlanVersion
+    PlanUpdate:
+      $ref: components/schemas.yaml#/PlanUpdate
+    MemoryFileSummary:
+      $ref: components/schemas.yaml#/MemoryFileSummary
+    MemoryFile:
+      $ref: components/schemas.yaml#/MemoryFile
+    MemoryFileSnapshotSummary:
+      $ref: components/schemas.yaml#/MemoryFileSnapshotSummary
+    MemoryFileSnapshot:
+      $ref: components/schemas.yaml#/MemoryFileSnapshot
+    SessionProject:
+      $ref: components/schemas.yaml#/SessionProject
+    SessionFile:
+      $ref: components/schemas.yaml#/SessionFile
+    SessionEntry:
+      $ref: components/schemas.yaml#/SessionEntry
+    SyncedSession:
+      $ref: components/schemas.yaml#/SyncedSession
+    SyncedSessionChunk:
+      $ref: components/schemas.yaml#/SyncedSessionChunk
+    SyncedSessionSearchResult:
+      $ref: components/schemas.yaml#/SyncedSessionSearchResult
+    SessionSummary:
+      $ref: components/schemas.yaml#/SessionSummary
+    SessionSummarySnapshot:
+      $ref: components/schemas.yaml#/SessionSummarySnapshot
+    SessionSummarySnapshotDetail:
+      $ref: components/schemas.yaml#/SessionSummarySnapshotDetail
+    SessionSummaryResponse:
+      $ref: components/schemas.yaml#/SessionSummaryResponse
+    BackupFile:
+      $ref: components/schemas.yaml#/BackupFile
+    RestoreResponse:
+      $ref: components/schemas.yaml#/RestoreResponse
+  responses:
+    NotFound:
+      $ref: components/responses.yaml#/NotFound
+    BadRequest:
+      $ref: components/responses.yaml#/BadRequest

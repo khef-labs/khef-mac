@@ -1,0 +1,293 @@
+Settings:
+  get:
+    operationId: listSettings
+    tags:
+      - settings
+    summary: Get all settings
+    description: |
+      Returns all settings as key-value pairs with metadata (description, value_type).
+      Notable export settings:
+      - export.imageTheme
+      - export.diagramScale (legacy Kroki PNG scale, 1–4)
+      - export.pngRenderScale (Playwright SVG→PNG render scale, 1–4)
+      - export.pngDisplayScalePercent (DOCX display size percent, 10–300)
+    responses:
+      '200':
+        description: All settings
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings:
+                  type: object
+                  additionalProperties:
+                    type: string
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      description:
+                        type: string
+                        nullable: true
+                      value_type:
+                        type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  patch:
+    operationId: updateSettings
+    tags:
+      - settings
+    summary: Update settings
+    description: Update one or more settings by key. All keys must already exist.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+            description: Key-value pairs to update
+    responses:
+      '200':
+        description: Updated settings
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                settings:
+                  type: object
+                  additionalProperties:
+                    type: string
+                metadata:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      description:
+                        type: string
+                        nullable: true
+                      value_type:
+                        type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SettingsExport:
+  get:
+    operationId: exportSettings
+    tags:
+      - settings
+    summary: Get export settings and capabilities
+    description: |
+      Returns export-related settings plus runtime capability flags for high-quality PNG rendering.
+      Use `highQualityImageRenderingAvailable` to decide if UI should show high-quality options.
+    responses:
+      '200':
+        description: Export settings and capabilities
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                export:
+                  type: object
+                  properties:
+                    imageTheme:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                        options:
+                          type: array
+                          items:
+                            type: string
+                    diagramScale:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                        min:
+                          type: integer
+                        max:
+                          type: integer
+                        legacy:
+                          type: boolean
+                    pngRenderScale:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                        min:
+                          type: integer
+                        max:
+                          type: integer
+                    pngDisplayScalePercent:
+                      type: object
+                      properties:
+                        value:
+                          type: string
+                        min:
+                          type: integer
+                        max:
+                          type: integer
+                flags:
+                  type: object
+                  properties:
+                    pngRenderPlaywrightEnabled:
+                      type: boolean
+                    pngRenderPlaywrightAvailable:
+                      type: boolean
+                highQualityImageRenderingAvailable:
+                  type: boolean
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SettingsRuntime:
+  get:
+    operationId: getRuntimeSettings
+    tags:
+      - settings
+    summary: Get runtime status for Khef
+    description: |
+      Returns active local ports and Docker runtime resources used by Khef.
+      Docker details are best-effort and include availability/error info.
+    responses:
+      '200':
+        description: Runtime status
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                generated_at:
+                  type: string
+                  format: date-time
+                ports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      service:
+                        type: string
+                      host:
+                        type: string
+                      host_port:
+                        type: integer
+                      protocol:
+                        type: string
+                        enum: [tcp, udp]
+                      source:
+                        type: string
+                        enum: [host, docker]
+                      container_name:
+                        type: string
+                      container_port:
+                        type: integer
+                docker:
+                  type: object
+                  properties:
+                    available:
+                      type: boolean
+                    error:
+                      type: string
+                    containers:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          image:
+                            type: string
+                          status:
+                            type: string
+                          ports:
+                            type: string
+                          labels:
+                            type: string
+                    images:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          repository:
+                            type: string
+                          tag:
+                            type: string
+                          id:
+                            type: string
+                          created_since:
+                            type: string
+                          size:
+                            type: string
+                          in_use:
+                            type: boolean
+                    volumes:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          type:
+                            type: string
+                          source:
+                            type: string
+                          destination:
+                            type: string
+                          driver:
+                            type: string
+                            nullable: true
+                          size:
+                            type: string
+                            nullable: true
+                          size_bytes:
+                            type: integer
+                            nullable: true
+                          containers:
+                            type: array
+                            items:
+                              type: string
+                huggingface:
+                  type: object
+                  properties:
+                    embed_server_available:
+                      type: boolean
+                    active_model:
+                      type: string
+                      nullable: true
+                    dimensions:
+                      type: integer
+                      nullable: true
+                    cache_dir:
+                      type: string
+                    cache_exists:
+                      type: boolean
+                    cache_size:
+                      type: string
+                      nullable: true
+                    cache_size_bytes:
+                      type: integer
+                      nullable: true
+                    models:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          model:
+                            type: string
+                          cache_path:
+                            type: string
+                          size:
+                            type: string
+                            nullable: true
+                          size_bytes:
+                            type: integer
+                            nullable: true
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

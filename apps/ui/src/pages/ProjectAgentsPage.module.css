@@ -1,0 +1,156 @@
+.page {
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: var(--page-max-width, 900px);
+  margin: 0 auto;
+}
+
+.loading {
+  color: var(--muted);
+  padding: var(--space-4);
+}
+
+.error {
+  color: var(--error);
+  font-size: var(--text-sm);
+  padding: var(--space-3);
+  background: var(--error-bg, rgba(239, 68, 68, 0.1));
+  border-radius: var(--radius-md);
+}
+
+/* Header */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.projectLabel {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  opacity: 0.7;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-2xl);
+}
+
+.projectPath {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+/* Sections */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.sectionHint {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+
+  &:hover {
+    color: var(--fg);
+    border-color: var(--fg);
+    background: var(--surface-hover);
+  }
+}
+
+.empty {
+  color: var(--muted);
+  padding: var(--space-3);
+}
+
+/* Agent list */
+.agentList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.agentCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  text-decoration: none;
+  color: inherit;
+}
+
+.userAgent {
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.agentIcon {
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.agentInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.agentName {
+  font-weight: 500;
+  font-size: var(--text-base);
+}
+
+.agentDescription {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scopeBadge {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding: 2px 8px;
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}

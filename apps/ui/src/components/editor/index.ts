@@ -1,0 +1,6 @@
+export { CodeEditor } from './CodeEditor'
+export type { EditorLanguage } from './CodeEditor'
+export { FileTree } from './FileTree'
+export { QuickOpen } from './QuickOpen'
+export type { PaletteCommand } from './QuickOpen'
+export { SearchPanel } from './SearchPanel'

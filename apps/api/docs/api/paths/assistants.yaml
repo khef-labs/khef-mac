@@ -1,0 +1,487 @@
+Assistants:
+  get:
+    operationId: listAssistants
+    tags:
+      - assistants
+    summary: List assistants
+    description: Retrieve all supported coding assistants
+    responses:
+      '200':
+        description: List of assistants
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assistants:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Assistant
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+AssistantsById:
+  get:
+    operationId: getAssistant
+    tags:
+      - assistants
+    summary: Get assistant
+    description: Retrieve a single assistant by handle
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (e.g., 'claude-code', 'codex-cli')
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Assistant found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assistant:
+                  $ref: ../components/schemas.yaml#/Assistant
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdConfigs:
+  get:
+    operationId: listAssistantConfigs
+    tags:
+      - assistants
+    summary: List user-wide configs for assistant
+    description: List system/global configurations for a specific assistant
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: scope
+        in: query
+        description: Filter by config scope (system/global only)
+        schema:
+          type: string
+          enum:
+            - system
+            - global
+      - name: type
+        in: query
+        description: Filter by config type
+        schema:
+          type: string
+          enum:
+            - settings
+            - instructions
+            - rules
+            - knowledge
+            - mcp
+    responses:
+      '200':
+        description: List of configs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configs:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AssistantConfig
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantConfig
+    tags:
+      - assistants
+    summary: Create user-wide config for assistant
+    description: Create a new system/global configuration for a specific assistant
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AssistantConfigCreate
+    responses:
+      '201':
+        description: Config created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config:
+                  $ref: ../components/schemas.yaml#/AssistantConfig
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdDiscover:
+  post:
+    operationId: discoverAssistantConfigs
+    tags:
+      - assistants
+    summary: Discover configs from disk
+    description: Scan known config file paths and import any that exist. Auto-discovery also runs on first access to configs.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Discovery results
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                discovered:
+                  type: object
+                  properties:
+                    imported:
+                      type: integer
+                      description: Number of new configs imported
+                    updated:
+                      type: integer
+                      description: Number of existing configs updated
+                    unchanged:
+                      type: integer
+                      description: Number of configs with no changes
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdCommands:
+  get:
+    operationId: listAssistantCommands
+    tags:
+      - assistants
+    summary: List assistant commands, skills, and prompts
+    description: >-
+      List slash commands, skills, and prompts for an assistant (merged across types and scopes). Claude Code supports
+      commands and skills; Codex CLI supports prompts.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: scope
+        in: query
+        description: Scope to include
+        schema:
+          type: string
+          enum:
+            - user
+            - project
+            - all
+          default: all
+      - name: type
+        in: query
+        description: Filter by command type (command/skill for claude-code, prompt for codex-cli)
+        schema:
+          type: string
+          enum:
+            - command
+            - skill
+            - prompt
+      - name: project
+        in: query
+        description: Project ID/handle/name (required for project scope)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: List of commands, skills, and prompts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                commands:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AssistantCommand
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantCommand
+    tags:
+      - assistants
+    summary: Create assistant command, skill, or prompt
+    description: >-
+      Create a new command, skill, or prompt for an assistant. Claude Code supports commands and skills; Codex CLI
+      supports prompts (user scope only).
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AssistantCommandCreate
+    responses:
+      '201':
+        description: Command created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                command:
+                  $ref: ../components/schemas.yaml#/AssistantCommand
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Command already exists
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+AssistantsByIdCommandsById:
+  get:
+    operationId: getAssistantCommand
+    tags:
+      - assistants
+    summary: Get assistant command, skill, or prompt
+    description: Retrieve a single command, skill, or prompt by name.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Command or skill name
+        schema:
+          type: string
+      - name: scope
+        in: query
+        required: true
+        description: Scope to retrieve from
+        schema:
+          type: string
+          enum:
+            - user
+            - project
+      - name: type
+        in: query
+        required: true
+        description: Command type
+        schema:
+          type: string
+          enum:
+            - command
+            - skill
+            - prompt
+      - name: project
+        in: query
+        description: Project ID/handle/name (required for project scope)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Command found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                command:
+                  $ref: ../components/schemas.yaml#/AssistantCommand
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateAssistantCommand
+    tags:
+      - assistants
+    summary: Update assistant command, skill, or prompt
+    description: Update the content or metadata for a command, skill, or prompt.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Command, skill, or prompt name
+        schema:
+          type: string
+      - name: scope
+        in: query
+        required: true
+        description: Scope to update
+        schema:
+          type: string
+          enum:
+            - user
+            - project
+      - name: type
+        in: query
+        required: true
+        description: Command type
+        schema:
+          type: string
+          enum:
+            - command
+            - skill
+            - prompt
+      - name: project
+        in: query
+        description: Project ID/handle/name (required for project scope)
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AssistantCommandUpdate
+    responses:
+      '200':
+        description: Command updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                command:
+                  $ref: ../components/schemas.yaml#/AssistantCommand
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Conflict updating command
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+  delete:
+    operationId: deleteAssistantCommand
+    tags:
+      - assistants
+    summary: Delete assistant command, skill, or prompt
+    description: Remove a command, skill, or prompt from disk.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Command, skill, or prompt name
+        schema:
+          type: string
+      - name: scope
+        in: query
+        required: true
+        description: Scope to delete from
+        schema:
+          type: string
+          enum:
+            - user
+            - project
+      - name: type
+        in: query
+        required: true
+        description: Command type
+        schema:
+          type: string
+          enum:
+            - command
+            - skill
+            - prompt
+      - name: project
+        in: query
+        description: Project ID/handle/name (required for project scope)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Command deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdCommandsSync:
+  post:
+    operationId: syncAssistantCommands
+    tags:
+      - assistants
+    summary: Sync built-in commands
+    description: >-
+      Sync built-in dvm- prefixed commands from the khef repo to the user's command/prompt directory. Supports
+      claude-code (~/.claude/commands/) and codex-cli (~/.codex/prompts/).
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle (claude-code or codex-cli)
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Sync completed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      file_path:
+                        type: string
+                      action:
+                        type: string
+                        enum:
+                          - created
+                          - updated
+                          - unchanged
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

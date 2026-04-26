@@ -1,0 +1,532 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Wrapper kept for spacing parity with prior sticky layout */
+.fileListSticky {
+  /* not sticky — scrolls away with diff content */
+}
+
+/* Flat inline summary panel (no longer floating/sticky) */
+.fileList {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.fileListHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background-color: transparent;
+  border: none;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+}
+
+.fileListIcon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.fileListTitle {
+  flex: 1;
+  letter-spacing: 0.01em;
+}
+
+.fileListTotals {
+  display: inline-flex;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.fileListAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+
+  &:hover {
+    color: var(--fg);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+}
+
+.fileListActionLabel {
+  /* Label visible next to chevrons; kept separate so it can be hidden on narrow panels if needed */
+}
+
+.fileListToggleLabel {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fileListToggleIcon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.fileListItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fileListItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-3);
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--fg);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+
+  &:hover {
+    background-color: var(--surface-hover);
+  }
+}
+
+.fileListStatus {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.fileListPath {
+  flex: 1;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fileListStats {
+  display: inline-flex;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.loading,
+.empty,
+.error {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.error {
+  color: var(--error);
+  background-color: color-mix(in srgb, var(--error) 10%, transparent);
+  border-color: var(--error);
+}
+
+/* File container */
+.file {
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* File header */
+.fileHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--surface-hover);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--surface-hover) 150%, transparent);
+  }
+}
+
+.collapseIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: transform var(--transition-fast);
+
+  &.collapsed {
+    transform: rotate(-90deg);
+  }
+}
+
+.statusIcon {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  width: 16px;
+  text-align: center;
+}
+
+.statusAdded {
+  color: var(--success);
+}
+
+.statusDeleted {
+  color: var(--error);
+}
+
+.statusRenamed {
+  color: var(--warning);
+}
+
+.statusModified {
+  color: var(--accent);
+}
+
+.filePath {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oldPath {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.arrow {
+  color: var(--muted);
+  margin: 0 var(--space-1);
+}
+
+.copyPathButton {
+  flex-shrink: 0;
+}
+
+.openEditorButton {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.openEditorButton:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.stats {
+  display: flex;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.additions {
+  color: var(--success);
+}
+
+.deletions {
+  color: var(--error);
+}
+
+/* File content */
+.fileContent {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+/* Hunk header */
+.hunkHeader {
+  display: flex;
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--muted);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+
+  &:first-child {
+    border-top: none;
+  }
+}
+
+.hunkLineNum {
+  width: 50px;
+  min-width: 50px;
+  text-align: right;
+  padding-right: var(--space-2);
+  color: transparent;
+  user-select: none;
+}
+
+.hunkContent {
+  padding-left: var(--space-4);
+  font-size: var(--text-xs);
+}
+
+/* Diff lines */
+.diffLine {
+  display: flex;
+  min-height: 22px;
+
+  &.clickable {
+    cursor: pointer;
+
+    &:hover {
+      background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+    }
+  }
+}
+
+.lineNum {
+  width: 50px;
+  min-width: 50px;
+  text-align: right;
+  padding-right: var(--space-2);
+  color: var(--muted);
+  user-select: none;
+  font-size: var(--text-xs);
+  border-right: 1px solid var(--border);
+  background-color: var(--surface);
+}
+
+.linePrefix {
+  width: 20px;
+  min-width: 20px;
+  text-align: center;
+  user-select: none;
+}
+
+.lineContent {
+  flex: 1;
+  padding-left: var(--space-2);
+  padding-right: var(--space-4);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.lineCommentBadge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 var(--space-2);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+/* Line types */
+.lineContext {
+  background-color: transparent;
+
+  .lineNum {
+    background-color: var(--surface);
+  }
+}
+
+.lineAddition {
+  background-color: color-mix(in srgb, var(--success) 15%, transparent);
+
+  .lineNum {
+    background-color: color-mix(in srgb, var(--success) 10%, transparent);
+    color: var(--success);
+  }
+
+  .linePrefix {
+    color: var(--success);
+  }
+}
+
+.lineDeletion {
+  background-color: color-mix(in srgb, var(--error) 15%, transparent);
+
+  .lineNum {
+    background-color: color-mix(in srgb, var(--error) 10%, transparent);
+    color: var(--error);
+  }
+
+  .linePrefix {
+    color: var(--error);
+  }
+}
+
+/* Inline comment input */
+.inlineComment {
+  margin: var(--space-2) var(--space-4);
+  margin-left: 120px; /* Align with content after line numbers */
+  padding: var(--space-3);
+  background-color: var(--surface-hover);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.commentTextarea {
+  width: 100%;
+  min-height: 80px;
+  padding: var(--space-2);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  &::placeholder {
+    color: var(--muted);
+  }
+}
+
+.commentActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.cancelButton {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    background-color: var(--surface);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.submitButton {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  background-color: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-on-accent);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* Comment thread display */
+.commentThread {
+  margin: var(--space-2) var(--space-4);
+  margin-left: 120px;
+  padding: var(--space-3);
+  background-color: var(--surface-hover);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+
+.comment {
+  &:not(:last-child) {
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.reply {
+  margin-left: var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
+.commentMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.commentAuthor {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.commentTime {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.commentContent {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: var(--leading-normal);
+  white-space: pre-wrap;
+}

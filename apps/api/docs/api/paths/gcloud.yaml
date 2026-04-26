@@ -1,0 +1,117 @@
+GcloudAccounts:
+  get:
+    operationId: listGcloudAccounts
+    tags:
+      - gcloud
+    summary: List authenticated gcloud accounts
+    responses:
+      '200':
+        description: Accounts and currently active account
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accounts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      account:
+                        type: string
+                      active:
+                        type: boolean
+                active_account:
+                  type: string
+                  nullable: true
+      '503':
+        $ref: ../components/responses.yaml#/BadRequest
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+GcloudAccount:
+  post:
+    operationId: setGcloudAccount
+    tags:
+      - gcloud
+    summary: Set active gcloud account
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - account
+            properties:
+              account:
+                type: string
+                description: Account email or workforce principal URI
+    responses:
+      '200':
+        description: Active account updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account:
+                  type: string
+                message:
+                  type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '503':
+        $ref: ../components/responses.yaml#/BadRequest
+
+GcloudHealth:
+  get:
+    operationId: getGcloudHealth
+    tags:
+      - gcloud
+    summary: Check gcloud and Drive access health
+    responses:
+      '200':
+        description: Health check result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+                gcloud_installed:
+                  type: boolean
+                authenticated:
+                  type: boolean
+                drive_access:
+                  type: boolean
+                active_account:
+                  type: string
+                  nullable: true
+                account:
+                  type: string
+                error:
+                  type: string
+                  nullable: true
+                account_checks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      account:
+                        type: string
+                      active:
+                        type: boolean
+                      healthy:
+                        type: boolean
+                      authenticated:
+                        type: boolean
+                      drive_access:
+                        type: boolean
+                      error:
+                        type: string
+                        nullable: true
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

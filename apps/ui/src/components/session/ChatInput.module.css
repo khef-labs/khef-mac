@@ -1,0 +1,116 @@
+.chatInput {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface, #1a1a1a);
+  border-top: 1px solid var(--border, #2d2d2d);
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+}
+
+.resizeHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  cursor: ns-resize;
+  color: var(--text-muted, #525252);
+  user-select: none;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--text-secondary, #a1a1aa);
+  }
+}
+
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.editorWrapper {
+  flex: 1;
+  border: 1px solid var(--border, #2d2d2d);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+
+  & :global(.cm-editor) {
+    height: 100%;
+    cursor: text;
+  }
+
+  & :global(.cm-scroller) {
+    height: 100%;
+    overflow: auto;
+  }
+
+  & :global(.cm-content) {
+    min-height: 100%;
+  }
+
+  &:focus-within {
+    border-color: var(--accent, #60a5fa);
+  }
+}
+
+.broadcastBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border, #2d2d2d);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted, #71717a);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+
+  &:hover {
+    color: var(--text-primary, #e4e4e7);
+    border-color: #444;
+  }
+}
+
+.broadcastBtnActive {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.08);
+  border-color: #a16207;
+}
+
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent, #60a5fa);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, opacity 0.15s;
+
+  &:hover:not(:disabled) {
+    background: var(--accent-hover, #3b82f6);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}

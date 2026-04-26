@@ -1,0 +1,114 @@
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.repoList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.repoCard {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+
+  &:hover {
+    border-color: var(--accent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.repoHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.repoIcon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.repoName {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: var(--text-base);
+}
+
+.repoFileCount {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.repoDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.repoPath {
+  word-break: break-all;
+}
+
+.repoRemote {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.repoFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.repoDeleteButton {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    opacity: 1;
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+  }
+}
+
+.loading {
+  color: var(--muted);
+  padding: var(--space-4);
+}
+
+.emptyTab {
+  color: var(--muted);
+  padding: var(--space-4);
+  text-align: center;
+}

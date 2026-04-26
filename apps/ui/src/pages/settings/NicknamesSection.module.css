@@ -1,0 +1,193 @@
+.nameList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  cursor: grab;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.nameRow:active {
+  cursor: grabbing;
+}
+
+.nameRow:hover {
+  background: var(--surface-2);
+}
+
+.nameRowDragging {
+  opacity: 0.4;
+}
+
+.nameRowOver {
+  border-top: 2px solid var(--accent);
+}
+
+.dragHandle {
+  color: var(--muted);
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.nameIndex {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  min-width: 18px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.nameText {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono, monospace);
+  color: var(--fg);
+}
+
+.nameActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+.statusDotActive {
+  background: var(--success, #22c55e);
+  opacity: 1;
+}
+
+.sessionLink {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 2px;
+  font-size: var(--text-xs);
+  transition: color var(--transition-fast);
+}
+
+.sessionLink:hover {
+  color: var(--fg);
+}
+
+.releaseButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: var(--text-xs);
+  transition: color var(--transition-fast);
+}
+
+.releaseButton:hover {
+  color: var(--danger, var(--error));
+}
+
+.releasedLabel {
+  font-size: var(--text-xs);
+  color: var(--success, #22c55e);
+  padding: 2px 4px;
+}
+
+.removeButton {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: var(--text-sm);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.removeButton:hover {
+  color: var(--danger, var(--error));
+}
+
+.incrementer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.incrementerButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--surface);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.incrementerButton:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.incrementerButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.incrementerValue {
+  min-width: 36px;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+  user-select: none;
+}
+
+.incrementerLabel {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.lengthRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.emptyList {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  padding: var(--space-3);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}

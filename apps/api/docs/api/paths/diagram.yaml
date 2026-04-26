@@ -1,0 +1,87 @@
+DiagramHealth:
+  get:
+    operationId: getDiagramHealth
+    tags:
+      - diagram
+    summary: Check diagram service health
+    description: Check if the Kroki diagram rendering service is available.
+    responses:
+      '200':
+        description: Service is available
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: ok
+      '503':
+        description: Service unavailable
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: unavailable
+                message:
+                  type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+DiagramPreview:
+  post:
+    operationId: previewDiagram
+    tags:
+      - diagram
+    summary: Render diagram to SVG
+    description: Render a diagram to SVG without storing it. Supports mermaid, d2, plantuml, and graphviz.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                  - mermaid
+                  - d2
+                  - plantuml
+                  - graphviz
+                description: Diagram type
+              content:
+                type: string
+                description: Diagram source content
+              theme:
+                type: string
+                enum:
+                  - dark
+                  - light
+                default: dark
+              maxWidth:
+                type: number
+                description: Optional max width for SVG scaling
+            required:
+              - type
+              - content
+    responses:
+      '200':
+        description: Rendered SVG
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                svg:
+                  type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '422':
+        description: Diagram rendering error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error

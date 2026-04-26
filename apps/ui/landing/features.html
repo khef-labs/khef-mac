@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khef Features</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0B1220;
+      --bg-card: #111827;
+      --fg: #e8eaed;
+      --muted: #7a8599;
+      --accent: #5B8FD4;
+      --accent-light: #7BA8E0;
+      --border: rgba(91, 143, 212, 0.15);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .card h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+
+    .card ul {
+      list-style: none;
+    }
+
+    .card li {
+      font-size: 0.9rem;
+      padding: 0.3rem 0;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card li::before {
+      content: "•";
+      color: var(--accent);
+    }
+
+    .highlight {
+      border-color: var(--accent);
+      border-width: 2px;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>KHEF</h1>
+      <p class="tagline">Persistent memory for AI-assisted development</p>
+    </header>
+
+    <div class="grid">
+      <div class="card highlight">
+        <h2>Memory Types</h2>
+        <ul>
+          <li>Decisions with rationale</li>
+          <li>Reusable patterns</li>
+          <li>Context (architecture, schemas)</li>
+          <li>Todos for you and your AI</li>
+          <li>Agent rules and guidelines</li>
+          <li>Commands and CLI reference</li>
+          <li>Diagrams and visual docs</li>
+          <li>References and API docs</li>
+          <li>Custom user-defined types</li>
+          <li>Type-specific status workflows</li>
+        </ul>
+      </div>
+
+      <div class="card highlight">
+        <h2>AI Integration</h2>
+        <ul>
+          <li>Claude Code via MCP</li>
+          <li>OpenAI Codex CLI via MCP</li>
+          <li>Google Gemini conversations</li>
+          <li>50+ tools for memory ops</li>
+          <li>One-call session bootstrap</li>
+          <li>UUID handoff between agents</li>
+          <li>Task routing and assignment</li>
+          <li>Custom slash commands</li>
+          <li>Prompt template management</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Knowledge Graph</h2>
+        <ul>
+          <li>11 typed relations</li>
+          <li>Interactive graph explorer</li>
+          <li>Clickable nodes for SPA navigation</li>
+          <li>Configurable traversal depth (1-4)</li>
+          <li>LR / TB direction toggle</li>
+          <li>Type-based color-coded nodes</li>
+          <li>Type filter chips</li>
+          <li>Graph health analysis</li>
+          <li>Orphan memory detection</li>
+          <li>SVG graph export</li>
+          <li>Pan and zoom controls</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Search</h2>
+        <ul>
+          <li>Full-text keyword search</li>
+          <li>Semantic similarity search</li>
+          <li>Cross-project queries</li>
+          <li>Filter by type, tag, status, handle</li>
+          <li>Date filters with quick presets</li>
+          <li>Pinned memory filter</li>
+          <li>UUID batch lookup</li>
+          <li>Relevance-ranked results</li>
+          <li>Session transcript search</li>
+          <li>Configurable sort and page size</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Gemini Conversations</h2>
+        <ul>
+          <li>Chat with Google Gemini models</li>
+          <li>Model selector (Pro, Flash, etc.)</li>
+          <li>Streaming responses</li>
+          <li>Save responses as memories</li>
+          <li>Edit titles, copy messages</li>
+          <li>Delete messages and conversations</li>
+          <li>Token usage per message</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Memory Editor</h2>
+        <ul>
+          <li>Rich markdown with GFM</li>
+          <li>90+ language syntax highlighting</li>
+          <li>Mermaid diagram rendering</li>
+          <li>Auto-generated table of contents</li>
+          <li>Focus mode (distraction-free)</li>
+          <li>Inline handle and metadata editing</li>
+          <li>Pin / unpin memories</li>
+          <li>Keyboard shortcuts (save, edit, nav)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Version History</h2>
+        <ul>
+          <li>Snapshots for memories and configs</li>
+          <li>Browse and compare versions</li>
+          <li>Restore to any previous snapshot</li>
+          <li>Delete old snapshots</li>
+          <li>Current version badge</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Files &amp; Media</h2>
+        <ul>
+          <li>Drag-and-drop file upload</li>
+          <li>Image preview and lightbox</li>
+          <li>Full-screen pan and zoom viewer</li>
+          <li>Audio playback (MP3, WAV)</li>
+          <li>Text-to-speech with voice selection</li>
+          <li>File download and deletion</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Inline Comments</h2>
+        <ul>
+          <li>Anchor to text excerpts</li>
+          <li>Active / resolved status</li>
+          <li>Orphan detection on edits</li>
+          <li>Comments on plans and diffs</li>
+          <li>Visible to AI automatically</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Config Syncing</h2>
+        <ul>
+          <li>Rules sync to CLAUDE.md</li>
+          <li>Knowledge to project files</li>
+          <li>Bidirectional sync</li>
+          <li>Conflict detection</li>
+          <li>Auto-discovery of configs</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Status Workflows</h2>
+        <ul>
+          <li>Type-specific statuses</li>
+          <li>Todos: open &rarr; in_progress &rarr; done</li>
+          <li>Decisions: proposed &rarr; accepted</li>
+          <li>Patterns: active / deprecated</li>
+          <li>Custom statuses per type</li>
+          <li>Filter by active / inactive</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Export Options</h2>
+        <ul>
+          <li>Markdown with frontmatter</li>
+          <li>PDF with embedded diagrams</li>
+          <li>DOCX with embedded diagrams</li>
+          <li>Slack-formatted mrkdwn</li>
+          <li>Bulk ZIP export</li>
+          <li>Seed file generation</li>
+          <li>Copy to clipboard</li>
+          <li>Google Drive sync</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Diagrams</h2>
+        <ul>
+          <li>Mermaid, D2, PlantUML, Graphviz</li>
+          <li>Live preview while editing</li>
+          <li>High-quality PNG export</li>
+          <li>Multiple color themes</li>
+          <li>Configurable sizing and scale</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Session Browser</h2>
+        <ul>
+          <li>Browse past conversations by project</li>
+          <li>Synced transcripts with embeddings</li>
+          <li>Keyword and semantic search</li>
+          <li>Filter by user / assistant / tool / thinking</li>
+          <li>Formatted and raw JSON views</li>
+          <li>Export as markdown or JSON</li>
+          <li>Embedding sync status and chunks</li>
+          <li>Bulk cleanup tools</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Plans</h2>
+        <ul>
+          <li>Browse implementation plans</li>
+          <li>Rendered markdown with diagrams</li>
+          <li>Version history per plan</li>
+          <li>Anchored comments on plans</li>
+          <li>Export and copy options</li>
+          <li>Auto project association</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Agent Management</h2>
+        <ul>
+          <li>User and project-scoped agents</li>
+          <li>Model and permission config</li>
+          <li>Instructions editor with preview</li>
+          <li>MCP server health monitoring</li>
+          <li>Stale / unavailable detection</li>
+          <li>Manage prompts and skills</li>
+          <li>Sync built-in commands</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Google Integration</h2>
+        <ul>
+          <li>Import from Google Docs</li>
+          <li>Manual re-sync from source</li>
+          <li>Export to Google Drive folder</li>
+          <li>Source link and last-sync tracking</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Diff Viewer</h2>
+        <ul>
+          <li>Browse git commits per project</li>
+          <li>View file diffs per commit</li>
+          <li>Annotate commits with notes</li>
+          <li>Anchored comments on diff lines</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>Stats Dashboard</h2>
+        <ul>
+          <li>Memory, project, tag, relation counts</li>
+          <li>Distribution by type and project</li>
+          <li>Top tags and relation types</li>
+          <li>File count and total size</li>
+          <li>Database size</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>UI &amp; Navigation</h2>
+        <ul>
+          <li>Dark theme throughout</li>
+          <li>Collapsible sidebar</li>
+          <li>Right-click context menus</li>
+          <li>Prev / next arrows in filtered lists</li>
+          <li>Filter state persistence</li>
+          <li>Project favorites</li>
+          <li>Keyboard shortcuts throughout</li>
+          <li>Skeleton loaders and toast notifications</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      khef.ai &mdash; <a href="architecture.html">Architecture</a> &middot; <a href="qa.html">Q&A</a>
+    </footer>
+  </div>
+</body>
+</html>

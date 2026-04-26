@@ -1,0 +1,506 @@
+AssistantsByIdChat:
+  post:
+    operationId: sendAssistantChat
+    tags:
+      - assistant-chat
+    summary: Send chat message
+    description: |
+      Send a message to an assistant backend (claude-code, codex-cli, gemini).
+      Auto-creates a persistent chat if no chat_id is provided.
+      Include previous messages for multi-turn context.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+          enum: [claude-code, codex-cli, gemini]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - prompt_text
+            properties:
+              prompt_text:
+                type: string
+                description: The current message to send
+                maxLength: 100000
+              messages:
+                type: array
+                description: Previous conversation turns for context
+                maxItems: 100
+                items:
+                  $ref: ../components/schemas.yaml#/AssistantChatTurn
+              model:
+                type: string
+                description: Optional model override
+              chat_id:
+                type: string
+                format: uuid
+                description: Existing chat to continue (auto-creates if omitted)
+              project_id:
+                type: string
+                description: Project handle, name, or UUID for new chat
+              title:
+                type: string
+                description: Title for new chat
+                maxLength: 200
+              parent_turn_id:
+                type: string
+                format: uuid
+                description: Parent turn UUID for delegation linking
+              source:
+                type: string
+                description: Origin channel (ui, mcp, api). Defaults to api.
+              caller_handle:
+                type: string
+                description: Handle of the assistant making this call (e.g., claude-code, codex-cli). Stored on new chats.
+              use_google_search:
+                type: boolean
+                description: Enable Google Search grounding (Gemini only)
+              use_thinking:
+                type: boolean
+                description: Enable thinking mode (Gemini only)
+              thinking_budget:
+                type: integer
+                description: Token budget for thinking (Gemini only, requires use_thinking)
+    responses:
+      '201':
+        description: Message sent and response received
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat_id:
+                  type: string
+                  format: uuid
+                turn_id:
+                  type: string
+                  format: uuid
+                  description: Turn UUID for this message (use as parent_turn_id when delegating)
+                message:
+                  $ref: ../components/schemas.yaml#/AssistantChatMessage
+      '400':
+        description: >
+          Invalid request. Possible reasons: invalid handle, missing prompt_text,
+          prompt_text or title exceeds max length, messages array exceeds 100 turns,
+          invalid message role, empty message content, message content exceeds max length,
+          chat has reached maximum of 100 stored messages.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '429':
+        description: >
+          Too many requests. Two possible causes: (1) Global rate limit exceeded
+          (30 requests per minute) — includes Retry-After header and retry_after_ms.
+          (2) Per-backend concurrency limit reached (claude/codex: 3, gemini: 5)
+          — includes active/limit counts.
+        headers:
+          Retry-After:
+            description: Seconds until rate limit resets (only for rate limit, not concurrency)
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                remaining:
+                  type: integer
+                  description: Remaining requests in window (rate limit)
+                retry_after_ms:
+                  type: integer
+                  description: Milliseconds until window resets (rate limit)
+                active:
+                  type: integer
+                  description: Current active calls (concurrency limit)
+                limit:
+                  type: integer
+                  description: Maximum concurrent calls (concurrency limit)
+      '500':
+        description: Backend returned an error (message is still persisted)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat_id:
+                  type: string
+                  format: uuid
+                turn_id:
+                  type: string
+                  format: uuid
+                message:
+                  $ref: ../components/schemas.yaml#/AssistantChatMessage
+                error:
+                  type: string
+      '503':
+        description: Backend unavailable
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                reason:
+                  type: string
+
+AssistantsByIdChats:
+  get:
+    operationId: listAssistantChats
+    tags:
+      - assistant-chat
+    summary: List chats
+    description: List persistent chats for an assistant backend with message counts
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+          enum: [claude-code, codex-cli, gemini]
+      - name: project_id
+        in: query
+        description: Filter by project (handle, name, or UUID)
+        schema:
+          type: string
+      - name: source
+        in: query
+        description: Filter by origin channel (ui, mcp, api)
+        schema:
+          type: string
+          enum: [ui, mcp, api]
+      - name: limit
+        in: query
+        description: Max results (default 20, max 100)
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        description: Pagination offset
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: List of chats
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chats:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AssistantChatSummary
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+AssistantsByIdChatsById:
+  get:
+    operationId: getAssistantChat
+    tags:
+      - assistant-chat
+    summary: Get chat
+    description: Get a specific chat with optional messages
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: include_messages
+        in: query
+        description: Include all messages in response
+        schema:
+          type: string
+          enum: ['true', 'false']
+    responses:
+      '200':
+        description: Chat found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat:
+                  $ref: ../components/schemas.yaml#/AssistantChat
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteAssistantChat
+    tags:
+      - assistant-chat
+    summary: Delete chat
+    description: Delete a chat and all its messages (cascade)
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Chat deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+AssistantsByIdChatsByIdMessages:
+  get:
+    operationId: listAssistantChatMessages
+    tags:
+      - assistant-chat
+    summary: List chat messages
+    description: Paginated message listing for a chat
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: asc
+    responses:
+      '200':
+        description: Message list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messages:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AssistantChatMessage
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+AssistantsByIdChatsByIdMessagesById:
+  delete:
+    operationId: deleteAssistantChatMessage
+    tags:
+      - assistant-chat
+    summary: Delete message
+    description: Delete a single message from a chat
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: messageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Message deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+# Handle-less chat routes (cross-backend)
+
+ChatsList:
+  get:
+    operationId: listAllChats
+    tags:
+      - assistant-chat
+    summary: List all chats
+    description: List all chats across backends (excludes delegated child chats)
+    parameters:
+      - name: project_id
+        in: query
+        description: Filter by project (handle, name, or UUID)
+        schema:
+          type: string
+      - name: source
+        in: query
+        description: Filter by origin channel
+        schema:
+          type: string
+          enum: [ui, mcp, api]
+      - name: assistant_handle
+        in: query
+        description: Filter by assistant backend
+        schema:
+          type: string
+          enum: [claude-code, codex-cli, gemini]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+    responses:
+      '200':
+        description: List of chats
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chats:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AssistantChatSummary
+                pagination:
+                  $ref: ../components/schemas.yaml#/PaginationMetadata
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+ChatsById:
+  get:
+    operationId: getChatById
+    tags:
+      - assistant-chat
+    summary: Get chat by UUID
+    description: Get a chat by UUID without specifying assistant handle
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: include_messages
+        in: query
+        schema:
+          type: string
+          enum: ['true', 'false']
+    responses:
+      '200':
+        description: Chat found
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat:
+                  $ref: ../components/schemas.yaml#/AssistantChat
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateChatById
+    tags:
+      - assistant-chat
+    summary: Update chat title
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                maxLength: 200
+    responses:
+      '200':
+        description: Chat updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chat:
+                  $ref: ../components/schemas.yaml#/AssistantChat
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteChatById
+    tags:
+      - assistant-chat
+    summary: Delete chat by UUID
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '204':
+        description: Chat deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+ChatsAll:
+  delete:
+    operationId: deleteAllChats
+    tags:
+      - assistant-chat
+    summary: Delete all chats
+    description: Delete all chats and their messages
+    responses:
+      '204':
+        description: All chats deleted
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khef Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0B1220;
+      --bg-card: #111827;
+      --fg: #e8eaed;
+      --muted: #7a8599;
+      --accent: #5B8FD4;
+      --accent-light: #7BA8E0;
+      --border: rgba(91, 143, 212, 0.15);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .section h2 {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+
+    .card h3 {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--fg);
+    }
+
+    .card p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .card .tech {
+      font-size: 0.75rem;
+      color: var(--accent-light);
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .stack-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .stack-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .stack-item .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .stack-item .value {
+      font-size: 0.95rem;
+      color: var(--fg);
+    }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .principle {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+
+    .principle h3 {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+
+    .principle p {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 2.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>KHEF ARCHITECTURE</h1>
+      <p class="tagline">Self-hosted, AI-native, built on proven foundations</p>
+    </header>
+
+    <div class="section">
+      <h2>Core Stack</h2>
+      <div class="stack-row">
+        <div class="stack-item">
+          <div class="label">Database</div>
+          <div class="value">PostgreSQL 17</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">API</div>
+          <div class="value">Fastify + TypeScript</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">UI</div>
+          <div class="value">Preact + Vite</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">AI Protocol</div>
+          <div class="value">MCP (Model Context)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Data Layer</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Relational Storage</h3>
+          <p>Projects, memories, relations, tags — all in PostgreSQL with proper foreign keys and indexes.</p>
+          <div class="tech">pgvector for embeddings</div>
+        </div>
+        <div class="card">
+          <h3>Full-Text Search</h3>
+          <p>Native PostgreSQL tsvector with GIN indexes. Fast keyword search across all content.</p>
+          <div class="tech">ts_rank for relevance</div>
+        </div>
+        <div class="card">
+          <h3>Vector Search</h3>
+          <p>Bring your own: pgvector, Chroma, or Qdrant. Semantic similarity via Sentence Transformers (SBERT).</p>
+          <div class="tech">MPNet · all-mpnet-base-v2</div>
+        </div>
+        <div class="card">
+          <h3>Auto-Chunking</h3>
+          <p>Large memories (>2000 chars) are automatically split for better search and embedding.</p>
+          <div class="tech">paragraph-aware splits</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Integration Points</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>MCP Server</h3>
+          <p>50+ tools exposed via Model Context Protocol. Claude Code and Codex CLI connect natively.</p>
+          <div class="tech">stdio transport</div>
+        </div>
+        <div class="card">
+          <h3>REST API</h3>
+          <p>Full CRUD for memories, projects, relations, tags. OpenAPI spec included.</p>
+          <div class="tech">JSON over HTTP</div>
+        </div>
+        <div class="card">
+          <h3>Config Sync</h3>
+          <p>Bidirectional sync between DB and filesystem. Rules to CLAUDE.md, knowledge to project files.</p>
+          <div class="tech">force-with-lease writes</div>
+        </div>
+        <div class="card">
+          <h3>Diagram Rendering</h3>
+          <p>Kroki service renders Mermaid, D2, PlantUML, Graphviz. Puppeteer for high-quality PNG.</p>
+          <div class="tech">server-side SVG/PNG</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Design Principles</h2>
+      <div class="principles">
+        <div class="principle">
+          <h3>Self-Hosted First</h3>
+          <p>Your code context stays on your machine. No cloud dependency. Works offline. Full data ownership.</p>
+        </div>
+        <div class="principle">
+          <h3>AI-Native</h3>
+          <p>Built for AI agents from day one. MCP tools, semantic search, session transcripts — all first-class.</p>
+        </div>
+        <div class="principle">
+          <h3>Proven Foundations</h3>
+          <p>PostgreSQL, TypeScript, Preact — boring tech that works. No exotic dependencies to break.</p>
+        </div>
+        <div class="principle">
+          <h3>Escape Hatches</h3>
+          <p>Markdown in, markdown out. Export anytime. Seed files for backup. No lock-in.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Deployment</h2>
+      <div class="stack-row">
+        <div class="stack-item">
+          <div class="label">Quick Start</div>
+          <div class="value">Docker Compose</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">API Port</div>
+          <div class="value">3200 (default)</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">UI Port</div>
+          <div class="value">5174 (dev)</div>
+        </div>
+        <div class="stack-item">
+          <div class="label">Vector DB</div>
+          <div class="value">9000 (Chroma)</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      khef.ai — <a href="features.html">Features</a> · <a href="qa.html">Q&A</a>
+    </footer>
+  </div>
+</body>
+</html>

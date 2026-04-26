@@ -1,0 +1,222 @@
+KdagInputTypes:
+  get:
+    operationId: listKdagInputTypes
+    tags:
+      - job-definitions
+    summary: List all input types
+    description: >
+      Returns all registered input types (built-in and custom).
+      Built-in types include prompt, chunk_prompt, system_prompt, transcript, existing_summary.
+    responses:
+      '200':
+        description: Input type list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input_types:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KdagInputType
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createKdagInputType
+    tags:
+      - job-definitions
+    summary: Register a custom input type
+    description: >
+      Register a new input type for use in pipeline definitions.
+      Key must start with a lowercase letter and contain only lowercase letters, digits, hyphens, and underscores.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateKdagInputTypeBody
+    responses:
+      '201':
+        description: Input type created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input_type:
+                  $ref: ../components/schemas.yaml#/KdagInputType
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '409':
+        description: Input type key already exists
+
+KdagBackends:
+  get:
+    operationId: listKdagBackends
+    tags:
+      - job-definitions
+    summary: List available kdag backends
+    description: >
+      Returns available execution backends (claude-code, codex-cli, gemini) with
+      availability status and suggested models. Results are cached for 60 seconds.
+      Availability is determined by CLI presence (which claude, which codex) or
+      API status (Gemini).
+    responses:
+      '200':
+        description: Backend list with availability and model suggestions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                backends:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/KdagBackend
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+JobDefinitions:
+  get:
+    operationId: listJobDefinitions
+    tags:
+      - job-definitions
+    summary: List all job definitions
+    description: >
+      Returns all pipeline definitions with step counts and job counts.
+      System definitions appear first, then sorted by name.
+    responses:
+      '200':
+        description: Definition list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                definitions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/JobDefinitionSummary
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+  post:
+    operationId: createJobDefinition
+    tags:
+      - job-definitions
+    summary: Create a new definition
+    description: >
+      Create a pipeline definition with ordered steps and optional input declarations.
+      Key must be unique lowercase kebab-case. At least one step is required.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateJobDefinitionBody
+    responses:
+      '201':
+        description: Definition created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                definition:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    key:
+                      type: string
+                    name:
+                      type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '409':
+        description: Duplicate key or step key/index conflict
+
+JobDefinitionsByKey:
+  get:
+    operationId: getJobDefinition
+    tags:
+      - job-definitions
+    summary: Get definition with steps and inputs
+    description: >
+      Returns a single definition by key, including its ordered steps
+      and required input declarations.
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Definition key (e.g., 'session-summary', 'custom')
+    responses:
+      '200':
+        description: Definition detail
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/JobDefinitionDetail
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateJobDefinition
+    tags:
+      - job-definitions
+    summary: Update a definition
+    description: >
+      Update definition name, description, steps, or input declarations.
+      Steps and inputs are replaced in full when provided (not merged).
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Definition key
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateJobDefinitionBody
+    responses:
+      '200':
+        description: Definition updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                updated:
+                  type: boolean
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Duplicate step key or index conflict
+  delete:
+    operationId: deleteJobDefinition
+    tags:
+      - job-definitions
+    summary: Delete a definition
+    description: >
+      Delete a definition by key. Blocked if the definition is a system definition
+      or has existing jobs referencing it.
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Definition key
+    responses:
+      '204':
+        description: Definition deleted
+      '400':
+        description: Cannot delete system definitions or definitions with existing jobs
+      '404':
+        $ref: ../components/responses.yaml#/NotFound

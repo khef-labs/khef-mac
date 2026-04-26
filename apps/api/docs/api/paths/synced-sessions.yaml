@@ -1,0 +1,426 @@
+SyncedSessions:
+  get:
+    operationId: listSyncedSessions
+    tags:
+      - synced-sessions
+    summary: List synced sessions
+    description: |
+      List sessions synced to PostgreSQL with optional filters.
+      Supports filtering by assistant, project, and content search across session chunks.
+    parameters:
+      - name: assistant
+        in: query
+        description: Filter by assistant handle (e.g., 'claude-code')
+        schema:
+          type: string
+      - name: project
+        in: query
+        description: Filter by project handle or name
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Substring search across session chunk content (messages, tool calls). Returns search_excerpt on matching sessions.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+          maximum: 100
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+            - started_at
+            - ended_at
+            - updated_at
+            - file_size
+          default: started_at
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - asc
+            - desc
+          default: desc
+    responses:
+      '200':
+        description: Paginated list of synced sessions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SyncedSession
+                pagination:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    limit:
+                      type: integer
+                    offset:
+                      type: integer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SyncedSessionsSearch:
+  get:
+    operationId: searchSyncedSessions
+    tags:
+      - synced-sessions
+    summary: Full-text search in session content
+    description: |
+      Search across session chunk content using PostgreSQL full-text search.
+      Returns matching chunks with excerpts and relevance ranking.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        description: Search query (minimum 2 characters)
+        schema:
+          type: string
+          minLength: 2
+      - name: assistant
+        in: query
+        description: Filter by assistant handle
+        schema:
+          type: string
+      - name: project
+        in: query
+        description: Filter by project handle or name
+        schema:
+          type: string
+      - name: session_id
+        in: query
+        description: Filter to a specific session UUID
+        schema:
+          type: string
+      - name: exclude_session_id
+        in: query
+        description: Exclude results from this session UUID
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 50
+    responses:
+      '200':
+        description: Search results with excerpts
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                results:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SyncedSessionSearchResult
+                query:
+                  type: string
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SyncedSessionsById:
+  get:
+    operationId: getSyncedSession
+    tags:
+      - synced-sessions
+    summary: Get a synced session
+    description: |
+      Get a single synced session by database row ID or file-based session UUID.
+      Optionally include content chunks.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Database row ID (UUID) or file-based session UUID
+        schema:
+          type: string
+          format: uuid
+      - name: include_chunks
+        in: query
+        description: Include session content chunks in response
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Session detail with optional chunks
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session:
+                  $ref: ../components/schemas.yaml#/SyncedSession
+                chunks:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SyncedSessionChunk
+                  description: Only present when include_chunks=true
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+SyncedSessionsBySessionId:
+  get:
+    operationId: getSyncedSessionBySessionId
+    tags:
+      - synced-sessions
+    summary: Lookup synced session by original file UUID
+    description: |
+      Find a synced session by its original JSONL file UUID (session_id).
+      Optionally include content chunks.
+    parameters:
+      - name: sessionId
+        in: path
+        required: true
+        description: Original session file UUID
+        schema:
+          type: string
+          format: uuid
+      - name: include_chunks
+        in: query
+        description: Include session content chunks in response
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Session detail with optional chunks
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session:
+                  $ref: ../components/schemas.yaml#/SyncedSession
+                chunks:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/SyncedSessionChunk
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+SyncedSessionsByIdSummary:
+  get:
+    operationId: getSessionSummary
+    tags:
+      - synced-sessions
+    summary: Get session summary
+    description: |
+      Get the AI-generated summary for a synced session.
+      Accepts database row ID, file-based session UUID, or snapshot UUID.
+      Returns summary content with assistant attribution, all snapshot metadata, and latest job run status.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Session database row ID, file-based session UUID, or snapshot UUID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Session summary with snapshots and job status
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionSummaryResponse
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateSessionSummary
+    tags:
+      - synced-sessions
+    summary: Update session summary
+    description: |
+      Update the content of the current summary snapshot.
+      Only modifies the snapshot pointed to by session_summaries.current_snapshot_id.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Session database row ID or file-based session UUID
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              content:
+                type: string
+                description: Updated summary content (markdown)
+            required:
+              - content
+    responses:
+      '200':
+        description: Updated summary
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    content:
+                      type: string
+                    updated_at:
+                      type: string
+                      format: date-time
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+SyncedSessionsByIdSummaryExport:
+  get:
+    operationId: exportSessionSummary
+    tags:
+      - synced-sessions
+    summary: Export session summary
+    description: Export the current session summary as markdown or Slack mrkdwn.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Session database row ID or file-based session UUID
+        schema:
+          type: string
+          format: uuid
+      - name: format
+        in: query
+        description: Export format
+        schema:
+          type: string
+          enum:
+            - markdown
+            - slack
+          default: markdown
+    responses:
+      '200':
+        description: Exported summary text
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: Summary content in the requested format
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+SyncedSessionsByIdSummarySnapshotsById:
+  get:
+    operationId: getSessionSummarySnapshot
+    tags:
+      - synced-sessions
+    summary: Get a summary snapshot
+    description: |
+      Fetch a single summary snapshot's full content by ID.
+      Use this to load older snapshots on demand without fetching all content upfront.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Session database row ID or file-based session UUID
+        schema:
+          type: string
+          format: uuid
+      - name: snapshotId
+        in: path
+        required: true
+        description: Snapshot UUID
+        schema:
+          type: string
+          format: uuid
+    responses:
+      '200':
+        description: Snapshot with full content
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot:
+                  $ref: ../components/schemas.yaml#/SessionSummarySnapshotDetail
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+SyncedSessionsSync:
+  post:
+    operationId: syncSessions
+    tags:
+      - synced-sessions
+    summary: Trigger manual session sync
+    description: |
+      Trigger a manual sync of session transcripts from disk to PostgreSQL.
+      The sync worker normally runs automatically every 60 seconds.
+    parameters:
+      - name: force
+        in: query
+        description: Force re-sync of all sessions (not just new/changed)
+        schema:
+          type: boolean
+          default: false
+    responses:
+      '200':
+        description: Sync result
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                synced:
+                  type: integer
+                skipped:
+                  type: integer
+                errors:
+                  type: integer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+SyncedSessionsSyncStatus:
+  get:
+    operationId: getSessionSyncStatus
+    tags:
+      - synced-sessions
+    summary: Get session sync status
+    description: Get the current status of the session sync worker.
+    responses:
+      '200':
+        description: Sync status
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                last_sync:
+                  type: string
+                  format: date-time
+                  nullable: true
+                sessions_synced:
+                  type: integer
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khef</title>
+  <meta name="description" content="Khef is a collaboration system that captures and surfaces project knowledge for engineers, AI assistants, and stakeholders.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0B1220;
+      --bg-lighter: #0f1a2b;
+      --fg: #e8eaed;
+      --muted: #8892a8;
+      --accent: #3b82f6;
+      --accent-secondary: #9333ea;
+      --accent-glow: rgba(59, 130, 246, 0.3);
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      z-index: 10;
+      padding: 2rem;
+      animation: fadeIn 1.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Logo container with ripples */
+    .logo-container {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2rem;
+    }
+
+    .logo {
+      width: 200px;
+      height: 200px;
+      position: relative;
+      z-index: 5;
+      animation: float 6s ease-in-out infinite;
+      filter: drop-shadow(0 0 40px var(--accent-glow));
+      will-change: transform;
+    }
+
+    .logo img,
+    .logo svg {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    /* Ripple rings */
+    .ripple {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--accent-secondary);
+      border-radius: 50%;
+      opacity: 0;
+      animation: ripple 12s ease-out infinite;
+    }
+
+    .ripple:nth-child(1) { animation-delay: 0s; }
+    .ripple:nth-child(2) { animation-delay: 3s; }
+    .ripple:nth-child(3) { animation-delay: 6s; }
+    .ripple:nth-child(4) { animation-delay: 9s; }
+
+    @keyframes ripple {
+      0% {
+        width: 160px;
+        height: 160px;
+        opacity: 0.35;
+      }
+      100% {
+        width: 800px;
+        height: 800px;
+        opacity: 0;
+      }
+    }
+
+    /* Text content */
+    .wordmark {
+      font-size: 2.5rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      margin-bottom: 1.5rem;
+      color: var(--fg);
+    }
+
+    .tagline {
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--muted);
+      max-width: 480px;
+      line-height: 1.6;
+      letter-spacing: 0.05em;
+    }
+
+    /* Footer */
+    .footer {
+      position: fixed;
+      bottom: 1.5rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .logo, .container { animation: none; }
+      .ripple { animation: none; opacity: 0.15; width: 300px; height: 300px; }
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .wordmark {
+        font-size: 2rem;
+      }
+
+      .tagline {
+        font-size: 1rem;
+        padding: 0 1rem;
+      }
+
+      .input-group {
+        flex-direction: column;
+      }
+
+      .email-input {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-container">
+      <div class="ripple"></div>
+      <div class="ripple"></div>
+      <div class="ripple"></div>
+      <div class="ripple"></div>
+      <div class="logo">
+        <img src="khef.svg" alt="Khef logo" width="100" height="100">
+      </div>
+    </div>
+
+    <h1 class="wordmark">KHEF</h1>
+    <p class="tagline">Knowledge Hub and Engineering Framework</p>
+  </div>
+
+  <footer class="footer">
+    khef.ai
+  </footer>
+</body>
+</html>

@@ -1,0 +1,73 @@
+# Dependencies & build
+node_modules/
+dist/
+apps/api/mcp-server/build/
+
+# Environment
+.env
+.env~
+\#*#
+*~
+
+# IDE / OS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Claude Code (user-private)
+CLAUDE.local.md
+AGENTS.local.md
+KF-RULES.md
+KF-RULES-*.md
+KF-PROJECT-KNOWLEDGE.md
+KF-PROJECT-KNOWLEDGE-*.md
+.claude/*
+!.claude/skills/
+
+# Slack exports
+chats/
+
+# Temp / test output
+tmp/
+scripts/voice/listen
+test-results/
+playwright-report/
+demo-screenshots/
+
+# Backend: seed memories (only track known projects + knowledge types)
+apps/api/db/seed/memories/*/
+!apps/api/db/seed/memories/khef/
+!apps/api/db/seed/memories/khef-demo/
+!apps/api/db/seed/memories/khef-ui/
+!apps/api/db/seed/memories/user/
+!apps/api/db/seed/memories/samples/
+apps/api/db/seed/memories/*/*/
+!apps/api/db/seed/memories/samples/*/
+!apps/api/db/seed/memories/*/assistant-rule/
+!apps/api/db/seed/memories/*/commands/
+!apps/api/db/seed/memories/*/context/
+!apps/api/db/seed/memories/*/pattern/
+
+# Backend: generated docs
+apps/api/docs/api/openapi.bundled.yaml
+
+# Backend: data
+apps/api/db/backups/
+apps/api/uploads/
+apps/api/recovery/
+
+# Editor scratch files
+khef-scratches/
+
+# Frontend
+.vite/
+apps/ui/project-details-page-requirements.md
+
+apps/voice/.build/
+
+# Generated third-party license texts (regenerated via `npm run licenses:generate`)
+licenses/
+
+

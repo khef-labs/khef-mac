@@ -1,0 +1,157 @@
+AssistantsByIdMcpServers:
+  get:
+    operationId: listAssistantMcpServers
+    tags:
+      - assistants
+    summary: List MCP servers
+    description: List MCP servers configured for an assistant.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    responses:
+      '200':
+        description: MCP servers
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                servers:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/McpServer
+                configPath:
+                  type: string
+                issues:
+                  type: integer
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createAssistantMcpServer
+    tags:
+      - assistants
+    summary: Add MCP server
+    description: Add an MCP server to an assistant's configuration.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              type:
+                type: string
+                enum:
+                  - stdio
+                  - http
+                default: stdio
+              command:
+                type: string
+                description: Command for stdio transport
+              args:
+                type: array
+                items:
+                  type: string
+              url:
+                type: string
+                description: URL for http transport
+              env:
+                type: object
+                additionalProperties:
+                  type: string
+            required:
+              - name
+    responses:
+      '201':
+        description: Server added
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                server:
+                  $ref: ../components/schemas.yaml#/McpServer
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+AssistantsByIdMcpServersById:
+  delete:
+    operationId: deleteAssistantMcpServer
+    tags:
+      - assistants
+    summary: Remove MCP server
+    description: Remove an MCP server from an assistant's configuration.
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: Assistant handle
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Server name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Server removed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+McpServersHealth:
+  get:
+    operationId: getMcpServersHealth
+    tags:
+      - assistants
+    summary: Aggregate MCP server health
+    description: Check MCP server health across all configured assistants.
+    responses:
+      '200':
+        description: Health summary
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issues:
+                  type: integer
+                assistants:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      handle:
+                        type: string
+                      name:
+                        type: string
+                      issues:
+                        type: integer
+                      servers:
+                        type: array
+                        items:
+                          $ref: ../components/schemas.yaml#/McpServer
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest

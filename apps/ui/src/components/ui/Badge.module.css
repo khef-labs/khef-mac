@@ -1,0 +1,132 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* Type variants */
+.decision {
+  background-color: color-mix(in srgb, var(--node-decision) 15%, transparent);
+  color: var(--node-decision);
+}
+
+.pattern {
+  background-color: color-mix(in srgb, var(--node-pattern) 15%, transparent);
+  color: var(--node-pattern);
+}
+
+.context {
+  background-color: color-mix(in srgb, var(--node-context) 15%, transparent);
+  color: var(--node-context);
+}
+
+.todo {
+  background-color: color-mix(in srgb, var(--node-todo) 15%, transparent);
+  color: var(--node-todo);
+}
+
+.note {
+  background-color: color-mix(in srgb, var(--node-note) 15%, transparent);
+  color: var(--node-note);
+}
+
+.command {
+  background-color: color-mix(in srgb, var(--node-command) 15%, transparent);
+  color: var(--node-command);
+}
+
+.api {
+  background-color: color-mix(in srgb, var(--node-api) 15%, transparent);
+  color: var(--node-api);
+}
+
+.reference {
+  background-color: color-mix(in srgb, var(--node-reference) 15%, transparent);
+  color: var(--node-reference);
+}
+
+.rule {
+  background-color: color-mix(in srgb, var(--node-rule) 15%, transparent);
+  color: var(--node-rule);
+}
+
+.diagram {
+  background-color: color-mix(in srgb, var(--node-diagram, #9333ea) 15%, transparent);
+  color: var(--node-diagram, #9333ea);
+}
+
+.csv {
+  background-color: color-mix(in srgb, var(--node-csv, #14b8a6) 15%, transparent);
+  color: var(--node-csv, #14b8a6);
+}
+
+.video {
+  background-color: color-mix(in srgb, var(--node-video, #e11d48) 15%, transparent);
+  color: var(--node-video, #e11d48);
+}
+
+.canvas {
+  background-color: color-mix(in srgb, var(--node-canvas, #0ea5e9) 15%, transparent);
+  color: var(--node-canvas, #0ea5e9);
+}
+
+.knowledge {
+  background-color: color-mix(in srgb, var(--node-command) 15%, transparent);
+  color: var(--node-command);
+}
+
+/* Parent type label */
+.parentLabel {
+  opacity: 0.7;
+}
+
+.separator {
+  opacity: 0.4;
+  margin: 0 2px;
+}
+
+/* Status variants */
+.statusOpen {
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+.statusInProgress {
+  background-color: color-mix(in srgb, var(--warning) 15%, transparent);
+  color: var(--warning);
+}
+
+.statusDone,
+.statusAccepted,
+.statusActive,
+.statusCurrent {
+  background-color: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.statusBlocked,
+.statusRejected,
+.statusDeprecated,
+.statusOutdated {
+  background-color: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+.statusCanceled,
+.statusSuperseded,
+.statusProposed,
+.statusUpdated {
+  background-color: color-mix(in srgb, var(--muted) 15%, transparent);
+  color: var(--muted);
+}
+
+/* Tag variant */
+.tag {
+  background-color: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}

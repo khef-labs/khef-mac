@@ -1,0 +1,230 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  min-height: 0;
+  flex: 1;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.commitItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--transition-fast);
+  width: 100%;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background-color: var(--surface-hover);
+  }
+
+  &.selected {
+    background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--border);
+  transition: background-color var(--transition-fast);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.indicatorActive {
+  background-color: var(--accent);
+}
+
+.uncommitted {
+  border-bottom: 1px solid var(--border);
+}
+
+.uncommittedLabel {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--warning, #f59e0b);
+}
+
+.commitContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.commitHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.commitMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.author {
+  color: var(--fg);
+  font-weight: 500;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metaSep {
+  color: var(--border);
+  font-size: var(--text-xs);
+  user-select: none;
+}
+
+.statAdd {
+  color: var(--diff-add, #22c55e);
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+.statDel {
+  color: var(--diff-del, #ef4444);
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+.sha {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.copyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+
+  &:hover {
+    color: var(--fg);
+  }
+}
+
+.commitItem:hover .copyButton {
+  opacity: 1;
+}
+
+.time {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.message {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: var(--leading-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.commentBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+
+.loading,
+.empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.count {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.loadMore {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    background-color: var(--surface-hover);
+    border-color: var(--accent);
+  }
+
+  &:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+}

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35.38 47.68">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: lime;
+      }
+
+      .cls-2 {
+        fill: #da24ff;
+      }
+
+      .cls-3 {
+        fill: #fff;
+      }
+
+      .cls-4 {
+        fill: #0065d4;
+      }
+    </style>
+  </defs>
+  <rect class="cls-3" width="10.1" height="47.68"/>
+  <rect x="1.56" y="1.57" width="6.98" height="44.53"/>
+  <rect class="cls-3" x=".53" y="13.7" width="34.75" height="4.61" transform="translate(-6.09 15.04) rotate(-39.49)"/>
+  <rect x="2.19" y="14.57" width="31.44" height="2.88" transform="translate(-6.09 15.04) rotate(-39.49)"/>
+  <rect class="cls-3" x="16.74" y="16.07" width="4.61" height="34.75" transform="translate(-18.82 26.57) rotate(-50.05)"/>
+  <rect x="17.61" y="17.72" width="2.88" height="31.44" transform="translate(-18.82 26.57) rotate(-50.05)"/>
+  <circle class="cls-3" cx="9.29" cy="24.65" r="6.26"/>
+  <circle class="cls-1" cx="9.29" cy="24.65" r="5.05"/>
+  <circle class="cls-3" cx="29.12" cy="6.26" r="6.26"/>
+  <circle class="cls-2" cx="29.12" cy="6.26" r="4.95"/>
+  <circle class="cls-3" cx="29.12" cy="41.41" r="6.26"/>
+  <circle class="cls-4" cx="29.12" cy="41.41" r="4.95"/>
+</svg>

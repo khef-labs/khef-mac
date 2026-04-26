@@ -1,0 +1,68 @@
+.card {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+  transition: all var(--transition-fast);
+}
+
+.interactive {
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* Skeleton animation */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface) 25%,
+    var(--border-subtle) 50%,
+    var(--surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeletonText {
+  height: 1em;
+  margin-bottom: var(--space-2);
+}
+
+.skeletonTitle {
+  height: 1.25em;
+  width: 60%;
+  margin-bottom: var(--space-3);
+}
+
+.skeletonBadge {
+  display: inline-block;
+  height: 1.5em;
+  width: 60px;
+  margin-right: var(--space-2);
+}
+
+.skeletonExcerpt {
+  height: 3em;
+  margin-top: var(--space-3);
+}

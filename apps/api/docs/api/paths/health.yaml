@@ -1,0 +1,186 @@
+Health:
+  get:
+    operationId: getHealth
+    tags:
+      - health
+    summary: Health check
+    description: Returns API health status
+    responses:
+      '200':
+        description: API is healthy
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  example: ok
+                timestamp:
+                  type: string
+                  format: date-time
+      '503':
+        description: Service unavailable
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+Initialize_session:
+  get:
+    operationId: initializeSession
+    tags:
+      - projects
+    summary: Initialize session
+    description: >-
+      Retrieve all relevant project context in one call. Returns project info, active todos, recent decisions, patterns,
+      and context. Accepts project_id, project_handle, or project_name as query parameters.
+    parameters:
+      - name: project_id
+        in: query
+        description: Project UUID
+        schema:
+          type: string
+          format: uuid
+      - name: project_handle
+        in: query
+        description: Project handle (e.g., 'khef')
+        schema:
+          type: string
+      - name: project_name
+        in: query
+        description: Project name
+        schema:
+          type: string
+    responses:
+      '200':
+        description: Session context
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionContext
+      '400':
+        description: No project identifier provided
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+Stats:
+  get:
+    operationId: getStats
+    tags:
+      - stats
+    summary: Get system statistics
+    description: >-
+      Returns system-wide metadata including memory counts (total, by type, by project), project/tag/relation/file
+      counts, database size, and timestamp bounds.
+    responses:
+      '200':
+        description: System statistics
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memories:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                      description: Total number of memories across all projects
+                    by_type:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            description: Memory type name
+                          count:
+                            type: integer
+                    by_project:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          handle:
+                            type: string
+                          name:
+                            type: string
+                          count:
+                            type: integer
+                    oldest:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      description: Timestamp of the oldest memory
+                    newest:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      description: Timestamp of the newest memory
+                projects:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                tags:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                      description: Total number of tags
+                    top:
+                      type: array
+                      description: Top 10 tags by usage count
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          count:
+                            type: integer
+                relations:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    by_type:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                          count:
+                            type: integer
+                files:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    total_size:
+                      type: integer
+                      description: Total file size in bytes
+                database:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+                      description: Database size in bytes
+                    size_human:
+                      type: string
+                      description: Human-readable database size
+                      example: 50 MB
+      '500':
+        description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
