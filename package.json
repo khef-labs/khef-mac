@@ -56,6 +56,7 @@
     "docs:preview": "npm --prefix apps/api run docs:preview",
     "docs:swagger": "npm --prefix apps/api run docs:swagger",
     "mcp:build": "npm --prefix apps/api/mcp-server run build",
+    "codex:setup": "bash scripts/setup-codex.sh",
     "licenses:generate": "rm -rf licenses && npx --yes license-checker-rseidelsohn --production --files licenses/api --start apps/api && npx --yes license-checker-rseidelsohn --production --files licenses/ui --start apps/ui",
     "audit:all": "echo '=== root ===' && npm audit; echo '=== apps/api ===' && npm --prefix apps/api audit; echo '=== apps/ui ===' && npm --prefix apps/ui audit; echo '=== apps/api/mcp-server ===' && npm --prefix apps/api/mcp-server audit; echo done",
     "setup": "cp -n apps/api/.env.example apps/api/.env 2>/dev/null; cp -n apps/ui/.env.example apps/ui/.env 2>/dev/null; npm run install:all && npm run db:up && npm run db:migrate && npm run db:seed:sync",

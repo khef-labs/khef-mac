@@ -48,7 +48,6 @@ CROSS JOIN (VALUES
   -- Agent Rule Statuses
   ('assistant-rule', 'active', 'Active', 'Rule is active', 0),
   ('assistant-rule', 'deprecated', 'Deprecated', 'Rule no longer applies', 1),
-  ('assistant-rule', 'inactive', 'Inactive', 'Memory is inactive', 10),
 
   -- CSV Statuses
   ('csv', 'draft', 'Draft', 'Work in progress', 0),
@@ -72,19 +71,16 @@ CROSS JOIN (VALUES
   ('commands', 'unverified', 'Unverified', 'Command not yet tested', 0),
   ('commands', 'verified', 'Verified', 'Command tested and confirmed working', 1),
   ('commands', 'deprecated', 'Deprecated', 'Command is outdated and should not be used', 2),
-  ('commands', 'inactive', 'Inactive', 'Memory is inactive', 10),
 
   -- Context (knowledge child) Statuses
   ('context', 'current', 'Current', 'Currently relevant', 0),
   ('context', 'outdated', 'Outdated', 'No longer current', 1),
   ('context', 'updated', 'Updated', 'Recently updated', 2),
-  ('context', 'inactive', 'Inactive', 'Memory is inactive', 10),
 
   -- Pattern (knowledge child) Statuses
   ('pattern', 'proposed', 'Proposed', 'Pattern proposed for adoption', 0),
   ('pattern', 'active', 'Active', 'Actively used pattern', 1),
-  ('pattern', 'deprecated', 'Deprecated', 'No longer recommended', 2),
-  ('pattern', 'inactive', 'Inactive', 'Memory is inactive', 10)
+  ('pattern', 'deprecated', 'Deprecated', 'No longer recommended', 2)
 ) AS v(memory_type_name, status_value, display_name, description, sort_order)
 WHERE mt.name = v.memory_type_name
 ON CONFLICT (memory_type_id, status_value) DO NOTHING;

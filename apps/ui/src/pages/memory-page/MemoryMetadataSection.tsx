@@ -1,4 +1,4 @@
-import { Pencil, Copy, Check, Trash2, ChevronDown, RotateCcw, ExternalLink, RefreshCw, History, Unlink, Repeat } from 'lucide-preact'
+import { Pencil, Copy, Check, Trash2, ChevronDown, RotateCcw, ExternalLink, RefreshCw, History, Unlink, Repeat, Layers } from 'lucide-preact'
 import { useState } from 'preact/hooks'
 import clsx from 'clsx'
 import { TypeBadge, StatusBadge, TagBadge, TagInput } from '../../components/ui'
@@ -15,6 +15,8 @@ import {
 import { getSettings } from '../../lib/settings'
 import { setEditorDeepLink } from '../../lib/editorDeepLink'
 import { formatDate, getExternalSource, isGoogleDocType, STATUS_FALLBACK } from './lib'
+
+const SYNC_TO_DISK_TYPES = new Set<string>(['assistant-rule', 'commands', 'context', 'pattern'])
 import type { useMemoryMetadataEditor } from './useMemoryMetadataEditor'
 import type { useMemoryContentEditor } from './useMemoryContentEditor'
 import type { Memory, MemoryType, Project } from '../../types'
@@ -38,6 +40,7 @@ interface Props {
   setShowDeleteConfirm: (v: boolean) => void
   setShowDeleteSnapshotConfirm: (v: boolean) => void
   setShowRestoreSnapshotConfirm: (v: boolean) => void
+  onOpenManageSnapshots?: () => void
 }
 
 export function MemoryMetadataSection({
@@ -57,6 +60,7 @@ export function MemoryMetadataSection({
   setShowDeleteConfirm,
   setShowDeleteSnapshotConfirm,
   setShowRestoreSnapshotConfirm,
+  onOpenManageSnapshots,
 }: Props) {
   const [copiedSeedPath, setCopiedSeedPath] = useState(false)
   const seedPath = memory.metadata?.['seed-path'] || null
@@ -382,6 +386,29 @@ export function MemoryMetadataSection({
               ) : <StatusBadge status={memory.status} />}
             </div>
           </div>
+          {SYNC_TO_DISK_TYPES.has(meta.effectiveEditType) && (
+            <div class={styles.metaTableRow}>
+              <div class={styles.metaTableLabel}>Sync to Disk</div>
+              <div class={styles.metaTableValue}>
+                {meta.isEditingMetadata ? (
+                  <label class={styles.metaCheckboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={meta.editSyncToDisk}
+                      onChange={(e) => meta.setEditSyncToDisk((e.target as HTMLInputElement).checked)}
+                    />
+                    <span class={styles.metaCheckboxHint}>
+                      {meta.editSyncToDisk
+                        ? 'Auto-imported into CLAUDE.md on sync'
+                        : 'Excluded from CLAUDE.md (still searchable)'}
+                    </span>
+                  </label>
+                ) : (
+                  <>{memory.metadata?.['sync_to_disk'] === 'false' ? 'Excluded' : 'Auto-imported'}</>
+                )}
+              </div>
+            </div>
+          )}
           {(meta.isEditingMetadata || (memory.tags && memory.tags.length > 0)) && (
             <div class={styles.metaTableRow}>
               <div class={styles.metaTableLabel}>Tags</div>
@@ -555,6 +582,17 @@ export function MemoryMetadataSection({
                         <button class={styles.deleteSnapshotButton} onClick={() => setShowDeleteSnapshotConfirm(true)}
                           disabled={isDeletingSnapshot || isRestoringSnapshot} title="Delete this snapshot"><Trash2 size={14} /></button>
                       </>
+                    )}
+                    {onOpenManageSnapshots && !isLoadingSnapshot && (
+                      <button
+                        class={styles.restoreSnapshotButton}
+                        onClick={onOpenManageSnapshots}
+                        disabled={isDeletingSnapshot || isRestoringSnapshot}
+                        title="Manage snapshots"
+                        aria-label="Manage snapshots"
+                      >
+                        <Layers size={14} />
+                      </button>
                     )}
                   </span>
                 </div>

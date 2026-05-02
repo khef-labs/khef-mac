@@ -213,6 +213,8 @@ Returns nodes and edges for visualization and context gathering. Use this to:
 
 Use the MCP tools directly in Claude Code sessions. The server provides tools as native Claude Code capabilities:
 
+Before assuming a khef capability is unavailable, inspect the connected MCP surface directly and use whatever tools are actually exposed in the current session. Do not rely solely on static documentation, cached assumptions, or partial tool lists from prior sessions. If a task can be done through an available MCP tool, prefer that over calling the equivalent HTTP API manually.
+
 **Project:** list_projects, create_project, get_project, initialize_session
 
 Note: If you already know the project handle, prefer calling tools directly with the handle (and use initialize_session for startup). Use get_project only for discovery/validation or when a tool explicitly requires a UUID.
@@ -237,27 +239,32 @@ search_memories(search: "authentication", type: "decision")
 If MCP tools fail with `fetch failed` or return no tools/resources:
 - Verify khef API health: `curl -s http://localhost:3100/health`
 - Confirm Codex MCP config points to the right port and build output:
-  - `~/.codex/config.toml` → `[mcp_servers.khef]` uses `mcp-server/build/index.js`
+  - `~/.codex/config.toml` → `[mcp_servers.khef]` uses `apps/api/mcp-server/build/index.js`
   - `~/.codex/config.toml` → `KHEF_API_URL = "http://localhost:3100"`
 - To add the server from the CLI instead of editing TOML manually:
   ```bash
   codex mcp add khef \
     --env KHEF_API_URL=http://localhost:3100 \
-    -- node "/absolute/path/to/khef/mcp-server/build/index.js"
+    -- node "/absolute/path/to/khef/apps/api/mcp-server/build/index.js"
   ```
 - A minimal `~/.codex/config.toml` entry looks like:
   ```toml
   [mcp_servers.khef]
   command = "node"
-  args = ["/absolute/path/to/khef/mcp-server/build/index.js"]
+  args = ["/absolute/path/to/khef/apps/api/mcp-server/build/index.js"]
   startup_timeout_sec = 15
   tool_timeout_sec = 60
 
   [mcp_servers.khef.env]
   KHEF_API_URL = "http://localhost:3100"
   ```
+- If Codex is missing from the Khef UI Assistants page on a fresh machine, make sure at least one discoverable global Codex file exists:
+  - `~/.codex/config.toml`
+  - `~/.codex/AGENTS.md`
+  Khef considers Codex "installed" only after it discovers a global config file for `codex-cli`.
 - In Codex, `/mcp` should show a connected `khef` server and its tool list
-- Rebuild the MCP server after changes: `npm --prefix mcp-server run build`
+- If the available khef tool surface seems incomplete, inspect the live MCP/tool inventory again before concluding a tool is missing. Tool exposure can differ by session and some tools may be deferred until explicitly surfaced.
+- Rebuild the MCP server after changes: `npm run mcp:build`
 - Restart the Codex session to reload MCP config and schemas
 - Ensure the MCP server is registered and visible in Codex (e.g., `/mcp` if available)
 - Ensure docker khef database container is up and running `docker ps | grep khef`

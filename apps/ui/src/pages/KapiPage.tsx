@@ -668,12 +668,15 @@ export function KapiPage({ initialCollectionHandle }: Props) {
     handle: string
     name: string
     activate: boolean
+    copyFromActive: boolean
   }): Promise<void> => {
     if (!activeCollection) return
     const env = await createKapiEnvironment(activeCollection.id, {
       handle: input.handle,
       name: input.name,
       is_active: input.activate,
+      copy_from_environment_id:
+        input.copyFromActive && activeEnv ? activeEnv.id : undefined,
     })
     setEnvironments((prev) =>
       input.activate
@@ -2414,6 +2417,7 @@ interface EnvModalProps {
     handle: string
     name: string
     activate: boolean
+    copyFromActive: boolean
   }) => Promise<void>
   onDeleteEnv: (id: string) => Promise<void>
   onUpsertVar: (input: {
@@ -2439,6 +2443,7 @@ function EnvModal({
 }: EnvModalProps) {
   const [newEnv, setNewEnv] = useState({ handle: '', name: '' })
   const [newEnvError, setNewEnvError] = useState<string | null>(null)
+  const [copyFromActive, setCopyFromActive] = useState(true)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -2460,6 +2465,7 @@ function EnvModal({
         handle: newEnv.handle.trim(),
         name: newEnv.name.trim(),
         activate: environments.length === 0,
+        copyFromActive: copyFromActive && !!activeEnv,
       })
       setNewEnv({ handle: '', name: '' })
     } catch (err: unknown) {
@@ -2499,24 +2505,32 @@ function EnvModal({
                   class={`${styles.envListItem} ${
                     env.is_active ? styles.envListItemActive : ''
                   }`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (!env.is_active) onSelectEnv(env.id)
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !env.is_active) {
+                      e.preventDefault()
+                      onSelectEnv(env.id)
+                    }
+                  }}
+                  title={env.is_active ? 'Active environment' : 'Click to activate'}
+                  style={env.is_active ? '' : 'cursor: pointer'}
                 >
                   <span class={styles.envListItemName}>{env.name}</span>
                   <span class={styles.envListItemHandle}>{env.handle}</span>
-                  {env.is_active ? (
+                  {env.is_active && (
                     <span class={styles.envListItemBadge}>Active</span>
-                  ) : (
-                    <button
-                      class={styles.btnSecondary}
-                      style="padding: 2px 8px; font-size: 11px"
-                      onClick={() => onSelectEnv(env.id)}
-                    >
-                      Activate
-                    </button>
                   )}
                   <button
                     class={styles.varDeleteBtn}
                     title="Delete environment"
-                    onClick={() => onDeleteEnv(env.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onDeleteEnv(env.id)
+                    }}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -2526,29 +2540,44 @@ function EnvModal({
           )}
           <form
             onSubmit={submitNewEnv}
-            style="display: flex; gap: 6px; margin-top: 4px"
+            style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px"
           >
-            <input
-              type="text"
-              value={newEnv.handle}
-              placeholder="handle (kebab-case)"
-              onInput={(e) =>
-                setNewEnv({ ...newEnv, handle: e.currentTarget.value })
-              }
-              style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 5px; font-size: 12px"
-            />
-            <input
-              type="text"
-              value={newEnv.name}
-              placeholder="Display name"
-              onInput={(e) =>
-                setNewEnv({ ...newEnv, name: e.currentTarget.value })
-              }
-              style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 5px; font-size: 12px"
-            />
-            <button type="submit" class={styles.btnPrimary}>
-              Add environment
-            </button>
+            <div style="display: flex; gap: 6px">
+              <input
+                type="text"
+                value={newEnv.handle}
+                placeholder="handle (kebab-case)"
+                onInput={(e) =>
+                  setNewEnv({ ...newEnv, handle: e.currentTarget.value })
+                }
+                style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 5px; font-size: 12px"
+              />
+              <input
+                type="text"
+                value={newEnv.name}
+                placeholder="Display name"
+                onInput={(e) =>
+                  setNewEnv({ ...newEnv, name: e.currentTarget.value })
+                }
+                style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 5px 8px; border-radius: 5px; font-size: 12px"
+              />
+              <button type="submit" class={styles.btnPrimary}>
+                Add environment
+              </button>
+            </div>
+            {activeEnv && (
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); user-select: none">
+                <input
+                  type="checkbox"
+                  checked={copyFromActive}
+                  onChange={(e) =>
+                    setCopyFromActive(e.currentTarget.checked)
+                  }
+                  data-testid="kapi--env-copy-vars"
+                />
+                Copy variables from <b>{activeEnv.name}</b>
+              </label>
+            )}
           </form>
           {newEnvError && <div class={styles.modalError}>{newEnvError}</div>}
         </div>

@@ -48,6 +48,8 @@ import {
   ProjectFilesPage,
   EditorPage,
   DatabasePage,
+  SavedQueriesPage,
+  SavedQueryPage,
   KapiPage,
 } from './pages'
 
@@ -498,6 +500,18 @@ export function App() {
             <Route path="/database">
               <PageMeta label="DatabasePage" templateFiles={['src/pages/database-page/DatabasePage.tsx']}>
                 <DatabasePage />
+              </PageMeta>
+            </Route>
+
+            <Route path="/database/saved-queries">
+              <PageMeta label="SavedQueriesPage" templateFiles={['src/pages/SavedQueriesPage.tsx']}>
+                <SavedQueriesPage />
+              </PageMeta>
+            </Route>
+
+            <Route path="/database/saved-queries/:id">
+              <PageMeta label="SavedQueryPage" templateFiles={['src/pages/SavedQueryPage.tsx']}>
+                <SavedQueryPage />
               </PageMeta>
             </Route>
 

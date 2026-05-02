@@ -665,6 +665,8 @@ export function ProjectPage({ projectId }: Props) {
         return
       }
       const docId = match[1]
+      const tabMatch = externalUrl.match(/[?&#]tab=(t\.[a-zA-Z0-9_-]+)/)
+      const tabId = tabMatch ? tabMatch[1] : undefined
       const effectiveType = (createSubtype || createType) as MemoryType
 
       setIsCreating(true)
@@ -674,6 +676,7 @@ export function ProjectPage({ projectId }: Props) {
           type: effectiveType,
           handle: createHandle.trim() || undefined,
           includeComments: true,
+          tab_id: tabId,
         })
         setShowCreate(false)
         resetCreateForm()
@@ -999,6 +1002,8 @@ export function ProjectPage({ projectId }: Props) {
       return
     }
     const docId = match[1]
+    const tabMatch = googleDocUrl.match(/[?&#]tab=(t\.[a-zA-Z0-9_-]+)/)
+    const tabId = tabMatch ? tabMatch[1] : undefined
 
     setIsImportingGoogleDoc(true)
     setGoogleDocError(null)
@@ -1009,6 +1014,7 @@ export function ProjectPage({ projectId }: Props) {
         type: googleDocType,
         handle: googleDocHandle.trim() || undefined,
         includeComments: true,
+        tab_id: tabId,
       })
 
       // Close modal and refresh

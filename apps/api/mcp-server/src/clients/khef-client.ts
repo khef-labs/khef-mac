@@ -1719,6 +1719,137 @@ export class KhefClient {
     return { success: true };
   }
 
+  // ── DBX Saved Queries ────────────────────────────────────────────
+
+  async listSavedQueries(options?: {
+    connection_id?: string;
+    session_id?: string;
+    favorite?: boolean;
+    shared?: boolean;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const qs = new URLSearchParams();
+    if (options?.connection_id) qs.set('connection_id', options.connection_id);
+    if (options?.session_id) qs.set('session_id', options.session_id);
+    if (options?.favorite) qs.set('favorite', 'true');
+    if (options?.shared) qs.set('shared', 'true');
+    if (options?.q) qs.set('q', options.q);
+    if (options?.limit) qs.set('limit', String(options.limit));
+    if (options?.offset) qs.set('offset', String(options.offset));
+    const params = qs.toString() ? `?${qs}` : '';
+    return this.request(`/api/dbx/saved-queries${params}`);
+  }
+
+  async getSavedQuery(id: string, sessionId?: string) {
+    const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    return this.request(`/api/dbx/saved-queries/${id}${params}`);
+  }
+
+  async createSavedQuery(input: {
+    connection_id?: string | null;
+    name: string;
+    handle: string;
+    description?: string;
+    sql?: string;
+    schema_scope?: string;
+    is_shared?: boolean;
+    is_readonly?: boolean;
+    owner_session_id?: string;
+    params?: Array<{
+      name: string;
+      value_type?: 'text' | 'number' | 'bool' | 'enum';
+      required?: boolean;
+      default_value?: string;
+      options?: string[];
+      sort_order?: number;
+    }>;
+  }) {
+    return this.request('/api/dbx/saved-queries', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  }
+
+  async updateSavedQuery(id: string, updates: {
+    connection_id?: string | null;
+    name?: string;
+    handle?: string;
+    description?: string;
+    sql?: string;
+    schema_scope?: string;
+    is_shared?: boolean;
+    is_readonly?: boolean;
+    params?: Array<{
+      name: string;
+      value_type?: 'text' | 'number' | 'bool' | 'enum';
+      required?: boolean;
+      default_value?: string;
+      options?: string[];
+      sort_order?: number;
+    }>;
+    edited_by?: string;
+  }) {
+    return this.request(`/api/dbx/saved-queries/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteSavedQuery(id: string) {
+    const url = `${this.baseUrl}/api/dbx/saved-queries/${id}`;
+    const response = await fetch(url, { method: 'DELETE' });
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API request failed: ${response.status} ${error}`);
+    }
+    return { success: true };
+  }
+
+  async runSavedQuery(
+    id: string,
+    body: {
+      params?: Record<string, unknown>;
+      session_id?: string;
+      timeout?: number;
+      maxRows?: number;
+    },
+  ) {
+    return this.request(`/api/dbx/saved-queries/${id}/run`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async listSavedQuerySnapshots(id: string) {
+    return this.request(`/api/dbx/saved-queries/${id}/snapshots`);
+  }
+
+  async createSavedQuerySnapshot(id: string, editedBy?: string) {
+    return this.request(`/api/dbx/saved-queries/${id}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify(editedBy ? { edited_by: editedBy } : {}),
+    });
+  }
+
+  async restoreSavedQuerySnapshot(id: string, num: number, editedBy?: string) {
+    return this.request(`/api/dbx/saved-queries/${id}/snapshots/${num}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(editedBy ? { edited_by: editedBy } : {}),
+    });
+  }
+
+  async deleteSavedQuerySnapshot(id: string, num: number) {
+    const url = `${this.baseUrl}/api/dbx/saved-queries/${id}/snapshots/${num}`;
+    const response = await fetch(url, { method: 'DELETE' });
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`API request failed: ${response.status} ${error}`);
+    }
+    return { success: true };
+  }
+
   // ── Assistant Chat ────────────────────────────────────────────
 
   async assistantChat(

@@ -516,7 +516,7 @@ export function AssistantPage({ handle }: Props) {
             skills.map((skill) => (
               <Link
                 key={`${skill.scope}-${skill.name}`}
-                href={`/assistants/${handle}/commands/${encodeURIComponent(skill.name)}?scope=${skill.scope}&type=skill&from=${encodeURIComponent(`/assistants/${handle}`)}`}
+                href={`/assistants/${handle}/skills/${encodeURIComponent(skill.name)}?scope=${skill.scope}&type=skill&from=${encodeURIComponent(`/assistants/${handle}`)}`}
                 class={clsx(cardStyles.card, cardStyles.interactive, styles.skillCard)}
               >
                 <Wand2 size={14} class={styles.skillIcon} />

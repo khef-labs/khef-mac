@@ -396,3 +396,176 @@ export async function getQueryHistory(
 export async function clearQueryHistory(connectionId: string): Promise<void> {
   await client.delete(`dbx/connections/${connectionId}/history`)
 }
+
+// ── Saved Queries ──
+
+export type DbxParamType = 'text' | 'number' | 'bool' | 'enum'
+
+export interface DbxSavedQueryParam {
+  id?: string
+  query_id?: string
+  name: string
+  value_type: DbxParamType
+  required: boolean
+  default_value: string | null
+  options: string[] | null
+  sort_order: number
+}
+
+export interface DbxSavedQuery {
+  id: string
+  connection_id: string | null
+  name: string
+  handle: string
+  description: string | null
+  sql: string
+  schema_scope: string | null
+  is_shared: boolean
+  is_readonly: boolean
+  owner_session_id: string | null
+  created_at: string
+  updated_at: string
+  is_favorite?: boolean
+  params?: DbxSavedQueryParam[]
+}
+
+export interface DbxSavedQuerySnapshot {
+  id: string
+  snapshot_number: number
+  sql: string
+  params_snapshot: DbxSavedQueryParam[] | null
+  edited_by: string | null
+  source: 'manual' | 'pre-restore'
+  edited_at: string
+}
+
+export interface DbxRecentSavedQuery {
+  query_id: string
+  last_run_at: string
+  name: string
+  handle: string
+  connection_id: string | null
+  schema_scope: string | null
+  connection_name: string | null
+}
+
+export async function getSavedQueries(opts?: {
+  connection_id?: string
+  session_id?: string
+  favorite?: boolean
+  shared?: boolean
+  q?: string
+  limit?: number
+  offset?: number
+}): Promise<{ saved_queries: DbxSavedQuery[] }> {
+  const sp = new URLSearchParams()
+  if (opts?.connection_id) sp.set('connection_id', opts.connection_id)
+  if (opts?.session_id) sp.set('session_id', opts.session_id)
+  if (opts?.favorite) sp.set('favorite', 'true')
+  if (opts?.shared) sp.set('shared', 'true')
+  if (opts?.q) sp.set('q', opts.q)
+  if (opts?.limit) sp.set('limit', String(opts.limit))
+  if (opts?.offset) sp.set('offset', String(opts.offset))
+  return client.get('dbx/saved-queries', { searchParams: sp }).json()
+}
+
+export async function getRecentSavedQueries(sessionId: string, limit?: number):
+  Promise<{ recent: DbxRecentSavedQuery[] }> {
+  const sp = new URLSearchParams({ session_id: sessionId })
+  if (limit) sp.set('limit', String(limit))
+  return client.get('dbx/saved-queries/recent', { searchParams: sp }).json()
+}
+
+export async function getSavedQuery(id: string, sessionId?: string):
+  Promise<{ saved_query: DbxSavedQuery }> {
+  const sp = sessionId ? new URLSearchParams({ session_id: sessionId }) : undefined
+  return client.get(`dbx/saved-queries/${id}`, { searchParams: sp }).json()
+}
+
+export async function createSavedQuery(data: {
+  connection_id?: string | null
+  name: string
+  handle: string
+  description?: string
+  sql?: string
+  schema_scope?: string
+  is_shared?: boolean
+  is_readonly?: boolean
+  owner_session_id?: string
+  params?: Array<Partial<DbxSavedQueryParam> & { name: string }>
+}): Promise<{ saved_query: DbxSavedQuery }> {
+  return client.post('dbx/saved-queries', { json: data }).json()
+}
+
+export async function updateSavedQuery(id: string, data: {
+  connection_id?: string | null
+  name?: string
+  handle?: string
+  description?: string
+  sql?: string
+  schema_scope?: string
+  is_shared?: boolean
+  is_readonly?: boolean
+  params?: Array<Partial<DbxSavedQueryParam> & { name: string }>
+  edited_by?: string
+}): Promise<{ saved_query: DbxSavedQuery }> {
+  return client.patch(`dbx/saved-queries/${id}`, { json: data }).json()
+}
+
+export async function deleteSavedQuery(id: string): Promise<void> {
+  await client.delete(`dbx/saved-queries/${id}`)
+}
+
+export async function favoriteSavedQuery(id: string, sessionId: string): Promise<void> {
+  await client.post(`dbx/saved-queries/${id}/favorite`, { json: { session_id: sessionId } })
+}
+
+export async function unfavoriteSavedQuery(id: string, sessionId: string): Promise<void> {
+  await client.delete(`dbx/saved-queries/${id}/favorite`, {
+    searchParams: { session_id: sessionId }
+  })
+}
+
+// ── Saved-query snapshots ──
+
+export async function listSavedQuerySnapshots(id: string):
+  Promise<{ snapshots: DbxSavedQuerySnapshot[]; current_snapshot: number | null }> {
+  return client.get(`dbx/saved-queries/${id}/snapshots`).json()
+}
+
+export async function createSavedQuerySnapshot(id: string, editedBy?: string):
+  Promise<{ snapshot_number: number }> {
+  return client.post(`dbx/saved-queries/${id}/snapshots`, {
+    json: editedBy ? { edited_by: editedBy } : {},
+  }).json()
+}
+
+export async function restoreSavedQuerySnapshot(id: string, num: number, editedBy?: string):
+  Promise<{ saved_query: DbxSavedQuery }> {
+  return client.post(`dbx/saved-queries/${id}/snapshots/${num}/restore`, {
+    json: editedBy ? { edited_by: editedBy } : {},
+  }).json()
+}
+
+export async function deleteSavedQuerySnapshot(id: string, num: number): Promise<void> {
+  await client.delete(`dbx/saved-queries/${id}/snapshots/${num}`)
+}
+
+export async function runSavedQuery(
+  id: string,
+  data: { params?: Record<string, unknown>; session_id?: string; timeout?: number; maxRows?: number }
+): Promise<DbxQueryResult> {
+  try {
+    return await client.post(`dbx/saved-queries/${id}/run`, { json: data }).json()
+  } catch (err: any) {
+    if (err.response) {
+      try {
+        const body = await err.response.json()
+        if (body?.error) throw new Error(body.error)
+      } catch (parseErr: any) {
+        if (parseErr.message && parseErr.message !== err.message) throw parseErr
+      }
+    }
+    throw err
+  }
+}

@@ -6,7 +6,7 @@ import { CodeEditor, FileTree, QuickOpen, SearchPanel } from '../components/edit
 import { ChickenIcon } from '../components/editor/ChickenIcon'
 import type { PaletteCommand } from '../components/editor'
 import type { EditorLanguage } from '../components/editor'
-import { fsRead, fsWrite, fsDelete, fsCompletions, fsReveal, getScratchHome, previewDiagram, getProjects, type DiagramType } from '../lib/api'
+import { fsRead, fsWrite, fsDelete, fsTree, fsNew, fsCompletions, fsReveal, getScratchHome, previewDiagram, getProjects, type DiagramType } from '../lib/api'
 import { loadSettings } from '../lib/settings'
 import type { Project } from '../types/api'
 import { consumeEditorDeepLink } from '../lib/editorDeepLink'
@@ -32,7 +32,25 @@ interface EditorTab {
 }
 
 const SCRATCH_DIR = '/tmp/khef-scratch'
-let _scratchSeq = 0
+
+// Resolve the next available scratch path by inspecting the directory.
+// Avoids module-level counters that reset on refresh and clobber saved files.
+async function nextScratchPath(baseDir: string): Promise<string> {
+  let maxN = 0
+  try {
+    const tree = await fsTree(baseDir, 1, false)
+    for (const entry of tree.entries) {
+      if (entry.type !== 'file') continue
+      const m = /^scratch-(\d+)\.md$/.exec(entry.name)
+      if (!m) continue
+      const n = parseInt(m[1], 10)
+      if (Number.isFinite(n) && n > maxN) maxN = n
+    }
+  } catch {
+    // Dir missing or unreadable — start from 1.
+  }
+  return `${baseDir}/scratch-${maxN + 1}.md`
+}
 
 type EditorViewMode = 'edit' | 'split' | 'preview'
 
@@ -147,6 +165,7 @@ export function EditorPage() {
   const [sidebarMode, setSidebarMode] = useState<'explorer' | 'search' | 'scratches'>('explorer')
   const [scratchDrawerEnabled, setScratchDrawerEnabled] = useState(false)
   const [scratchHome, setScratchHome] = useState<string | null>(null)
+  const [scratchTreeNonce, setScratchTreeNonce] = useState(0)
   const [explorerWidth, setExplorerWidth] = useState(() =>
     Math.max(160, Math.min(500, initialEditor.current.explorerWidth))
   )
@@ -341,7 +360,10 @@ export function EditorPage() {
 
           for (const savedGroup of state.groups) {
             const groupTabs: EditorTab[] = []
+            const seenInGroup = new Set<string>()
             for (const p of savedGroup.openPaths) {
+              if (seenInGroup.has(p)) continue
+              seenInGroup.add(p)
               const tab = restoredByPath.get(p)
               if (tab) groupTabs.push(tab)
             }
@@ -506,30 +528,49 @@ export function EditorPage() {
   // Open a scratch tab backed by a persistent scratch file when the drawer is
   // enabled, otherwise fall back to /tmp for the legacy ephemeral path.
   const openScratchTab = useCallback(async () => {
-    _scratchSeq += 1
-    const name = `scratch-${_scratchSeq}.md`
     const baseDir = scratchDrawerEnabled && scratchHome ? scratchHome : SCRATCH_DIR
-    const scratchPath = `${baseDir}/${name}`
+    let scratchPath = await nextScratchPath(baseDir)
+    let modified: string
     try {
-      const result = await fsWrite(scratchPath, '')
-      const newTab: EditorTab = {
-        path: scratchPath,
-        name,
-        content: '',
-        savedContent: '',
-        language: 'markdown',
-        lastModified: result.modified,
-        isScratch: true,
-      }
-      setGroups(prev => prev.map(g => {
-        if (g.id !== activeGroupId) return g
-        return { ...g, tabs: [...g.tabs, newTab], activeTabIndex: g.tabs.length }
-      }))
-      if (scratchDrawerEnabled && sidebarMode === 'scratches') {
-        setRevealPath(scratchPath)
-      }
+      const result = await fsNew(scratchPath, 'file')
+      modified = result.modified
     } catch (err: any) {
-      console.error('Failed to create scratch file:', err)
+      // Stale listing or race — recompute and retry once before giving up.
+      if (err?.response?.status === 409) {
+        try {
+          scratchPath = await nextScratchPath(baseDir)
+          const result = await fsNew(scratchPath, 'file')
+          modified = result.modified
+        } catch (retryErr) {
+          console.error('Failed to create scratch file:', retryErr)
+          return
+        }
+      } else {
+        console.error('Failed to create scratch file:', err)
+        return
+      }
+    }
+
+    const newTab: EditorTab = {
+      path: scratchPath,
+      name: basename(scratchPath),
+      content: '',
+      savedContent: '',
+      language: 'markdown',
+      lastModified: modified,
+      isScratch: true,
+    }
+    setGroups(prev => prev.map(g => {
+      if (g.id !== activeGroupId) return g
+      const existingIdx = g.tabs.findIndex(t => t.path === scratchPath)
+      if (existingIdx >= 0) return { ...g, activeTabIndex: existingIdx }
+      return { ...g, tabs: [...g.tabs, newTab], activeTabIndex: g.tabs.length }
+    }))
+    if (scratchDrawerEnabled && sidebarMode === 'scratches') {
+      setRevealPath(scratchPath)
+    }
+    if (scratchDrawerEnabled && scratchHome && scratchPath.startsWith(scratchHome)) {
+      setScratchTreeNonce(n => n + 1)
     }
   }, [activeGroupId, scratchDrawerEnabled, scratchHome, sidebarMode])
 
@@ -620,6 +661,9 @@ export function EditorPage() {
         }
         return { ...t, lastModified: result.modified }
       })
+      if (scratchHome && tab.path.startsWith(scratchHome)) {
+        setScratchTreeNonce(n => n + 1)
+      }
     } catch (err: any) {
       if (err.message?.includes('modified externally')) {
         if (!promptOnConflict) return
@@ -645,7 +689,7 @@ export function EditorPage() {
     } finally {
       savingPathsRef.current.delete(tab.path)
     }
-  }, [updateTabByPath])
+  }, [updateTabByPath, scratchHome])
 
   // Save active tab with conflict detection
   const saveActiveTab = useCallback(async () => {
@@ -1830,7 +1874,7 @@ export function EditorPage() {
               )}
             </div>
             <div class={styles.explorerActions}>
-              {sidebarMode !== 'search' && (
+              {sidebarMode === 'explorer' && (
                 <>
                   <button
                     class={styles.explorerToggle}
@@ -1841,13 +1885,6 @@ export function EditorPage() {
                   </button>
                   <button
                     class={styles.explorerToggle}
-                    onClick={() => void openScratchTab()}
-                    title="New Scratch File"
-                  >
-                    <FilePlus size={14} />
-                  </button>
-                  <button
-                    class={styles.explorerToggle}
                     onClick={() => requestRootCreate('directory')}
                     title={rootPath ? 'New Folder (root)' : 'Open a folder first'}
                     disabled={!rootPath}
@@ -1855,6 +1892,15 @@ export function EditorPage() {
                     <FolderPlus size={14} />
                   </button>
                 </>
+              )}
+              {sidebarMode !== 'search' && (
+                <button
+                  class={styles.explorerToggle}
+                  onClick={() => void openScratchTab()}
+                  title="New Scratch File"
+                >
+                  <FilePlus size={14} />
+                </button>
               )}
               <button
                 class={styles.explorerToggle}
@@ -1886,6 +1932,7 @@ export function EditorPage() {
                   revealPath={revealPath}
                   showHidden={showHiddenFiles}
                   onRevertFile={revertFileByPath}
+                  refreshNonce={scratchTreeNonce}
                 />
               ) : (
                 <div style={{ padding: 'var(--space-4)', color: 'var(--muted)', fontSize: 'var(--text-sm)' }}>

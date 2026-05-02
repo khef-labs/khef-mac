@@ -32,6 +32,7 @@ import * as memoryTypeTools from "./tools/memory-types.js";
 import * as kdagTools from "./tools/kdag.js";
 import * as kapiTools from "./tools/kapi.js";
 import * as promptTools from "./tools/prompts.js";
+import * as savedQueryTools from "./tools/saved-queries.js";
 import * as assistantChatTools from "./tools/assistant-chat.js";
 import * as exportTools from "./tools/export.js";
 import * as dbTools from "./tools/db.js";
@@ -109,6 +110,7 @@ const toolModules = [
   kdagTools,
   kapiTools,
   promptTools,
+  savedQueryTools,
   assistantChatTools,
   exportTools,
   dbTools,

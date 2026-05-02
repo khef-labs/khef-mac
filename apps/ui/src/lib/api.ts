@@ -1385,6 +1385,7 @@ export async function getSessions(params: {
   assistant?: string
   project?: string
   q?: string
+  nickname?: string
   session_id?: string
   limit?: number
   offset?: number
@@ -1395,6 +1396,7 @@ export async function getSessions(params: {
   if (params.assistant) searchParams.set('assistant', params.assistant)
   if (params.project) searchParams.set('project', params.project)
   if (params.q) searchParams.set('q', params.q)
+  if (params.nickname) searchParams.set('nickname', params.nickname)
   if (params.session_id) searchParams.set('session_id', params.session_id)
   if (params.limit !== undefined) searchParams.set('limit', String(params.limit))
   if (params.offset !== undefined) searchParams.set('offset', String(params.offset))
@@ -2179,6 +2181,8 @@ export interface MemorySnapshotListItem {
   created_at: string
   is_current: boolean
   has_comments: boolean
+  content_size: number
+  comment_count: number
 }
 
 export interface MemorySnapshotsResponse {
@@ -2220,6 +2224,22 @@ export async function deleteMemorySnapshot(
   message: string
 }> {
   return client.delete(`memories/${memoryId}/snapshots/${snapshotNumber}`).json()
+}
+
+export async function bulkDeleteMemorySnapshots(
+  memoryId: string,
+  snapshotNumbers: number[]
+): Promise<{
+  deleted: number[]
+  not_found?: number[]
+  current_snapshot: number
+  message: string
+}> {
+  return client
+    .post(`memories/${memoryId}/snapshots/bulk-delete`, {
+      json: { snapshot_numbers: snapshotNumbers },
+    })
+    .json()
 }
 
 export async function restoreMemorySnapshot(

@@ -79,10 +79,10 @@ const rulesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Fetch active assistant-rule memories for the project
-      // Only includes rules with status = 'active' (excludes deprecated)
+      // Fetch sync-eligible assistant-rule memories for the project.
+      // Excludes deprecated rules and any rule with sync_to_disk metadata = 'false'.
       // Note: array_agg returns {NULL} on LEFT JOIN with no matches, so we use
-      // array_remove to strip NULLs before checking length
+      // array_remove to strip NULLs before checking length.
       const memories = await query<MemoryRow>(
         `SELECT m.id, m.title,
                 CASE WHEN array_length(array_remove(array_agg(mc.content ORDER BY mc.chunk_index), NULL), 1) > 0
@@ -93,7 +93,16 @@ const rulesRoutes: FastifyPluginAsync = async (fastify) => {
          LEFT JOIN memory_chunks mc ON mc.memory_id = m.id
          JOIN memory_types mt ON mt.id = m.memory_type_id
          JOIN memory_type_statuses mts ON m.status_id = mts.id
-         WHERE m.project_id = $1 AND mt.name = 'assistant-rule' AND mts.status_value NOT IN ('deprecated', 'inactive')
+         WHERE m.project_id = $1
+           AND mt.name = 'assistant-rule'
+           AND mts.status_value <> 'deprecated'
+           AND COALESCE(
+             (SELECT mm.value FROM memory_metadata mm
+              JOIN metadata md ON md.id = mm.metadata_id
+              WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+              LIMIT 1),
+             'true'
+           ) <> 'false'
          GROUP BY m.id, m.title, m.content`,
         [project.id]
       );

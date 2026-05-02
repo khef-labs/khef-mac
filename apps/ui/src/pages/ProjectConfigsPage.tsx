@@ -162,7 +162,7 @@ export function ProjectConfigsPage({ projectId }: Props) {
             {skills.map((skill) => (
               <Link
                 key={`${skill.scope}-${skill.name}`}
-                href={`/assistants/claude-code/commands/${encodeURIComponent(skill.name)}?scope=${skill.scope}&type=skill&project=${encodeURIComponent(sessionContext?.project?.handle || projectId)}&from=${encodeURIComponent(`/projects/${projectId}/configs`)}`}
+                href={`/assistants/claude-code/skills/${encodeURIComponent(skill.name)}?scope=${skill.scope}&type=skill&project=${encodeURIComponent(sessionContext?.project?.handle || projectId)}&from=${encodeURIComponent(`/projects/${projectId}/configs`)}`}
                 class={clsx(cardStyles.card, cardStyles.interactive, styles.skillCard)}
               >
                 <Wand2 size={14} class={styles.skillIcon} />

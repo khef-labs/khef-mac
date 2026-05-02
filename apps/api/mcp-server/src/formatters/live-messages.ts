@@ -11,9 +11,17 @@ export function formatLiveMessageSent(data: any): string {
   // Broadcast response: { messages: [...], recipients: N }
   if (data.messages && Array.isArray(data.messages)) {
     const count = data.recipients || data.messages.length;
-    const lines = data.messages.map((m: any) =>
-      `- ${m.to_session_id} (ID: ${m.id})`
+    const deliveries = new Map(
+      (Array.isArray(data.deliveries) ? data.deliveries : [])
+        .map((d: any) => [d.message_id, d])
     );
+    const lines = data.messages.map((m: any) => {
+      const delivery = deliveries.get(m.id) as any;
+      const status = delivery
+        ? ` | instant: ${delivery.delivered ? 'yes' : 'no'}${delivery.delivery_method ? ` (${delivery.delivery_method})` : ''}${delivery.delivery_error ? `: ${delivery.delivery_error}` : ''}`
+        : '';
+      return `- ${m.to_session_id} (ID: ${m.id})${status}`;
+    });
     return `Live message broadcast to ${count} session${count !== 1 ? 's' : ''}:\n${lines.join('\n')}\nSent: ${formatDate(data.messages[0]?.created_at)}`;
   }
   // Single message response (legacy)

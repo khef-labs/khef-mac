@@ -14,6 +14,7 @@ import {
   fetchDocComments,
   findAnchorContext,
   parseGoogleDocId,
+  parseGoogleDocTabId,
   localizeDocImages,
   pushToGoogleDoc,
   pushToGoogleDocWorkspace,
@@ -27,6 +28,9 @@ interface ImportBody {
   subtype?: string
   tags?: string[]
   includeComments?: boolean
+  // Optional tab ID (e.g., "t.abc123") for importing a single tab of a multi-tab doc.
+  // When set, it is appended to external-source-url so the link round-trips to the right tab.
+  tab_id?: string
 }
 
 const CHUNK_SIZE = 2000
@@ -111,6 +115,7 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
       subtype,
       tags = [],
       includeComments = true,
+      tab_id,
     } = request.body
 
     if (!project_id) {
@@ -211,29 +216,44 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const defaultStatusId = defaultStatusResult.rows.length > 0 ? defaultStatusResult.rows[0].id : null
 
-        // Check for handle uniqueness within project
-        const handleCheck = await client.query(
-          'SELECT id FROM memories WHERE project_id = $1 AND handle = $2',
-          [project.id, handle]
-        )
-        if (handleCheck.rows.length > 0) {
-          await client.query('ROLLBACK')
-          return reply.code(409).send({
-            error: 'A memory with this handle already exists in this project',
-            handle,
-          })
+        // Resolve handle uniqueness within project. If the caller supplied an
+        // explicit handle, surface a 409 so they can correct it. When the
+        // handle was auto-generated from the doc title (common for multi-tab
+        // imports of the same doc), keep appending -2, -3, ... until free.
+        let finalHandle = handle
+        if (inputHandle) {
+          const handleCheck = await client.query(
+            'SELECT id FROM memories WHERE project_id = $1 AND handle = $2',
+            [project.id, finalHandle]
+          )
+          if (handleCheck.rows.length > 0) {
+            await client.query('ROLLBACK')
+            return reply.code(409).send({
+              error: 'A memory with this handle already exists in this project',
+              handle: finalHandle,
+            })
+          }
+        } else {
+          for (let suffix = 2; suffix < 1000; suffix += 1) {
+            const handleCheck = await client.query(
+              'SELECT id FROM memories WHERE project_id = $1 AND handle = $2',
+              [project.id, finalHandle]
+            )
+            if (handleCheck.rows.length === 0) break
+            finalHandle = `${handle}-${suffix}`.slice(0, 60)
+          }
         }
 
-        // Check for title uniqueness within project
-        const titleCheck = await client.query(
-          'SELECT id FROM memories WHERE project_id = $1 AND title = $2',
-          [project.id, doc.title]
-        )
-        if (titleCheck.rows.length > 0) {
-          await client.query('ROLLBACK')
-          return reply.code(409).send({
-            error: 'A memory with this title already exists in this project',
-          })
+        // Resolve title uniqueness by appending " (N)". Multi-tab Google Doc
+        // imports otherwise collide on the shared doc title.
+        let finalTitle = doc.title
+        for (let suffix = 2; suffix < 1000; suffix += 1) {
+          const titleCheck = await client.query(
+            'SELECT id FROM memories WHERE project_id = $1 AND title = $2',
+            [project.id, finalTitle]
+          )
+          if (titleCheck.rows.length === 0) break
+          finalTitle = `${doc.title} (${suffix})`
         }
 
         // Create the memory with original content
@@ -241,7 +261,7 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
           `INSERT INTO memories (project_id, handle, title, content, memory_type_id, status_id)
            VALUES ($1, $2, $3, $4, $5, $6)
            RETURNING id, created_at, updated_at`,
-          [project.id, handle, doc.title, doc.content, memoryTypeId, defaultStatusId]
+          [project.id, finalHandle, finalTitle, doc.content, memoryTypeId, defaultStatusId]
         )
         const memory = memoryResult.rows[0]
 
@@ -275,11 +295,19 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
           )
         }
 
-        // Set external source metadata
+        // Set external source metadata. If a tab id was supplied (or present in
+        // the input URL), preserve it on external-source-url so the link
+        // round-trips to the same tab in a multi-tab doc.
+        const explicitTabId = tab_id && /^t\.[a-zA-Z0-9_-]+$/.test(tab_id) ? tab_id : null
+        const fallbackTabId = explicitTabId ? null : parseGoogleDocTabId(docId)
+        const validTabId = explicitTabId ?? fallbackTabId
+        const externalUrl = validTabId
+          ? `${doc.url}${doc.url.includes('?') ? '&' : '?'}tab=${validTabId}`
+          : doc.url
         const metadataFields = [
           { field: 'external-source-type', value: 'google-doc' },
           { field: 'external-source-id', value: parsedId },
-          { field: 'external-source-url', value: doc.url },
+          { field: 'external-source-url', value: externalUrl },
           { field: 'external-source-last-synced-at', value: new Date().toISOString() },
         ]
 
@@ -391,8 +419,8 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           memory: {
             id: memory.id,
-            handle,
-            title: doc.title,
+            handle: finalHandle,
+            title: finalTitle,
             type: effectiveType,
             ...(parentType ? { parent_type: parentType } : {}),
             project_id: project.id,
@@ -401,7 +429,7 @@ const googleRoutes: FastifyPluginAsync = async (fastify) => {
             external_source: {
               type: 'google-doc',
               id: parsedId,
-              url: doc.url,
+              url: externalUrl,
               last_synced_at: new Date().toISOString(),
             },
             comments_imported: googleComments.length,

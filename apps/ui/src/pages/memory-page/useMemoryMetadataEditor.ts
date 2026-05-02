@@ -73,6 +73,7 @@ export function useMemoryMetadataEditor({
   const [editExternalUrl, setEditExternalUrl] = useState('')
   const [editSlideOrder, setEditSlideOrder] = useState('')
   const [editDriveExportFolder, setEditDriveExportFolder] = useState('')
+  const [editSyncToDisk, setEditSyncToDisk] = useState(true)
 
   // The actual memory type: subtype if set, otherwise primary type
   const effectiveEditType = (editSubtype || editType) as MemoryType
@@ -207,6 +208,7 @@ export function useMemoryMetadataEditor({
       setEditExternalUrl(memory.metadata?.['external-source-url'] || '')
       setEditSlideOrder(memory.metadata?.['slide-order'] || '')
       setEditDriveExportFolder(memory.metadata?.['drive-export-folder'] || '')
+      setEditSyncToDisk(memory.metadata?.['sync_to_disk'] !== 'false')
       setIsEditingMetadata(true)
     }
   }, [memory, resolveEditTypeValues])
@@ -238,6 +240,7 @@ export function useMemoryMetadataEditor({
       setEditExternalUrl(memory.metadata?.['external-source-url'] || '')
       setEditSlideOrder(memory.metadata?.['slide-order'] || '')
       setEditDriveExportFolder(memory.metadata?.['drive-export-folder'] || '')
+      setEditSyncToDisk(memory.metadata?.['sync_to_disk'] !== 'false')
     }
     setIsEditingMetadata(false)
   }, [memory, resolveEditTypeValues])
@@ -382,6 +385,15 @@ export function useMemoryMetadataEditor({
         }
       }
 
+      const currentSyncToDisk = memory.metadata?.['sync_to_disk'] !== 'false'
+      if (editSyncToDisk !== currentSyncToDisk) {
+        if (editSyncToDisk) {
+          await deleteMemoryMetadataField(memory.id, 'sync_to_disk')
+        } else {
+          await setMemoryMetadataField(memory.id, 'sync_to_disk', 'false')
+        }
+      }
+
       const currentDriveExportFolder = memory.metadata?.['drive-export-folder'] || ''
       const driveExportFolderChanged = editDriveExportFolder !== currentDriveExportFolder
       if (driveExportFolderChanged) {
@@ -430,6 +442,7 @@ export function useMemoryMetadataEditor({
       setEditExternalUrl(updated.metadata?.['external-source-url'] || '')
       setEditSlideOrder(updated.metadata?.['slide-order'] || '')
       setEditDriveExportFolder(updated.metadata?.['drive-export-folder'] || '')
+      setEditSyncToDisk(updated.metadata?.['sync_to_disk'] !== 'false')
       if (updated.project_id && updated.project_id !== project?.id) {
         const nextProject = await getProject(updated.project_id).catch(() => null)
         setProject(nextProject)
@@ -444,6 +457,7 @@ export function useMemoryMetadataEditor({
     memory, project, editTitle, editHandle, editType, editSubtype, effectiveEditType,
     editStatus, editProjectId, editTags, editMaxWidth, editDiagramTheme, editDiagramScale,
     editImageQuality, editDisplaySize, editExternalUrl, editSlideOrder, editDriveExportFolder,
+    editSyncToDisk,
     statusOptions, statusOptionsType, setError, setMemory, setProject,
   ])
 
@@ -564,6 +578,7 @@ export function useMemoryMetadataEditor({
     editExternalUrl, setEditExternalUrl,
     editSlideOrder, setEditSlideOrder,
     editDriveExportFolder, setEditDriveExportFolder,
+    editSyncToDisk, setEditSyncToDisk,
     effectiveEditType,
 
     // Type/status options

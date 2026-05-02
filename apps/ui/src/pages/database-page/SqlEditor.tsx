@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'preact/hooks'
-import { EditorState } from '@codemirror/state'
+import { EditorState, Compartment } from '@codemirror/state'
 import { EditorView, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { sql, PostgreSQL } from '@codemirror/lang-sql'
@@ -17,9 +17,11 @@ interface SqlEditorProps {
   onCloseTab?: () => void
   onGetSelectedText?: (getText: () => string | null) => void
   onGetFoldActions?: (actions: { foldAll: () => void; unfoldAll: () => void }) => void
+  /** When true, the editor is non-editable. Used for snapshot view mode. */
+  readOnly?: boolean
 }
 
-export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSelectedText, onGetFoldActions }: SqlEditorProps) {
+export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSelectedText, onGetFoldActions, readOnly }: SqlEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -35,6 +37,9 @@ export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSel
   const isApplyingExternalRef = useRef(false)
   const lastEmittedValueRef = useRef(value)
   const emitCounterRef = useRef(0)
+
+  // Compartment lets us reconfigure read-only state without rebuilding the view.
+  const readOnlyCompartmentRef = useRef(new Compartment())
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -164,6 +169,10 @@ export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSel
         updateListener,
         cmPlaceholder('Enter SQL query...'),
         EditorView.lineWrapping,
+        readOnlyCompartmentRef.current.of([
+          EditorView.editable.of(!readOnly),
+          EditorState.readOnly.of(!!readOnly),
+        ]),
       ],
     })
 
@@ -236,14 +245,16 @@ export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSel
   // Capture emit counter at render time to detect stale value props
   const renderEmitCount = emitCounterRef.current
 
-  // Sync external value changes (e.g., loading a script, history replay)
+  // Sync external value changes (e.g., loading a script, history replay,
+  // entering/exiting snapshot view mode).
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
-    // Skip if value matches what we last emitted — prevents loop
-    if (value === lastEmittedValueRef.current) return
-    // Skip if user has edited since this render — stale prop
+    // Skip if user has edited since this render — stale prop.
     if (emitCounterRef.current !== renderEmitCount) return
+    // Compare against the editor's actual doc, not the last-emitted value.
+    // The two diverge when an external action (e.g., snapshot view mode)
+    // dispatches a change directly into the editor.
     const currentDoc = view.state.doc.toString()
     if (currentDoc === value) return
     isApplyingExternalRef.current = true
@@ -251,6 +262,18 @@ export function SqlEditor({ value, onChange, onRun, onSave, onCloseTab, onGetSel
       changes: { from: 0, to: currentDoc.length, insert: value },
     })
   }, [value])
+
+  // Toggle read-only state when entering/leaving snapshot view mode.
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({
+      effects: readOnlyCompartmentRef.current.reconfigure([
+        EditorView.editable.of(!readOnly),
+        EditorState.readOnly.of(!!readOnly),
+      ]),
+    })
+  }, [readOnly])
 
   return <div ref={containerRef} class={styles.cmEditor} />
 }

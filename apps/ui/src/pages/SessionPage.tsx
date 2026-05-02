@@ -13,7 +13,7 @@ import {
 } from '../lib/sessionNavContext'
 import { CopyButton, ConfirmModal, ModelCombobox, useToast, LoadingMessage, VirtualList } from '../components/ui'
 import { useDocumentTitle } from '../hooks'
-import { ArchiveBadge, ChatInput, SessionToolbar } from '../components/session'
+import { ArchiveBadge, ChatInput, SessionTerminal, SessionToolbar } from '../components/session'
 import type { ViewMode, SortOrder } from '../components/session'
 import { useKdagBackends } from '../hooks/useKdagBackends'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -166,7 +166,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
   useDocumentTitle(sessionTitleLabel ? `Session - ${sessionTitleLabel}` : 'Session - Loading')
 
   // View mode: parsed chunks vs raw JSONL entries
-  const [viewMode, setViewMode] = useState<ViewMode>('parsed')
+  const [viewMode, setViewMode] = useState<ViewMode>('terminal')
   const [rawEntries, setRawEntries] = useState<SessionEntry[]>([])
   const [rawSource, setRawSource] = useState<'original' | 'backup' | undefined>(undefined)
   const [rawFilePath, setRawFilePath] = useState<string | undefined>(undefined)
@@ -337,15 +337,20 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
     }
   }, [id])
 
-  // Check if this session is active
+  // Check whether the session is actively running in *another* terminal.
+  // We only gate the in-browser Connect button when:
+  //   1. The row has a live heartbeat pid (rules out mtime-only Tier 3 entries),
+  //      and
+  //   2. The pid is NOT owned by our own PTY daemon (rules out the in-browser
+  //      claude we just spawned ourselves — that's a reattach, not a conflict).
   useEffect(() => {
     if (!session) return
     let mounted = true
     getActiveSessions(session.project ? { project_id: session.project.id } : undefined)
       .then((data) => {
         if (mounted) {
-          const ids = new Set((data.sessions || []).map(s => s.session_id))
-          setIsActive(ids.has(session.session_id))
+          const row = (data.sessions || []).find(s => s.session_id === session.session_id)
+          setIsActive(!!row && row.pid != null && !row.pid_is_self)
         }
       })
       .catch(() => {})
@@ -1083,7 +1088,8 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
     : `session-${session.session_id.slice(0, 8)}`)
 
   return (
-    <div class={styles.page}>
+    <div class={clsx(styles.page, viewMode === 'terminal' && styles.pageWide)}>
+      <div class={styles.stickyTop}>
       <header class={styles.header}>
         <div class={styles.backRow}>
           {session.project && (
@@ -1441,6 +1447,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
         onSearchChange={setSearchQuery}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        showTerminalToggle={true}
         showUser={showUser}
         onShowUserChange={setShowUser}
         showAssistant={showAssistant}
@@ -1516,9 +1523,22 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
           </>
         }
       />
+      </div>
 
       <div class={styles.conversation} ref={conversationRef}>
-        {viewMode === 'parsed' ? (
+        {/* Keep the live PTY mounted across view switches so toggling to
+            Parsed or Raw does not tear down the websocket. We hide via CSS
+            instead of unmounting; the existing ResizeObserver re-fits xterm
+            when the host element regains layout. */}
+        {session?.session_id && (
+          <div class={viewMode === 'terminal' ? styles.terminalShell : styles.terminalShellHidden}>
+            <SessionTerminal
+              sessionId={session.session_id}
+              filePath={session.file_path}
+            />
+          </div>
+        )}
+        {viewMode === 'terminal' ? null : viewMode === 'parsed' ? (
           <VirtualList
             items={allSegments}
             containerRef={conversationRef}
@@ -1713,7 +1733,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
         )}
       </div>
 
-      {isActive && !rawLoading && (
+      {isActive && !rawLoading && viewMode !== 'terminal' && (
         <ChatInput
           onSend={handleSendMessage}
           sending={isSending}

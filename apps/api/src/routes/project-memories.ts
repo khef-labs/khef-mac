@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import archiver from 'archiver';
 import { getClient, query } from '../db/client';
-import { saveSnapshot } from '../services/snapshots';
+import { saveSnapshot, saveSnapshotIfContentChanged } from '../services/snapshots';
 import { CreateMemoryInput, Memory, Comment, UpdateMemoryInput, FullMemoryInput, MemorySearchParams, PaginationMetadata, SearchMode, CompactMemory, RelationType, TagRef, ENTITY_TYPE } from '../types';
 import { resolveProject } from './projects';
 import { isValidHandle } from '../utils/slugify';
@@ -1228,6 +1228,15 @@ const projectMemoryRoutes: FastifyPluginAsync = async (fastify) => {
         await client.query('ROLLBACK');
         return reply.code(404).send({ error: 'Memory not found in this project' });
       }
+
+      // Auto-snapshot: when the caller is changing memory content (and did not
+      // already request a manual snapshot), record a pre-update snapshot so a
+      // bad agent edit can be rolled back from the snapshot management modal.
+      // Skipped when content is unchanged or only metadata fields are being
+      // updated.
+      if (content !== undefined && !shouldSnapshot) {
+        await saveSnapshotIfContentChanged(memoryId, content, 'pre-update', client);
+      }
       const currentMemoryTypeId = checkMemory.rows[0].memory_type_id;
       const currentTitle = checkMemory.rows[0].title;
       const currentHandle = checkMemory.rows[0].handle;
@@ -1531,6 +1540,10 @@ const projectMemoryRoutes: FastifyPluginAsync = async (fastify) => {
       const existingMemory = memoryResult.rows[0];
       const sep = separator !== undefined ? separator : '\n\n';
       const newContent = existingMemory.content + sep + content;
+
+      // Auto-snapshot pre-append so the agent can roll back if the appended
+      // content is wrong.
+      await saveSnapshotIfContentChanged(memoryId, newContent, 'pre-update', client);
 
       // Update memory content (mark for vector sync)
       await client.query(

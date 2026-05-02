@@ -25,6 +25,7 @@ interface SessionListQuery {
   assistant?: string;
   project?: string;
   q?: string;
+  nickname?: string;
   session_id?: string;
   limit?: string;
   offset?: string;
@@ -156,7 +157,7 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
     request: FastifyRequest<{ Querystring: SessionListQuery }>,
     reply: FastifyReply
   ) => {
-    const { assistant, project, q, session_id, limit = '50', offset = '0', sort: rawSort = 'started_at', order = 'desc', includeHidden } = request.query;
+    const { assistant, project, q, nickname, session_id, limit = '50', offset = '0', sort: rawSort = 'started_at', order = 'desc', includeHidden } = request.query;
     const sort = ALLOWED_SORT_FIELDS.has(rawSort) ? rawSort : 'started_at';
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
     const offsetNum = parseInt(offset, 10) || 0;
@@ -191,6 +192,15 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
       const sid = session_id.toLowerCase();
       conditions.push(`(s.session_id::text ILIKE $${paramIndex} || '%' OR s.session_id::text ILIKE '%' || $${paramIndex})`);
       params.push(sid);
+      paramIndex++;
+    }
+
+    if (nickname) {
+      // Case-insensitive prefix match on the stored nickname so the chat
+      // sidebar lookup surfaces sessions by name without dragging in
+      // every transcript that happens to mention them.
+      conditions.push(`s.nickname ILIKE $${paramIndex} || '%'`);
+      params.push(nickname.toLowerCase().trim());
       paramIndex++;
     }
 
@@ -1131,11 +1141,12 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
    * POST /api/sessions/sync - Trigger manual sync
    */
   fastify.post('/sync', async (
-    request: FastifyRequest<{ Querystring: { force?: string } }>,
+    request: FastifyRequest<{ Querystring: { force?: string; assistant?: string } }>,
     reply: FastifyReply
   ) => {
     const force = request.query.force === 'true';
-    const result = await triggerSessionSync({ force });
+    const assistant = request.query.assistant?.trim();
+    const result = await triggerSessionSync({ force, assistant });
     return result;
   });
 
@@ -1220,7 +1231,7 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
     // Check which sessions are currently live
     const liveRows = await query<{ session_id: string; pid: number | null; last_seen_at: string }>(
       `SELECT session_id, pid, last_seen_at::text
-       FROM active_sessions
+       FROM sessions
        WHERE nickname = $1 AND status = 'active'`,
       [normalizedNickname]
     );

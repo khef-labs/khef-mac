@@ -99,6 +99,9 @@
 }
 
 .toggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 10px;
   font-size: 11px;
   background: transparent;

@@ -35,7 +35,7 @@ export function ProjectsPage() {
     let mounted = true
     setError(null)
     setProjectsLoaded(false)
-    getProjects({ favorite: favoriteOnly })
+    getProjects()
       .then((data) => {
         if (mounted) setProjects(data)
       })
@@ -48,7 +48,7 @@ export function ProjectsPage() {
     return () => {
       mounted = false
     }
-  }, [favoriteOnly])
+  }, [])
 
   const resetCreateForm = () => {
     setCreateName('')
@@ -68,7 +68,7 @@ export function ProjectsPage() {
   const refreshProjects = () => {
     setProjectsLoaded(false)
     setError(null)
-    getProjects({ favorite: favoriteOnly })
+    getProjects()
       .then(setProjects)
       .catch((err) => console.warn('Failed to load projects:', err))
       .finally(() => setProjectsLoaded(true))
@@ -138,9 +138,12 @@ export function ProjectsPage() {
     if (!projects.length) return []
 
     let filtered = projects
+    if (favoriteOnly) {
+      filtered = filtered.filter((p) => p.is_favorite)
+    }
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = projects.filter((p) => {
+      filtered = filtered.filter((p) => {
         const name = (p.name || '').toLowerCase()
         const displayName = (p.display_name || '').toLowerCase()
         const handle = (p.handle || '').toLowerCase()
@@ -154,7 +157,7 @@ export function ProjectsPage() {
       const nameB = (b.display_name || b.name || '').toLowerCase()
       return nameA.localeCompare(nameB)
     })
-  }, [projects, searchQuery])
+  }, [projects, searchQuery, favoriteOnly])
 
   const handleProjectClick = (projectId: string) => {
     const projectIds = filteredProjects.map(p => p.id)
@@ -175,15 +178,11 @@ export function ProjectsPage() {
     const nextFavorite = !project.is_favorite
     const previous = projects
 
-    setProjects((prev) => {
-      const updated = prev.map((item) =>
+    setProjects((prev) =>
+      prev.map((item) =>
         item.id === project.id ? { ...item, is_favorite: nextFavorite } : item
       )
-      if (favoriteOnly && !nextFavorite) {
-        return updated.filter((item) => item.id !== project.id)
-      }
-      return updated
-    })
+    )
 
     try {
       await updateProject(project.id, { is_favorite: nextFavorite })

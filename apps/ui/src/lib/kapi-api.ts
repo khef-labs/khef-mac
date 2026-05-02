@@ -162,7 +162,12 @@ export async function listKapiEnvironments(collectionId: string): Promise<KapiEn
 
 export async function createKapiEnvironment(
   collectionId: string,
-  input: { handle: string; name: string; is_active?: boolean }
+  input: {
+    handle: string
+    name: string
+    is_active?: boolean
+    copy_from_environment_id?: string
+  }
 ): Promise<KapiEnvironment> {
   const res = await client
     .post(`kapi/collections/${collectionId}/environments`, { json: input })

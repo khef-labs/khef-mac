@@ -930,7 +930,21 @@ SnapshotListItem:
     source:
       type: string
       nullable: true
-      description: How snapshot was created (manual, external-sync)
+      enum:
+        - manual
+        - external-sync
+        - pre-sync
+        - pre-restore
+        - pre-update
+      description: |
+        How the snapshot was created.
+        - `manual` — explicit save (e.g., PATCH `?snapshot=true` or save button)
+        - `external-sync` — captured during sync from an external source (e.g., Google Doc)
+        - `pre-sync` — auto-captured before an external sync overwrites local content
+        - `pre-restore` — auto-captured before restoring a historical snapshot
+        - `pre-update` — auto-captured before any content-changing API call
+          (`update_memory`, `update_memory_from_file`, `update_memory_section`,
+          `append_memory`). Skipped when only metadata changes or content is unchanged.
     created_at:
       type: string
       format: date-time

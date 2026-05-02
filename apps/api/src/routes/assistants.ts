@@ -107,9 +107,15 @@ const assistantRoutes: FastifyPluginAsync = async (fastify) => {
        ORDER BY name`
     );
 
-    // Filter to only installed assistants (those with at least one config file present)
+    // Lazy-discover global configs so assistants appear even if startup
+    // discovery did not run or the files were created after API boot.
     const installedRows: AssistantRow[] = [];
     for (const row of rows) {
+      try {
+        await discoverAndImportGlobalConfigs(row.handle);
+      } catch {
+        // Ignore discovery failures here and fall back to installed-state check.
+      }
       if (await isAssistantInstalled(row.handle)) {
         installedRows.push(row);
       }

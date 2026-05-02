@@ -117,6 +117,38 @@ Add to your `~/.claude.json`:
 
 Restart Claude Code, then use `/mcp` to verify the connection. You should see 140+ tools for memory management and pipeline orchestration.
 
+## Using with Codex CLI (MCP)
+
+Run:
+
+```bash
+npm run codex:setup
+```
+
+That bootstrap script creates the two files Khef expects for Codex discovery on a new machine:
+
+- `~/.codex/config.toml`
+- `~/.codex/AGENTS.md`
+
+It also adds the khef MCP server using this build output:
+
+```toml
+[mcp_servers.khef]
+command = "node"
+args = ["/absolute/path/to/khef/apps/api/mcp-server/build/index.js"]
+
+[mcp_servers.khef.env]
+KHEF_API_URL = "http://localhost:3201"
+```
+
+Important: the Khef UI only lists assistants that have at least one discovered global config file. If Codex is installed but `~/.codex/config.toml` and `~/.codex/AGENTS.md` do not exist yet, Codex will not appear in the Assistants page.
+
+After setup:
+
+1. Restart Codex.
+2. Restart the khef API or trigger config discovery from the Codex assistant page.
+3. Run `/mcp` in Codex and confirm the `khef` server is present.
+
 ## Optional: Google Cloud integrations
 
 Both features use the `gcloud` CLI. Install it first if you haven't:

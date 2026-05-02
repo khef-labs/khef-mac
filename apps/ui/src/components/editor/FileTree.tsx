@@ -19,6 +19,8 @@ interface FileTreeProps {
   revealPath?: string | null
   showHidden?: boolean
   onRevertFile?: (path: string) => void
+  // Bump to ask the tree to re-list its root (used after external file creates).
+  refreshNonce?: number
 }
 
 function FileIcon({ name }: { name: string }) {
@@ -209,7 +211,7 @@ function TreeNode({ entry, depth, selectedPath, selectedDirectoryPath, modifiedP
   )
 }
 
-export function FileTree({ rootPath, onFileSelect, onDirectorySelect, onFileCreated, onFileDeleted, selectedPath, selectedDirectoryPath, modifiedPaths, createRootRequest, revealPath, showHidden, onRevertFile }: FileTreeProps) {
+export function FileTree({ rootPath, onFileSelect, onDirectorySelect, onFileCreated, onFileDeleted, selectedPath, selectedDirectoryPath, modifiedPaths, createRootRequest, revealPath, showHidden, onRevertFile, refreshNonce }: FileTreeProps) {
   const [entries, setEntries] = useState<FsEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -260,6 +262,12 @@ export function FileTree({ rootPath, onFileSelect, onDirectorySelect, onFileCrea
     setInlineValue('')
     setInlineError(null)
   }, [createRootRequest?.nonce, rootPath])
+
+  // External refresh trigger — re-list the root when the parent bumps the nonce.
+  useEffect(() => {
+    if (refreshNonce === undefined) return
+    refreshRoot()
+  }, [refreshNonce, refreshRoot])
 
   // Close context menu on outside click
   useEffect(() => {

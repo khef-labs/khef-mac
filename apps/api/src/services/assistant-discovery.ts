@@ -51,25 +51,21 @@ export function expandPath(template: string, projectPath?: string): string {
 }
 
 /**
- * Check if an assistant is installed by verifying any of its global config paths exist.
+ * Check if an assistant is installed by verifying it has at least one
+ * imported global config. Discovery runs on startup and populates this,
+ * so we trust whatever it found rather than re-scanning disk here.
  */
 export async function isAssistantInstalled(assistantHandle: string): Promise<boolean> {
-  const templates = await query<ConfigPath>(
-    `SELECT acp.*
-     FROM assistant_config_paths acp
-     JOIN assistants a ON a.id = acp.assistant_id
-     WHERE a.handle = $1 AND acp.scope = 'global'`,
+  const rows = await query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM configs c
+     JOIN assistant_configs ac ON ac.config_id = c.id
+     JOIN assistants a ON a.id = ac.assistant_id
+     WHERE a.handle = $1 AND c.scope = 'global'`,
     [assistantHandle]
   );
 
-  for (const template of templates) {
-    const expandedPath = expandPath(template.path_template);
-    if (fs.existsSync(expandedPath)) {
-      return true;
-    }
-  }
-
-  return false;
+  return Number(rows[0]?.count ?? 0) > 0;
 }
 
 /**

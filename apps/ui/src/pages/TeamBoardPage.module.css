@@ -373,6 +373,20 @@
   padding: 12px 20px;
 }
 
+/* SessionTerminal instances stay mounted across member focus switches; we
+   toggle visibility via display so each PTY's xterm buffer and websocket
+   survive the swap. */
+.terminalShell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.terminalShellHidden {
+  display: none;
+}
+
 .archiveBadge {
   margin-bottom: 12px;
 }

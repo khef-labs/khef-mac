@@ -1036,6 +1036,13 @@ MemoriesByIdSectionsById:
       Update a specific section of a memory without affecting other sections.
       The heading line is preserved; only the content under it is replaced.
       Content is automatically re-chunked if the memory grows large.
+
+      When `replace_subsections` is false (default) and the parent has tracked
+      subsections, body content containing heading markdown that collides with
+      an existing child heading (same level + same text) is rejected with 400
+      to prevent duplicate subsections in the outline. Pass
+      `replace_subsections=true` to replace the children, or update each
+      colliding subsection in a separate call.
     parameters:
       - $ref: ../components/parameters.yaml#/MemoryId
       - name: heading

@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
 import { expand } from 'dotenv-expand';
 expand(dotenv.config());
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
 import { seedMemoriesForProject, listSeedProjects } from './memories';
@@ -43,10 +43,20 @@ async function runSqlSeeds(client: Client): Promise<void> {
     'seeds/default_statuses.sql',
     'seeds/samples_project.sql',
     'seeds/demo_projects.sql',
+    'seeds/kdag_input_types.sql',
+    'seeds/kdag_input_types_local.sql',
+    'seeds/dbx_saved_queries.sql',
+    'seeds/kapi_requests.sql',
   ];
 
   for (const file of seedFiles) {
     const filepath = join(__dirname, file);
+    // Some seed files (e.g. *_local.sql) ship only with the private source
+    // repo and are intentionally absent from public clones. Skip silently.
+    if (!existsSync(filepath)) {
+      console.log(`- ${file} (skipped — not present)`);
+      continue;
+    }
     const sql = readFileSync(filepath, 'utf-8');
     await client.query(sql);
     console.log(`✓ ${file}`);

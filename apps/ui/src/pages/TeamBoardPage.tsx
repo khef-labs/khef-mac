@@ -14,7 +14,7 @@ import {
 import type { SessionTeam, SessionTeamMember } from '../lib/api'
 import type { SessionDetail, SessionChunk, SessionEntry, SessionContentBlock } from '../types'
 import { formatRelativeTime } from '../lib/format'
-import { ArchiveBadge, ChatInput, SessionToolbar } from '../components/session'
+import { ArchiveBadge, ChatInput, SessionTerminal, SessionToolbar } from '../components/session'
 import type { ViewMode } from '../components/session'
 import { LoadingMessage, ConfirmModal, useToast, VirtualList } from '../components/ui'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -193,6 +193,11 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
 
   // Focused session
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null)
+  // Sessions that have ever been focused get a SessionTerminal mounted so
+  // the PTY connection and xterm buffer survive switching between members.
+  // We never evict; the page unmount tears them down. file_path is captured
+  // from member info at first focus.
+  const [mountedTerminals, setMountedTerminals] = useState<Map<string, { file_path: string | null }>>(new Map())
   const [focusedSession, setFocusedSession] = useState<SessionDetail | null>(null)
   const [focusedChunks, setFocusedChunks] = useState<SessionChunk[]>([])
   const [focusLoading, setFocusLoading] = useState(false)
@@ -201,7 +206,7 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
   const [showThinking, setShowThinking] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
-  const [viewMode, setViewMode] = useState<ViewMode>('parsed')
+  const [viewMode, setViewMode] = useState<ViewMode>('terminal')
   const [rawEntries, setRawEntries] = useState<SessionEntry[]>([])
   const [rawSource, setRawSource] = useState<'original' | 'backup' | undefined>(undefined)
   const [rawFilePath, setRawFilePath] = useState<string | undefined>(undefined)
@@ -262,6 +267,23 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
       setFocusedSessionId(members[0].session_id)
     }
   }, [members, focusedSessionId])
+
+  // Register the focused session as a mounted terminal once we have a
+  // file_path for it (from member info or the loaded session detail). Never
+  // evicts — the goal is to keep the PTY warm across focus switches.
+  useEffect(() => {
+    if (!focusedSessionId) return
+    if (mountedTerminals.has(focusedSessionId)) return
+    const member = members.find(m => m.session_id === focusedSessionId)
+    const filePath = member?.file_path || null
+    if (!filePath) return
+    setMountedTerminals(prev => {
+      if (prev.has(focusedSessionId)) return prev
+      const next = new Map(prev)
+      next.set(focusedSessionId, { file_path: filePath })
+      return next
+    })
+  }, [focusedSessionId, members, mountedTerminals])
 
   // Poll team members for status updates (pause during drag)
   useEffect(() => {
@@ -797,16 +819,12 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
               <Users size={48} class={styles.focusEmptyIcon} />
               <p>Select a session to view its conversation</p>
             </div>
-          ) : focusLoading ? (
-            <div class={styles.focusEmpty}><p>Loading session...</p></div>
-          ) : !focusedSession ? (
-            <div class={styles.focusEmpty}><p>Session not synced yet</p></div>
           ) : (
             <div class={styles.focusContent}>
               <div class={styles.focusHeader}>
                 <span class={`${styles.statusDot} ${styles[focusedMember?.status || 'inactive']}`} />
                 <span class={styles.focusTitle}>
-                  {focusedSession.nickname || focusedSession.id.slice(0, 8)}
+                  {focusedSession?.nickname || focusedMember?.nickname || focusedSessionId.slice(0, 8)}
                 </span>
                 {isActiveSession && (
                   <span class={styles.liveIndicator}><span class={styles.liveDot} /> Live</span>
@@ -826,6 +844,7 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
                 onSearchChange={setSearchQuery}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
+                showTerminalToggle={true}
                 showUser={showUser}
                 onShowUserChange={setShowUser}
                 showAssistant={showAssistant}
@@ -842,8 +861,8 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
                 sortOrder={sortOrder}
                 onSortChange={setSortOrder}
                 onRefresh={handleRefreshFocused}
-                sessionId={focusedSession?.session_id}
-                filePath={rawFilePath || focusedSession?.file_path || undefined}
+                sessionId={focusedSession?.session_id || focusedSessionId || undefined}
+                filePath={rawFilePath || focusedSession?.file_path || focusedMember?.file_path || undefined}
                 statsSlot={focusedSession && (
                   <>
                     {focusedSession.message_count && (
@@ -857,7 +876,23 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
               />
 
               <div class={styles.conversation} ref={conversationRef}>
-                {viewMode === 'parsed' ? (
+                {/* Keep every ever-focused session's SessionTerminal mounted
+                    so the user can switch between member PTYs without
+                    losing their xterm buffer or websocket. Only the focused
+                    one is shown when in Terminal view. */}
+                {Array.from(mountedTerminals.entries()).map(([sid, meta]) => (
+                  <div
+                    key={sid}
+                    class={(viewMode === 'terminal' && sid === focusedSessionId) ? styles.terminalShell : styles.terminalShellHidden}
+                  >
+                    <SessionTerminal sessionId={sid} filePath={meta.file_path} />
+                  </div>
+                ))}
+                {viewMode === 'terminal' ? null : focusLoading ? (
+                  <div class={styles.focusEmpty}><p>Loading session...</p></div>
+                ) : !focusedSession ? (
+                  <div class={styles.focusEmpty}><p>Session not synced yet</p></div>
+                ) : viewMode === 'parsed' ? (
                   <VirtualList
                     items={sortedSegments}
                     containerRef={conversationRef}
@@ -995,13 +1030,13 @@ export function TeamBoardPage({ id }: TeamBoardPageProps) {
                 )}
               </div>
 
-              {isActiveSession && (
+              {isActiveSession && viewMode !== 'terminal' && focusedSession && (
                 <ChatInput
                   onSend={handleSendMessage}
                   sending={isSending || isBroadcasting}
                   placeholder={broadcastMode
                     ? `Broadcast to all active sessions... (Cmd+Enter)`
-                    : `Send to ${focusedSession.nickname || 'session'}... (Cmd+Enter)`}
+                    : `Send to ${focusedSession.nickname || focusedMember?.nickname || 'session'}... (Cmd+Enter)`}
                   broadcastMode={broadcastMode}
                   onBroadcastToggle={setBroadcastMode}
                 />

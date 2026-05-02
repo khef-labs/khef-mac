@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef } from 'preact/hooks'
-import { Table2, Eye, FileText, Plus, Play, Square, X, ChevronsDownUp, ChevronsUpDown, Search, GitBranch, Braces, Zap } from 'lucide-preact'
+import { useLocation } from 'wouter-preact'
+import { Table2, Eye, FileText, Plus, Play, Square, X, ChevronsDownUp, ChevronsUpDown, Search, GitBranch, Braces, Zap, Camera } from 'lucide-preact'
 import clsx from 'clsx'
 import {
   getConnections, getSchemas, getTables, getTableDetail, executeQuery, getTableData,
   getScripts, createScript, updateScript, deleteScript, getQueryHistory, getTableErd, getSchemaErd,
   getFunctions, getSchemaTriggers, getFunctionDetail,
+  createSavedQuery, getSavedQuery, runSavedQuery, updateSavedQuery,
+  listSavedQuerySnapshots, createSavedQuerySnapshot, restoreSavedQuerySnapshot,
   type DbxConnection, type DbxQueryResult, type DbxScript, type DbxQueryHistoryEntry,
+  type DbxSavedQuery, type DbxSavedQuerySnapshot,
 } from '../../lib/dbx-api'
+import { SavedQueriesPanel } from './SavedQueriesPanel'
+import { ParametersForm } from './ParametersForm'
+import { SnapshotsModal } from './SnapshotsModal'
+
+const UI_SESSION_ID = 'khef-ui'
 import { ConfirmModal } from '../../components/ui'
 import { loadStore, saveStore } from '../../lib/store'
 import { isDesktopApp } from '../../lib/settings'
@@ -21,6 +30,46 @@ import { SqlEditor } from './SqlEditor'
 import { SchemaErdPanel } from './SchemaErdPanel'
 import { EditRowDialog } from './EditRowDialog'
 import styles from './DatabasePage.module.css'
+
+// Minimum keeps header + ~1 row of content visible — going below this clips the
+// section's filter input and items because each panel uses its own overflow-y:
+// auto. Default lands users on a useful "showing content" view on first visit
+// instead of a header-only stub. See pattern memory:
+// pattern-page-meta-footer-and-resizable-sidebar-sections
+const SECTION_HEIGHT_MIN = 96
+const SECTION_HEIGHT_DEFAULT = 140
+
+function loadSectionHeight(value: number | undefined): number {
+  if (!value || value <= SECTION_HEIGHT_MIN) return SECTION_HEIGHT_DEFAULT
+  return value
+}
+
+/**
+ * Coerce stored param defaults (TEXT in dbx.saved_query_params.default_value)
+ * into typed form values matching ParametersForm's expected shape:
+ * number → Number, bool → true/false, text/enum → string. Skips params with
+ * no default so the form renders empty for those.
+ */
+function defaultsForParams(params: { name: string; value_type: string; default_value: string | null }[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const p of params) {
+    if (p.default_value === null || p.default_value === undefined || p.default_value === '') continue
+    switch (p.value_type) {
+      case 'number': {
+        const n = Number(p.default_value)
+        out[p.name] = Number.isFinite(n) ? n : p.default_value
+        break
+      }
+      case 'bool':
+        out[p.name] = p.default_value === 'true' || p.default_value === '1'
+        break
+      default:
+        out[p.name] = p.default_value
+        break
+    }
+  }
+  return out
+}
 
 function serializeTabs(tabs: Tab[]): any[] {
   return tabs.map(t => {
@@ -38,6 +87,7 @@ function serializeTabs(tabs: Tab[]): any[] {
 
 export function DatabasePage() {
   useDocumentTitle('Database')
+  const [, setLocation] = useLocation()
   const stored = useRef(loadStore().dbx)
 
   // Tree state
@@ -73,6 +123,10 @@ export function DatabasePage() {
   const [deletingScript, setDeletingScript] = useState<DbxScript | null>(null)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showNewScriptDialog, setShowNewScriptDialog] = useState(false)
+  const [showSnapshotsModal, setShowSnapshotsModal] = useState(false)
+  // Snapshot list for the currently-active saved query, refreshed on save/restore.
+  const [savedQuerySnapshots, setSavedQuerySnapshots] = useState<DbxSavedQuerySnapshot[]>([])
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false)
   const [pendingMutation, setPendingMutation] = useState<{ sql: string; type: string; connectionId: string; onSuccess?: () => void } | null>(null)
   const [editingRow, setEditingRow] = useState<{ tabId: string; rowIndex: number } | null>(null)
   const [dangerMode, setDangerMode] = useState(false)
@@ -83,32 +137,212 @@ export function DatabasePage() {
   const getSelectedTextRef = useRef<(() => string | null) | null>(null)
   const foldActionsRef = useRef<{ foldAll: () => void; unfoldAll: () => void } | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
-  const [scriptsHeight, setScriptsHeight] = useState(() => loadStore().dbx.scriptsHeight)
+  const [scriptsHeight, setScriptsHeight] = useState(() => loadSectionHeight(loadStore().dbx.scriptsHeight))
+  const [savedQueriesHeight, setSavedQueriesHeight] = useState(() => loadSectionHeight(loadStore().dbx.savedQueriesHeight))
   const [sidebarWidth, setSidebarWidth] = useState(() => loadStore().dbx.sidebarWidth)
+
+  useEffect(() => {
+    const store = loadStore().dbx
+    const nextScriptsHeight = loadSectionHeight(store.scriptsHeight)
+    const nextSavedQueriesHeight = loadSectionHeight(store.savedQueriesHeight)
+    if (store.scriptsHeight !== nextScriptsHeight || store.savedQueriesHeight !== nextSavedQueriesHeight) {
+      saveStore({
+        dbx: {
+          ...store,
+          scriptsHeight: nextScriptsHeight,
+          savedQueriesHeight: nextSavedQueriesHeight,
+        },
+      })
+    }
+  }, [])
+
+  // Consume `/database?open=<saved-query-id>` once on mount: opens the query
+  // in a fresh SQL tab and strips the param from the URL so a refresh doesn't
+  // reopen it. Used by /database/saved-queries to hand off a click into the
+  // existing editor flow.
+  const openConsumedRef = useRef(false)
+  useEffect(() => {
+    if (openConsumedRef.current) return
+    if (connections.length === 0) return // wait for connections to load
+    const params = new URLSearchParams(window.location.search)
+    const openId = params.get('open')
+    if (!openId) { openConsumedRef.current = true; return }
+    openConsumedRef.current = true
+    getSavedQuery(openId, UI_SESSION_ID).then(({ saved_query }) => {
+      openSavedQueryInTab(saved_query)
+    }).catch(() => {})
+    // Strip ?open= from the URL without adding a history entry.
+    params.delete('open')
+    const next = window.location.pathname + (params.toString() ? `?${params}` : '')
+    window.history.replaceState(null, '', next)
+  }, [connections])
+
+  // Hydrate declared params for any saved-query tab missing them. The list
+  // endpoint returns compact rows without params, and tabs restored from
+  // sessionStorage that pre-date the params form lack savedQueryParams.
+  useEffect(() => {
+    const needsHydration = tabs.filter(t =>
+      t.kind === 'sql' && (t as SqlTab).savedQueryId && (t as SqlTab).savedQueryParams === undefined
+    ) as SqlTab[]
+    if (needsHydration.length === 0) return
+    for (const tab of needsHydration) {
+      getSavedQuery(tab.savedQueryId!, UI_SESSION_ID).then(({ saved_query }) => {
+        const params = saved_query.params || []
+        setTabs(prev => prev.map(t =>
+          t.id === tab.id && t.kind === 'sql'
+            ? {
+                ...t,
+                savedQueryParams: params,
+                // Seed defaults for any field the user hasn't filled yet.
+                paramValues: { ...defaultsForParams(params), ...(t.paramValues || {}) },
+              }
+            : t
+        ))
+      }).catch(() => {})
+    }
+  }, [tabs])
+
+  // ─── Saved-query snapshot helpers ───
+
+  // Track the active tab's saved-query id specifically (not the whole tab
+  // object) so editor keystrokes don't trigger snapshot refetches.
+  const activeSavedQueryId = (() => {
+    const tab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
+    return tab?.savedQueryId ?? null
+  })()
+
+  // Reload the snapshot list (and server-side current_snapshot pointer)
+  // whenever the active tab points at a different saved query.
+  useEffect(() => {
+    if (!activeSavedQueryId) {
+      setSavedQuerySnapshots([])
+      return
+    }
+    listSavedQuerySnapshots(activeSavedQueryId)
+      .then(({ snapshots, current_snapshot }) => {
+        setSavedQuerySnapshots(snapshots)
+        setTabs(prev => prev.map(t =>
+          t.kind === 'sql' && (t as SqlTab).savedQueryId === activeSavedQueryId
+            ? { ...t, currentSnapshot: current_snapshot }
+            : t
+        ))
+      })
+      .catch(() => setSavedQuerySnapshots([]))
+  }, [activeSavedQueryId])
+
+  /**
+   * Switch the active tab into snapshot-view mode (read-only display of a
+   * historical snapshot's SQL) or back to live editing.
+   *
+   * Picking the same number as currentSnapshot exits view mode; picking
+   * another loads that snapshot's SQL into viewingSnapshotSql so the editor
+   * can render it read-only.
+   */
+  function pickSnapshotForView(num: number) {
+    const tab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
+    if (!tab) return
+    if (num === tab.currentSnapshot) {
+      // Back to live.
+      setTabs(prev => prev.map(t =>
+        t.id === tab.id && t.kind === 'sql' ? { ...t, viewingSnapshot: null, viewingSnapshotSql: null } : t
+      ))
+      return
+    }
+    const snap = savedQuerySnapshots.find(s => s.snapshot_number === num)
+    if (!snap) return
+    setTabs(prev => prev.map(t =>
+      t.id === tab.id && t.kind === 'sql'
+        ? { ...t, viewingSnapshot: num, viewingSnapshotSql: snap.sql }
+        : t
+    ))
+  }
+
+  async function captureCurrentSnapshot() {
+    const tab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
+    if (!tab?.savedQueryId || isCapturingSnapshot) return
+    setIsCapturingSnapshot(true)
+    try {
+      // Persist any unsaved SQL edits first so the captured snapshot reflects
+      // what's in the editor, not the stale server-side row.
+      if (tab.isDirty) {
+        await updateSavedQuery(tab.savedQueryId, { sql: tab.content, edited_by: UI_SESSION_ID })
+        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+      }
+      await createSavedQuerySnapshot(tab.savedQueryId, UI_SESSION_ID)
+      const { snapshots, current_snapshot } = await listSavedQuerySnapshots(tab.savedQueryId)
+      setSavedQuerySnapshots(snapshots)
+      // Server bumped current_snapshot to the new capture; mirror it on the tab.
+      setTabs(prev => prev.map(t =>
+        t.id === tab.id && t.kind === 'sql' ? { ...t, currentSnapshot: current_snapshot } : t
+      ))
+    } catch (err: any) {
+      alert(`Failed to capture snapshot: ${err?.message || err}`)
+    } finally {
+      setIsCapturingSnapshot(false)
+    }
+  }
+
+  async function restoreSnapshotInActiveTab(num: number) {
+    const tab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
+    if (!tab?.savedQueryId) return
+    try {
+      const { saved_query } = await restoreSavedQuerySnapshot(tab.savedQueryId, num, UI_SESSION_ID)
+      const { snapshots, current_snapshot } = await listSavedQuerySnapshots(tab.savedQueryId)
+      setSavedQuerySnapshots(snapshots)
+      setTabs(prev => prev.map(t =>
+        t.id === tab.id && t.kind === 'sql'
+          ? {
+              ...t,
+              content: saved_query.sql,
+              savedQueryParams: saved_query.params || [],
+              paramValues: { ...defaultsForParams(saved_query.params || []), ...(t.paramValues || {}) },
+              currentSnapshot: current_snapshot,
+              // Exit view mode — live SQL now matches the restored snapshot.
+              viewingSnapshot: null,
+              viewingSnapshotSql: null,
+              isDirty: false,
+            }
+          : t
+      ))
+    } catch (err: any) {
+      alert(`Failed to restore snapshot: ${err?.message || err}`)
+    }
+  }
 
   // ─── Sidebar divider drag ───
 
-  function onDividerMouseDown(e: MouseEvent) {
-    e.preventDefault()
-    const startY = e.clientY
-    const sidebar = sidebarRef.current
-    if (!sidebar) return
-    const sidebarRect = sidebar.getBoundingClientRect()
-    const scriptsEl = sidebar.querySelector('[data-scripts]') as HTMLElement
-    const startHeight = scriptsHeight === -1 ? (scriptsEl?.offsetHeight || sidebarRect.height / 2) : scriptsHeight
+  function makeSectionResizer(
+    storeKey: 'scriptsHeight' | 'savedQueriesHeight',
+    setter: (h: number | ((prev: number) => number)) => void,
+    currentHeight: number,
+  ) {
+    return (e: MouseEvent) => {
+      e.preventDefault()
+      const startY = e.clientY
+      const sidebar = sidebarRef.current
+      if (!sidebar) return
+      const sidebarRect = sidebar.getBoundingClientRect()
+      const startHeight = currentHeight
 
-    function onMouseMove(ev: MouseEvent) {
-      const delta = startY - ev.clientY
-      setScriptsHeight(Math.max(60, Math.min(sidebarRect.height - 100, startHeight + delta)))
+      function onMouseMove(ev: MouseEvent) {
+        const delta = startY - ev.clientY
+        setter(Math.max(SECTION_HEIGHT_MIN, Math.min(sidebarRect.height - 100, startHeight + delta)))
+      }
+      function onMouseUp() {
+        document.removeEventListener('mousemove', onMouseMove)
+        document.removeEventListener('mouseup', onMouseUp)
+        setter((h: number) => {
+          saveStore({ dbx: { ...loadStore().dbx, [storeKey]: h } })
+          return h
+        })
+      }
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
     }
-    function onMouseUp() {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-      setScriptsHeight(h => { saveStore({ dbx: { ...loadStore().dbx, scriptsHeight: h } }); return h })
-    }
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
   }
+
+  const onScriptsDividerMouseDown = makeSectionResizer('scriptsHeight', setScriptsHeight, scriptsHeight)
+  const onSavedQueriesDividerMouseDown = makeSectionResizer('savedQueriesHeight', setSavedQueriesHeight, savedQueriesHeight)
 
   // ─── Results resize drag ───
 
@@ -396,6 +630,16 @@ export function DatabasePage() {
 
   function runQuery() {
     if (isRunning) return
+
+    // Saved queries route through the /run endpoint so :name params get bound
+    // and the call runs in a read-only transaction. Skips mutation detection
+    // since the server enforces read-only for is_readonly saved queries.
+    const sqlTab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
+    if (sqlTab?.savedQueryId) {
+      runSavedQueryNow(sqlTab)
+      return
+    }
+
     const active = getActiveSql()
     if (!active) return
 
@@ -405,6 +649,38 @@ export function DatabasePage() {
       return
     }
     executeQueryNow(active.sql, active.connectionId)
+  }
+
+  async function runSavedQueryNow(tab: SqlTab) {
+    if (!tab.savedQueryId) return
+    setIsRunning(true); setQueryError(null); setResultTab('results')
+    const ts = new Date().toLocaleTimeString()
+    try {
+      // Auto-persist SQL edits before running. The /run endpoint executes the
+      // server-stored SQL, not the editor buffer, so unsaved edits would
+      // silently run the prior version. Save-on-run keeps Cmd+Enter / the Run
+      // button feeling immediate.
+      if (tab.isDirty) {
+        await updateSavedQuery(tab.savedQueryId, {
+          sql: tab.content,
+          edited_by: UI_SESSION_ID,
+        })
+        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+      }
+
+      const result = await runSavedQuery(tab.savedQueryId, {
+        params: tab.paramValues || {},
+        session_id: UI_SESSION_ID,
+        maxRows,
+      })
+      setQueryResult(result)
+      setMessages(prev => [...prev, { text: `${result.rowCount} row(s) returned (${result.duration}ms)`, type: 'success', ts }])
+    } catch (err: any) {
+      const errorMsg = err.message || 'Query failed'
+      setQueryError(errorMsg)
+      setMessages(prev => [...prev, { text: errorMsg, type: 'error', ts }])
+      setResultTab('messages')
+    } finally { setIsRunning(false) }
   }
 
   async function executeQueryNow(sql: string, connectionId: string, onSuccess?: () => void) {
@@ -454,6 +730,21 @@ export function DatabasePage() {
   async function saveCurrentTab() {
     const sqlTab = tabs.find(t => t.id === activeTabId && t.kind === 'sql') as SqlTab | undefined
     if (!sqlTab) return
+    // Saved-query tabs PATCH the underlying dbx.saved_queries row (and bump
+    // version + write a snapshot via the API). Script tabs go through the
+    // legacy update path.
+    if (sqlTab.savedQueryId) {
+      try {
+        await updateSavedQuery(sqlTab.savedQueryId, {
+          sql: sqlTab.content,
+          edited_by: UI_SESSION_ID,
+        })
+        setTabs(prev => prev.map(t => t.id === activeTabId && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+      } catch (err: any) {
+        alert(`Failed to save: ${err?.message || err}`)
+      }
+      return
+    }
     if (sqlTab.scriptId) {
       await updateScript(sqlTab.scriptId, { content: sqlTab.content, connection_id: sqlTab.connectionId || undefined })
       setTabs(prev => prev.map(t => t.id === activeTabId && t.kind === 'sql' ? { ...t, isDirty: false } : t))
@@ -482,6 +773,63 @@ export function DatabasePage() {
     if (existing) { setActiveTabId(existing.id); return }
     const tab: SqlTab = { kind: 'sql', id: crypto.randomUUID(), name: script.name, content: script.content, scriptId: script.id, connectionId: script.connection_id || connections[0]?.id || '', isDirty: false }
     setTabs(prev => [...prev, tab]); setActiveTabId(tab.id)
+  }
+
+  function openSavedQueryInTab(q: DbxSavedQuery) {
+    const existing = tabs.find(t => t.kind === 'sql' && (t as SqlTab).savedQueryId === q.id)
+    if (existing) { setActiveTabId(existing.id); return }
+    const initialParams = q.params || []
+    const tab: SqlTab = {
+      kind: 'sql', id: crypto.randomUUID(),
+      name: q.name, content: q.sql,
+      savedQueryId: q.id,
+      savedQueryParams: initialParams,
+      paramValues: defaultsForParams(initialParams),
+      connectionId: q.connection_id || connections[0]?.id || '',
+      isDirty: false,
+    }
+    setTabs(prev => [...prev, tab]); setActiveTabId(tab.id)
+    // The list endpoint may have returned a compact saved-query without params —
+    // hydrate the declared param list so the form renders.
+    if (!q.params) {
+      getSavedQuery(q.id, UI_SESSION_ID).then(({ saved_query }) => {
+        const params = saved_query.params || []
+        setTabs(prev => prev.map(t =>
+          t.id === tab.id && t.kind === 'sql'
+            ? {
+                ...t,
+                savedQueryParams: params,
+                content: saved_query.sql,
+                // User may have started typing before hydration landed — keep
+                // their values; only seed defaults for blank fields.
+                paramValues: { ...defaultsForParams(params), ...(t.paramValues || {}) },
+              }
+            : t
+        ))
+      }).catch(() => {})
+    }
+  }
+
+  async function createNewSavedQuery() {
+    const name = prompt('Saved query name')
+    if (!name) return
+    const handle = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    if (!handle) { alert('Name must contain at least one letter or digit'); return }
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    const conn = activeTab && 'connectionId' in activeTab
+      ? activeTab.connectionId
+      : connections[0]?.id || null
+    try {
+      const { saved_query } = await createSavedQuery({
+        name,
+        handle,
+        connection_id: conn,
+        owner_session_id: UI_SESSION_ID,
+      })
+      openSavedQueryInTab(saved_query)
+    } catch (err: any) {
+      alert(`Failed to create: ${err?.message || err}`)
+    }
   }
 
   async function loadDetailData(tab: DetailViewTab, opts?: { limit?: number; sort?: string; order?: string; where?: string }) {
@@ -559,7 +907,19 @@ export function DatabasePage() {
   return (
     <div class={styles.wrapper} style={isDesktopApp() ? { '--dbx-bottom': '0px' } as any : undefined}>
       {/* Sidebar */}
-      <div class={styles.sidebar} ref={sidebarRef} style={{ '--sidebar-width': `${sidebarWidth}px`, gridTemplateRows: scriptsHeight === -1 ? 'auto auto 1fr auto 1fr' : `auto auto 1fr auto ${scriptsHeight}px` } as any}>
+      <div
+        class={styles.sidebar}
+        ref={sidebarRef}
+        style={{
+          '--sidebar-width': `${sidebarWidth}px`,
+          // 7-row grid: header / filter / tree(1fr) / drag1 / saved-queries /
+          // drag2 / scripts. Each section gets its own pixel track and divider
+          // above it so they resize independently. Adding a child without
+          // adding a row produces a misaligned divider (looks like a small
+          // floating blue rectangle on the sidebar's left edge).
+          gridTemplateRows: `auto auto minmax(0, 1fr) auto minmax(${SECTION_HEIGHT_MIN}px, ${savedQueriesHeight}px) auto minmax(${SECTION_HEIGHT_MIN}px, ${scriptsHeight}px)`,
+        } as any}
+      >
         <div class={styles.sidebarHeader}>
           <span class={styles.sidebarTitle}>Connections</span>
           <button class={styles.btnAdd} onClick={() => setShowConnDialog(true)}><Plus size={12} /> New</button>
@@ -592,7 +952,20 @@ export function DatabasePage() {
           />
         </div>
 
-        <div class={styles.sidebarDivider} onMouseDown={onDividerMouseDown} />
+        <div class={styles.sidebarDivider} onMouseDown={onSavedQueriesDividerMouseDown} />
+
+        <SavedQueriesPanel
+          sessionId={UI_SESSION_ID}
+          activeConnectionId={(() => {
+            const t = tabs.find(t => t.id === activeTabId)
+            return t && 'connectionId' in t ? t.connectionId : connections[0]?.id || null
+          })()}
+          onOpen={openSavedQueryInTab}
+          onNew={createNewSavedQuery}
+          onManageAll={() => setLocation('/database/saved-queries')}
+        />
+
+        <div class={styles.sidebarDivider} onMouseDown={onScriptsDividerMouseDown} />
 
         <div class={styles.scriptsSection} data-scripts>
           <div class={styles.sidebarHeader}>
@@ -611,36 +984,38 @@ export function DatabasePage() {
               {scriptFilter && <button class={styles.treeFilterClear} onClick={() => setScriptFilter('')}><X size={10} /></button>}
             </div>
           )}
-          {(() => {
-            const lf = scriptFilter.toLowerCase()
-            const filtered = scripts.filter(s => !lf || s.name.toLowerCase().includes(lf))
-            const grouped = new Map<string, DbxScript[]>()
-            for (const s of filtered) {
-              const key = s.connection_id || '__unlinked__'
-              if (!grouped.has(key)) grouped.set(key, [])
-              grouped.get(key)!.push(s)
-            }
-            if (filtered.length === 0) {
-              return <div style={{ padding: '8px 14px', fontSize: '11px', color: 'var(--muted)' }}>{scripts.length > 0 ? 'No matching scripts' : 'No saved scripts'}</div>
-            }
-            return Array.from(grouped.entries()).map(([connId, items]) => {
-              const connName = connId === '__unlinked__' ? 'Unlinked' : connections.find(c => c.id === connId)?.name || 'Unknown'
-              return (
-                <div key={connId}>
-                  {grouped.size > 1 && <div class={styles.scriptGroupLabel}>{connName}</div>}
-                  {items.map(s => (
-                    <div key={s.id} class={styles.scriptItem} onClick={() => openScriptInTab(s)}>
-                      <FileText size={12} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
-                      <button class={styles.scriptDelete} onClick={(e) => { e.stopPropagation(); setDeletingScript(s) }} title="Delete script">
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )
-            })
-          })()}
+          <div class={styles.scriptsList}>
+            {(() => {
+              const lf = scriptFilter.toLowerCase()
+              const filtered = scripts.filter(s => !lf || s.name.toLowerCase().includes(lf))
+              const grouped = new Map<string, DbxScript[]>()
+              for (const s of filtered) {
+                const key = s.connection_id || '__unlinked__'
+                if (!grouped.has(key)) grouped.set(key, [])
+                grouped.get(key)!.push(s)
+              }
+              if (filtered.length === 0) {
+                return <div style={{ padding: '8px 14px', fontSize: '11px', color: 'var(--muted)' }}>{scripts.length > 0 ? 'No matching scripts' : 'No saved scripts'}</div>
+              }
+              return Array.from(grouped.entries()).map(([connId, items]) => {
+                const connName = connId === '__unlinked__' ? 'Unlinked' : connections.find(c => c.id === connId)?.name || 'Unknown'
+                return (
+                  <div key={connId}>
+                    {grouped.size > 1 && <div class={styles.scriptGroupLabel}>{connName}</div>}
+                    {items.map(s => (
+                      <div key={s.id} class={styles.scriptItem} onClick={() => openScriptInTab(s)}>
+                        <FileText size={12} />
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                        <button class={styles.scriptDelete} onClick={(e) => { e.stopPropagation(); setDeletingScript(s) }} title="Delete script">
+                          <X size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })
+            })()}
+          </div>
         </div>
       </div>
 
@@ -730,14 +1105,72 @@ export function DatabasePage() {
               }}>
                 {connections.map(c => <option key={c.id} value={c.id}>{c.name} ({c.config.host}:{c.config.port})</option>)}
               </select>
-              <button class={styles.btnRun} onClick={runQuery} disabled={isRunning}>
+              <button
+                class={styles.btnRun}
+                onClick={runQuery}
+                disabled={isRunning || activeSqlTab.viewingSnapshot != null}
+                title={activeSqlTab.viewingSnapshot != null ? 'Exit snapshot view to run' : undefined}
+              >
                 {isRunning ? <><Square size={12} /> Running...</> : <><Play size={12} /> Run</>}
               </button>
               <span class={styles.shortcutHint}>⌘Enter</span>
               <button class={styles.btnIcon} onClick={() => foldActionsRef.current?.foldAll()} title="Fold all"><ChevronsDownUp size={13} /></button>
               <button class={styles.btnIcon} onClick={() => foldActionsRef.current?.unfoldAll()} title="Unfold all"><ChevronsUpDown size={13} /></button>
               <div class={styles.spacer} />
-              <button class={styles.btnAdd} onClick={saveCurrentTab}>Save</button>
+              {activeSqlTab.savedQueryId && (
+                <>
+                  <select
+                    class={styles.snapshotSelect}
+                    value={
+                      activeSqlTab.viewingSnapshot != null
+                        ? String(activeSqlTab.viewingSnapshot)
+                        : activeSqlTab.currentSnapshot != null
+                          ? String(activeSqlTab.currentSnapshot)
+                          : ''
+                    }
+                    onChange={(e) => {
+                      const val = (e.target as HTMLSelectElement).value
+                      if (val === '__manage__') {
+                        setShowSnapshotsModal(true)
+                        return
+                      }
+                      if (!val) return
+                      pickSnapshotForView(parseInt(val, 10))
+                    }}
+                    disabled={isCapturingSnapshot}
+                    title="Snapshots — picking one shows it read-only; use Restore to make it live"
+                  >
+                    {savedQuerySnapshots.length === 0 ? (
+                      <option value="">No snapshots</option>
+                    ) : (
+                      savedQuerySnapshots.map(s => (
+                        <option key={s.snapshot_number} value={String(s.snapshot_number)}>
+                          #{s.snapshot_number}{s.snapshot_number === activeSqlTab.currentSnapshot ? ' current' : ''}
+                        </option>
+                      ))
+                    )}
+                    {savedQuerySnapshots.length > 0 && (
+                      <option value="__manage__">— Manage snapshots…</option>
+                    )}
+                  </select>
+                  <button
+                    class={styles.btnIcon}
+                    onClick={captureCurrentSnapshot}
+                    disabled={isCapturingSnapshot || activeSqlTab.viewingSnapshot != null}
+                    title={activeSqlTab.viewingSnapshot != null
+                      ? 'Exit snapshot view to capture'
+                      : 'Save a snapshot of the current SQL'}
+                  >
+                    <Camera size={13} />
+                  </button>
+                </>
+              )}
+              <button
+                class={styles.btnAdd}
+                onClick={saveCurrentTab}
+                disabled={activeSqlTab.viewingSnapshot != null}
+                title={activeSqlTab.viewingSnapshot != null ? 'Exit snapshot view to save' : undefined}
+              >Save</button>
               <button
                 class={clsx(styles.envLabel, dangerMode ? styles.envLabelDanger : styles.envLabelRw)}
                 onClick={() => setDangerMode(!dangerMode)}
@@ -747,9 +1180,53 @@ export function DatabasePage() {
               </button>
             </div>
 
+            {activeSqlTab.viewingSnapshot != null && (
+              <div class={styles.snapshotViewBanner}>
+                <span>
+                  Viewing snapshot <strong>#{activeSqlTab.viewingSnapshot}</strong> — read-only
+                </span>
+                <div class={styles.snapshotViewActions}>
+                  <button
+                    class={styles.btnAdd}
+                    onClick={() => restoreSnapshotInActiveTab(activeSqlTab.viewingSnapshot!)}
+                    title="Make this snapshot live. Current SQL will be saved as a pre-restore safety snapshot first."
+                  >
+                    Restore
+                  </button>
+                  <button
+                    class={styles.btnIcon}
+                    onClick={() => setTabs(prev => prev.map(t =>
+                      t.id === activeTabId && t.kind === 'sql'
+                        ? { ...t, viewingSnapshot: null, viewingSnapshotSql: null }
+                        : t
+                    ))}
+                    title="Exit snapshot view"
+                  >
+                    Exit view
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {activeSqlTab.savedQueryId && activeSqlTab.savedQueryParams && activeSqlTab.savedQueryParams.length > 0 && (
+              <ParametersForm
+                params={activeSqlTab.savedQueryParams}
+                values={activeSqlTab.paramValues || {}}
+                disabled={isRunning || activeSqlTab.viewingSnapshot != null}
+                onChange={(next) => setTabs(prev => prev.map(t =>
+                  t.id === activeTabId && t.kind === 'sql' ? { ...t, paramValues: next } : t
+                ))}
+              />
+            )}
+
             <div class={styles.editorArea}>
               <SqlEditor
-                value={activeSqlTab.content}
+                value={
+                  activeSqlTab.viewingSnapshot != null && activeSqlTab.viewingSnapshotSql != null
+                    ? activeSqlTab.viewingSnapshotSql
+                    : activeSqlTab.content
+                }
+                readOnly={activeSqlTab.viewingSnapshot != null}
                 onChange={val => setTabs(prev => prev.map(t => t.id === activeTabId && t.kind === 'sql' ? { ...t, content: val, isDirty: true } : t))}
                 onRun={runQuery}
                 onSave={saveCurrentTab}
@@ -903,6 +1380,36 @@ export function DatabasePage() {
       {deletingScript && (
         <ConfirmModal title="Delete Script" message={`Delete "${deletingScript.name}"? This cannot be undone.`} confirmLabel="Delete" variant="danger"
           onConfirm={async () => { await deleteScript(deletingScript.id); setDeletingScript(null); loadScripts() }} onCancel={() => setDeletingScript(null)} />
+      )}
+      {showSnapshotsModal && activeSqlTab?.savedQueryId && (
+        <SnapshotsModal
+          savedQueryId={activeSqlTab.savedQueryId}
+          savedQueryName={activeSqlTab.name}
+          sessionId={UI_SESSION_ID}
+          onClose={() => setShowSnapshotsModal(false)}
+          onRestored={(saved) => {
+            setTabs(prev => prev.map(t =>
+              t.id === activeSqlTab.id && t.kind === 'sql'
+                ? {
+                    ...t,
+                    content: saved.sql,
+                    savedQueryParams: saved.params || [],
+                    paramValues: { ...defaultsForParams(saved.params || []), ...(t.paramValues || {}) },
+                    isDirty: false,
+                  }
+                : t
+            ))
+            // Restore changes the snapshot list (adds a pre-restore safety net),
+            // so refresh the toolbar dropdown.
+            listSavedQuerySnapshots(activeSqlTab.savedQueryId!)
+              .then(({ snapshots }) => setSavedQuerySnapshots(snapshots))
+              .catch(() => {})
+          }}
+          onChanged={async () => {
+            const { snapshots } = await listSavedQuerySnapshots(activeSqlTab.savedQueryId!)
+            setSavedQuerySnapshots(snapshots)
+          }}
+        />
       )}
       {pendingMutation && (
         <ConfirmModal

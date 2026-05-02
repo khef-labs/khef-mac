@@ -1,10 +1,10 @@
 import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { User, Bot, Eye, EyeOff, Search, X, Code, Square, ChevronDown, RefreshCw, Copy } from 'lucide-preact'
+import { User, Bot, Eye, EyeOff, Search, X, Code, Square, ChevronDown, RefreshCw, Copy, Terminal as TerminalIcon } from 'lucide-preact'
 import clsx from 'clsx'
 import styles from './SessionToolbar.module.css'
 
-export type ViewMode = 'parsed' | 'raw'
+export type ViewMode = 'parsed' | 'raw' | 'terminal'
 export type SortOrder = 'desc' | 'asc'
 
 export interface SessionToolbarProps {
@@ -16,6 +16,8 @@ export interface SessionToolbarProps {
   // View mode toggle (optional)
   viewMode?: ViewMode
   onViewModeChange?: (mode: ViewMode) => void
+  // Show the Terminal view button alongside Parsed/Raw (default: false)
+  showTerminalToggle?: boolean
 
   // Role filters
   showUser: boolean
@@ -64,7 +66,7 @@ export interface SessionToolbarProps {
 export function SessionToolbar(props: SessionToolbarProps) {
   const {
     searchQuery, onSearchChange, searchPlaceholder = 'Search messages...',
-    viewMode, onViewModeChange,
+    viewMode, onViewModeChange, showTerminalToggle = false,
     showUser, onShowUserChange, showAssistant, onShowAssistantChange,
     showThinking, onShowThinkingChange,
     showTools, onShowToolsChange, showCommandsOnly, onShowCommandsOnlyChange,
@@ -180,6 +182,16 @@ export function SessionToolbar(props: SessionToolbarProps) {
         {onViewModeChange != null && (
           <>
             <div class={styles.toggleGroup}>
+              {showTerminalToggle && (
+                <button
+                  class={clsx(styles.toggleBtn, viewMode === 'terminal' && styles.toggleBtnActive)}
+                  onClick={() => onViewModeChange('terminal')}
+                  title="Live PTY terminal view"
+                >
+                  <TerminalIcon size={11} />
+                  <span>Terminal</span>
+                </button>
+              )}
               <button
                 class={clsx(styles.toggleBtn, viewMode === 'parsed' && styles.toggleBtnActive)}
                 onClick={() => onViewModeChange('parsed')}

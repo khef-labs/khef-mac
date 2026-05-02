@@ -5,6 +5,13 @@
   margin: 0 auto;
 }
 
+/* Terminal view needs more horizontal real estate so xterm columns don't
+   wrap mid-sentence. Caps at 1400px so it doesn't go edge-to-edge on very
+   wide displays. */
+.pageWide {
+  max-width: min(1400px, calc(100vw - var(--space-6) * 2));
+}
+
 .loading {
   color: var(--muted);
   text-align: center;
@@ -20,7 +27,7 @@
 }
 
 .header {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-4);
 }
 
 .breadcrumb {
@@ -311,9 +318,22 @@
   line-height: 1.5;
 }
 
+/* Sticky region wrapping header + summary panel + toolbar */
+.stickyTop {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  margin-top: calc(-1 * var(--space-6));
+  padding-top: var(--space-6);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
 /* Toolbar */
 .toolbar {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .modelBadge {
@@ -385,6 +405,19 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* SessionTerminal stays mounted across view switches; toggle visibility via
+   display so its websocket and xterm buffer survive a flip to Parsed/Raw. */
+.terminalShell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.terminalShellHidden {
+  display: none;
 }
 
 .archiveBadge {

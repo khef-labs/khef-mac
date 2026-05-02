@@ -16,6 +16,7 @@ import {
 } from '../utils/markdown-sections';
 import { generateExcerpt } from '../utils/excerpt';
 import { isUuid, isPartialUuid, resolvePartialMemoryId } from '../utils/uuid';
+import { saveSnapshotIfContentChanged } from '../services/snapshots';
 
 interface MemoryRow extends Memory {
   type: string;
@@ -281,6 +282,11 @@ async function updateMemoryContent(memoryId: string, newContent: string): Promis
   try {
     await client.query('BEGIN');
 
+    // Auto-snapshot pre-update so a botched section edit (the collision case
+    // the route now blocks, or any other bad rewrite) can be rolled back from
+    // the snapshot management modal.
+    await saveSnapshotIfContentChanged(memoryId, newContent, 'pre-update', client);
+
     // Update the memory content (mark for vector sync)
     await client.query(
       `UPDATE memories SET content = $1, updated_at = NOW(), vector_synced_at = NULL WHERE id = $2`,
@@ -507,6 +513,54 @@ const memorySectionsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!section) {
         const indexMsg = index > 0 ? ` at index ${index}` : '';
         return reply.code(404).send({ error: `Section "${decodedHeading}"${indexMsg} not found` });
+      }
+
+      // Guard: when preserving existing subsections, reject body content that
+      // contains heading markdown colliding with an existing child heading
+      // (same level, same text). Without this, the agent's duplicate inline
+      // subsection markdown gets inserted into the parent's direct content
+      // area while the original tracked subsection persists below, producing
+      // duplicates in the outline. New (non-colliding) child headings are
+      // allowed — that's how you insert a new subsection before existing ones.
+      if (!replaceSubsections) {
+        const existingChildren = sections.filter(
+          (s) => s.start > section.contentStart && s.start < section.end
+        );
+        if (existingChildren.length > 0) {
+          let scan = newContent.trim();
+          const leadingHeading = scan.match(/^(#{1,6})\s+(.+?)(?:\n|$)/);
+          if (leadingHeading) {
+            const lvl = leadingHeading[1].length;
+            const txt = leadingHeading[2].trim();
+            const target = newHeading || section.heading;
+            if (lvl === section.level && txt.toLowerCase() === target.toLowerCase()) {
+              scan = scan.slice(leadingHeading[0].length).trim();
+            }
+          }
+
+          const bodyHeadings: Array<{ level: number; text: string }> = [];
+          const headingLineRegex = /^(#{1,6})\s+(.+)$/gm;
+          let m: RegExpExecArray | null;
+          while ((m = headingLineRegex.exec(scan)) !== null) {
+            bodyHeadings.push({ level: m[1].length, text: m[2].trim() });
+          }
+
+          const existingChildKeys = new Set(
+            existingChildren.map((c) => `${c.level}:${c.heading.toLowerCase()}`)
+          );
+          const collisions = bodyHeadings.filter((h) =>
+            existingChildKeys.has(`${h.level}:${h.text.toLowerCase()}`)
+          );
+
+          if (collisions.length > 0) {
+            const names = collisions.map((c) => `"${c.text}"`).join(', ');
+            return reply.code(400).send({
+              error:
+                `content contains heading(s) (${names}) that collide with existing subsections of "${section.heading}". ` +
+                `Pass replace_subsections=true to replace the subsections, or update each colliding subsection in a separate call.`
+            });
+          }
+        }
       }
 
       const updatedContent = replaceSectionContent(memory.content, section, newContent, newHeading, { replaceSubsections: replaceSubsections ?? false });

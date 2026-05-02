@@ -28,6 +28,10 @@ export interface DiffResult {
     commit_sha: string | null;
     parent_sha: string | null;
   };
+  /** True when the commit has no parent (initial commit). The `diff` field
+   *  contains only file headers, no line content, to avoid sending the
+   *  entire repo as a unified diff. */
+  is_initial_commit?: boolean;
 }
 
 export interface WorkingDiffResult {
@@ -199,6 +203,32 @@ export async function getCommitDiff(
   } catch {
     // Initial commit has no parent
     parentSha = null;
+  }
+
+  // Initial commit fast path: a real `git show` would emit the entire repo
+  // as a unified diff (potentially many MB), which locks up the browser
+  // parser. Synthesize a content-less header-only diff via `git diff-tree`
+  // so the UI can list the added files without rendering line content.
+  if (parentSha === null) {
+    const treeArgs = ['diff-tree', '--no-commit-id', '--name-only', '--root', '-r', safeSha];
+    if (path) {
+      treeArgs.push('--', path);
+    }
+    const treeOutput = await execGit(projectPath, treeArgs);
+    const files = treeOutput.split('\n').map((p) => p.trim()).filter(Boolean);
+    const headerDiff = files
+      .map((p) => `diff --git a/${p} b/${p}\nnew file mode 100644`)
+      .join('\n');
+    return {
+      diff: headerDiff,
+      stats: { files: files.length, insertions: 0, deletions: 0 },
+      refs: {
+        branch,
+        commit_sha: safeSha,
+        parent_sha: null,
+      },
+      is_initial_commit: true,
+    };
   }
 
   // Get diff content

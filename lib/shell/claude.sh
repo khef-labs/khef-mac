@@ -25,11 +25,16 @@ clauderesume() {
 
     # If a prefix was given, try nickname first, then session ID prefix
     if [ -n "$prefix" ]; then
-        # Try nickname lookup via API (most recent session with this name in this project)
+        # Try nickname lookup via dedicated endpoint (returns full lineage, ASC by started_at).
+        # Prefer the most recent session in this project; fall back to most recent across projects.
         local nick_match=""
-        nick_match=$(curl -sf "$api/sessions?project=$project&limit=20" 2>/dev/null \
-            | jq -r --arg nick "$prefix" '.sessions[] | select(.nickname == $nick) | .session_id' \
-            | head -1)
+        nick_match=$(curl -sf "$api/sessions/by-nickname/$prefix" 2>/dev/null \
+            | jq -r --arg project "$project" '
+                (.sessions // []) as $all
+                | ($all | map(select(.project_handle == $project))) as $scoped
+                | (if ($scoped | length) > 0 then $scoped else $all end)
+                | (last // {})
+                | .session_id // empty')
 
         if [ -n "$nick_match" ]; then
             echo "Resuming: $prefix ($nick_match)"

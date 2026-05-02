@@ -10,6 +10,12 @@ export interface CreateEnvironmentInput {
   handle: string;
   name: string;
   is_active?: boolean;
+  /**
+   * If set, copy every env_var row from this source environment into the
+   * newly created one. Source must belong to the same collection. Secret
+   * ciphertext is copied as-is (no decrypt/re-encrypt).
+   */
+  copy_from_environment_id?: string;
 }
 
 export interface UpdateEnvironmentInput {
@@ -56,6 +62,22 @@ export async function createEnvironment(
     throw new KapiError(409, `Environment "${input.handle}" already exists in this collection`);
   }
 
+  if (input.copy_from_environment_id) {
+    const source = await querySingle<{ collection_id: string }>(
+      `SELECT collection_id FROM kapi.environments WHERE id = $1`,
+      [input.copy_from_environment_id]
+    );
+    if (!source) {
+      throw new KapiError(404, 'Source environment to copy from not found');
+    }
+    if (source.collection_id !== input.collection_id) {
+      throw new KapiError(
+        400,
+        'Source environment belongs to a different collection'
+      );
+    }
+  }
+
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -71,8 +93,19 @@ export async function createEnvironment(
        RETURNING *`,
       [input.collection_id, input.handle, input.name, input.is_active ?? false]
     );
+    const created = result.rows[0];
+    if (input.copy_from_environment_id) {
+      await client.query(
+        `INSERT INTO kapi.env_vars
+           (environment_id, key, value, secret_ciphertext, is_secret, description)
+         SELECT $1, key, value, secret_ciphertext, is_secret, description
+         FROM kapi.env_vars
+         WHERE environment_id = $2`,
+        [created.id, input.copy_from_environment_id]
+      );
+    }
     await client.query('COMMIT');
-    return result.rows[0];
+    return created;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

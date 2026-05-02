@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks'
 import { useLocation, Link } from 'wouter-preact'
 import {
   MessageSquare, Send, Loader2, Square,
   Pencil, Trash2, Copy, Check,
-  PanelLeftClose, PanelLeft,
+  PanelLeftClose, PanelLeft, Search, X,
 } from 'lucide-preact'
 import { GeminiChatOptions, type GeminiOptions } from '../components/chat/GeminiChatOptions'
 import {
@@ -14,12 +14,17 @@ import {
   renameChatById,
   deleteChatMessageById,
   deleteAllChats,
+  getProjects,
+  getActiveSessions,
+  getSessions,
 } from '../lib/api'
 import type {
-  AssistantChat, AssistantChatMessage, ChatDelegation, SendChatResponse,
+  ActiveSession, AssistantChat, AssistantChatMessage, ChatDelegation, Project, SendChatResponse,
 } from '../types'
 import { useToast, ConfirmModal } from '../components/ui'
 import { ConversationContextMenu } from '../components/shared/ConversationContextMenu'
+import { SessionContextMenu } from '../components/shared/SessionContextMenu'
+import { SessionTerminal } from '../components/session'
 import { renderMarkdown } from '../lib/markdown'
 import { getSettings, isDesktopApp } from '../lib/settings'
 import { useDocumentTitle } from '../hooks'
@@ -45,7 +50,7 @@ const BACKEND_BADGE_CLASS: Record<Backend, string> = {
   'gemini': styles.badgeGemini,
 }
 
-const FILTER_BACKENDS: Backend[] = ['claude-code', 'gemini', 'codex-cli']
+const FILTER_BACKENDS: Backend[] = ['claude-code', 'codex-cli', 'gemini']
 
 const CLAUDE_MODELS: { value: string; label: string }[] = [
   { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
@@ -79,6 +84,71 @@ function getModelsForBackend(backend: Backend): { value: string; label: string }
 }
 
 const SIDEBAR_KEY = 'khef-chat-sidebar-collapsed'
+const SIDEBAR_SESSION_CAP = 25
+const PINNED_KEY = (backend: Backend) => `khefChatSidebarPinned:${backend}`
+const HIDDEN_KEY = (backend: Backend) => `khefChatSidebarHidden:${backend}`
+const ORDER_KEY = (backend: Backend) => `khefChatSidebarOrder:${backend}`
+
+interface PinnedSession {
+  session_id: string
+  nickname?: string | null
+  file_path?: string | null
+  project_name?: string | null
+}
+
+function readPinnedSessions(backend: Backend): PinnedSession[] {
+  try {
+    const raw = window.localStorage.getItem(PINNED_KEY(backend))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((p): p is PinnedSession => p && typeof p === 'object' && typeof p.session_id === 'string')
+  } catch {
+    return []
+  }
+}
+
+function writePinnedSessions(backend: Backend, list: PinnedSession[]): void {
+  try {
+    window.localStorage.setItem(PINNED_KEY(backend), JSON.stringify(list))
+  } catch { /* ignore quota / private-mode failures */ }
+}
+
+function readHiddenSessions(backend: Backend): string[] {
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_KEY(backend))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeHiddenSessions(backend: Backend, list: string[]): void {
+  try {
+    window.localStorage.setItem(HIDDEN_KEY(backend), JSON.stringify(list))
+  } catch { /* ignore */ }
+}
+
+function readSidebarOrder(backend: Backend): string[] {
+  try {
+    const raw = window.localStorage.getItem(ORDER_KEY(backend))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeSidebarOrder(backend: Backend, list: string[]): void {
+  try {
+    window.localStorage.setItem(ORDER_KEY(backend), JSON.stringify(list))
+  } catch { /* ignore */ }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function formatAssistantName(handle: string): string {
   const known = BACKEND_LABELS[handle as Backend]
@@ -229,6 +299,24 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
     useGoogleSearch: false,
     systemPrompt: '',
   })
+  // Spawn cwd for fresh PTYs (Claude / Codex chat). Empty = let API fall back
+  // to $HOME. Persisted per-backend in localStorage so users don't have to
+  // retype on every refresh.
+  const [terminalCwd, setTerminalCwd] = useState<string>('')
+  const [ptyProjects, setPtyProjects] = useState<Project[]>([])
+  // Live active sessions for the focused CLI assistant (claude-code / codex-cli)
+  // and the currently-focused row in the sidebar. When set, the main area
+  // mounts SessionTerminal in resume mode against that session.
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([])
+  // Focused row may be from the live active-sessions feed OR from the
+  // pinned-by-lookup list, so we keep just what the main area needs and
+  // render richer details from activeSessions when available.
+  const [focusedActiveSession, setFocusedActiveSession] = useState<{
+    session_id: string
+    file_path: string | null
+    nickname?: string | null
+    project_name?: string | null
+  } | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -256,6 +344,280 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
       setSelectedModel(getDefaultModel(activeBackend))
     }
   }, [activeBackend])
+
+  // Load persisted PTY cwd whenever the active CLI backend changes (claude/codex).
+  useEffect(() => {
+    if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') return
+    try {
+      const saved = window.localStorage.getItem(`khefChatCwd:${activeBackend}`) || ''
+      setTerminalCwd(saved)
+    } catch {
+      setTerminalCwd('')
+    }
+  }, [activeBackend])
+
+  // Persist PTY cwd as the user types so it survives refresh.
+  useEffect(() => {
+    if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') return
+    try {
+      window.localStorage.setItem(`khefChatCwd:${activeBackend}`, terminalCwd)
+    } catch { /* ignore quota/private-mode failures */ }
+  }, [activeBackend, terminalCwd])
+
+  // Pull khef projects with a known path so the user can pick one as cwd.
+  useEffect(() => {
+    if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') return
+    if (ptyProjects.length > 0) return
+    let cancelled = false
+    getProjects().then(list => {
+      if (cancelled) return
+      setPtyProjects(list.filter(p => !!p.path))
+    }).catch(() => { /* ignore — picker just stays empty */ })
+    return () => { cancelled = true }
+  }, [activeBackend, ptyProjects.length])
+
+  // Poll active sessions for the focused CLI assistant. Drops on backend
+  // change so we don't show stale rows from another assistant.
+  useEffect(() => {
+    if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') {
+      setActiveSessions([])
+      setFocusedActiveSession(null)
+      return
+    }
+    let cancelled = false
+    const fetchOnce = async () => {
+      try {
+        const data = await getActiveSessions({ assistant: activeBackend, status: 'active' })
+        if (cancelled) return
+        setActiveSessions(data.sessions || [])
+      } catch { /* ignore — sidebar just stays as it was */ }
+    }
+    fetchOnce()
+    const t = setInterval(fetchOnce, 5000)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [activeBackend])
+
+  // Pinned and hidden sessions for the sidebar (per CLI backend).
+  // Pinned rows let the user keep an arbitrary session reachable from chat
+  // even when it isn't currently active. Hidden rows let them dismiss noisy
+  // active sessions without losing them — a follow-up pin via the lookup
+  // input un-hides automatically.
+  const [pinnedSessions, setPinnedSessions] = useState<PinnedSession[]>([])
+  const [hiddenSessionIds, setHiddenSessionIds] = useState<string[]>([])
+  const [sidebarOrder, setSidebarOrder] = useState<string[]>([])
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const isCliBackend = activeBackend === 'claude-code' || activeBackend === 'codex-cli'
+
+  useEffect(() => {
+    if (!isCliBackend) {
+      setPinnedSessions([])
+      setHiddenSessionIds([])
+      setSidebarOrder([])
+      return
+    }
+    setPinnedSessions(readPinnedSessions(activeBackend))
+    setHiddenSessionIds(readHiddenSessions(activeBackend))
+    setSidebarOrder(readSidebarOrder(activeBackend))
+  }, [activeBackend, isCliBackend])
+
+  // Drop the focused-session pin if it disappears from the active list AND
+  // isn't held in the pinned list either. Pinned rows survive an active-side
+  // drop so the user can keep working with them after, e.g., a brief PTY
+  // restart.
+  useEffect(() => {
+    if (!focusedActiveSession) return
+    const inActive = activeSessions.some(s => s.session_id === focusedActiveSession.session_id)
+    const inPinned = pinnedSessions.some(p => p.session_id === focusedActiveSession.session_id)
+    if (!inActive && !inPinned) setFocusedActiveSession(null)
+  }, [activeSessions, focusedActiveSession, pinnedSessions])
+
+  // Lookup input + debounced search results.
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupResults, setLookupResults] = useState<Array<{
+    session_id: string; nickname?: string | null; file_path?: string | null; project_name?: string | null
+  }>>([])
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupOpen, setLookupOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isCliBackend) { setLookupResults([]); return }
+    const trimmed = lookupQuery.trim()
+    if (!trimmed) { setLookupResults([]); setLookupLoading(false); return }
+    let cancelled = false
+    setLookupLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const isUuid = UUID_RE.test(trimmed)
+        const data = await getSessions({
+          assistant: activeBackend,
+          // Nickname-prefix search keeps the result set scoped to actual
+          // session names instead of every transcript that mentions the
+          // term. UUID inputs go through the dedicated session_id filter.
+          nickname: isUuid ? undefined : trimmed,
+          session_id: isUuid ? trimmed : undefined,
+          limit: 8,
+          sort: 'updated_at',
+          order: 'desc',
+        })
+        if (cancelled) return
+        // Drop sessions that are already visible in the sidebar — but keep
+        // hidden ones so the user can re-pin a row they previously dismissed.
+        const hidden = new Set(hiddenSessionIds)
+        const visible = new Set([
+          ...activeSessions.map(s => s.session_id).filter(id => !hidden.has(id)),
+          ...pinnedSessions.map(p => p.session_id).filter(id => !hidden.has(id)),
+        ])
+        const fresh = (data.sessions || []).filter(s => !visible.has(s.session_id))
+        setLookupResults(fresh.map(s => ({
+          session_id: s.session_id,
+          nickname: s.nickname,
+          file_path: s.file_path,
+          project_name: s.project?.name ?? null,
+        })))
+      } catch {
+        if (!cancelled) setLookupResults([])
+      } finally {
+        if (!cancelled) setLookupLoading(false)
+      }
+    }, 250)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [lookupQuery, activeBackend, isCliBackend, activeSessions, pinnedSessions, hiddenSessionIds])
+
+  const pinSession = (s: PinnedSession) => {
+    if (!isCliBackend) return
+    setPinnedSessions(prev => {
+      if (prev.some(p => p.session_id === s.session_id)) return prev
+      const next = [s, ...prev].slice(0, SIDEBAR_SESSION_CAP)
+      writePinnedSessions(activeBackend, next)
+      return next
+    })
+    // Unhide if the user previously dismissed this session.
+    setHiddenSessionIds(prev => {
+      if (!prev.includes(s.session_id)) return prev
+      const next = prev.filter(id => id !== s.session_id)
+      writeHiddenSessions(activeBackend, next)
+      return next
+    })
+  }
+
+  const hideSidebarSession = (sessionId: string) => {
+    if (!isCliBackend) return
+    setHiddenSessionIds(prev => {
+      if (prev.includes(sessionId)) return prev
+      const next = [...prev, sessionId]
+      writeHiddenSessions(activeBackend, next)
+      return next
+    })
+    setPinnedSessions(prev => {
+      if (!prev.some(p => p.session_id === sessionId)) return prev
+      const next = prev.filter(p => p.session_id !== sessionId)
+      writePinnedSessions(activeBackend, next)
+      return next
+    })
+    if (focusedActiveSession?.session_id === sessionId) setFocusedActiveSession(null)
+  }
+
+  // Active-session context menu state.
+  const [sessionMenu, setSessionMenu] = useState<{
+    sessionId: string
+    position: { x: number; y: number }
+  } | null>(null)
+
+  const openSessionMenu = (e: MouseEvent, sessionId: string) => {
+    e.preventDefault()
+    setSessionMenu({ sessionId, position: { x: e.clientX, y: e.clientY } })
+  }
+
+  const handleSessionView = (sessionId: string) => {
+    setLocation(`/sessions/${sessionId}`)
+  }
+
+  const handleSessionCopyResume = async (sessionId: string) => {
+    const cmd = activeBackend === 'codex-cli'
+      ? `codex resume ${sessionId}`
+      : `claude --resume ${sessionId}`
+    try {
+      await navigator.clipboard.writeText(cmd)
+      showToast('Resume command copied')
+    } catch {
+      showToast('Failed to copy')
+    }
+  }
+
+  // Reorder via drag-and-drop. Captures the current visible order into
+  // sidebarOrder on first move so unordered (newly active) sessions stop
+  // floating around and stay where the user dropped them.
+  const reorderSidebar = (draggedId: string, targetId: string) => {
+    if (!isCliBackend || draggedId === targetId) return
+    const visibleIds = sidebarSessions.map(s => s.session_id)
+    const baseline = sidebarOrder.length > 0 ? [...sidebarOrder] : []
+    for (const id of visibleIds) if (!baseline.includes(id)) baseline.push(id)
+    const filtered = baseline.filter(id => id !== draggedId)
+    const targetIdx = filtered.indexOf(targetId)
+    if (targetIdx === -1) return
+    filtered.splice(targetIdx, 0, draggedId)
+    setSidebarOrder(filtered)
+    writeSidebarOrder(activeBackend, filtered)
+  }
+
+  // Merged sidebar list: pinned rows first (manually added), then any active
+  // rows that aren't already in the pinned list. Hidden ids drop from both.
+  // Capped to SIDEBAR_SESSION_CAP so the list stays readable when the user
+  // accumulates a lot of pinned/active sessions. User-customized order wins
+  // over the default pinned-first / first_seen_at-asc layout.
+  const sidebarSessions = useMemo(() => {
+    if (!isCliBackend) return [] as Array<{
+      session_id: string; nickname?: string | null;
+      file_path?: string | null; project_name?: string | null; pinned: boolean
+    }>
+    const hidden = new Set(hiddenSessionIds)
+    const sortedActive = [...activeSessions].sort((a, b) => {
+      const aT = a.first_seen_at ? Date.parse(a.first_seen_at) : 0
+      const bT = b.first_seen_at ? Date.parse(b.first_seen_at) : 0
+      if (aT !== bT) return aT - bT
+      return a.session_id.localeCompare(b.session_id)
+    })
+    const seen = new Set<string>()
+    const out: Array<{
+      session_id: string; nickname?: string | null;
+      file_path?: string | null; project_name?: string | null; pinned: boolean
+    }> = []
+    for (const p of pinnedSessions) {
+      if (hidden.has(p.session_id)) continue
+      seen.add(p.session_id)
+      out.push({
+        session_id: p.session_id,
+        nickname: p.nickname,
+        file_path: p.file_path,
+        project_name: p.project_name,
+        pinned: true,
+      })
+    }
+    for (const s of sortedActive) {
+      if (hidden.has(s.session_id) || seen.has(s.session_id)) continue
+      out.push({
+        session_id: s.session_id,
+        nickname: s.nickname,
+        file_path: s.file_path,
+        project_name: s.project?.name ?? null,
+        pinned: false,
+      })
+    }
+    if (sidebarOrder.length > 0) {
+      const orderMap = new Map<string, number>()
+      sidebarOrder.forEach((id, idx) => orderMap.set(id, idx))
+      out.sort((a, b) => {
+        const aOrder = orderMap.get(a.session_id)
+        const bOrder = orderMap.get(b.session_id)
+        if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
+        if (aOrder !== undefined) return -1
+        if (bOrder !== undefined) return 1
+        return 0
+      })
+    }
+    return out.slice(0, SIDEBAR_SESSION_CAP)
+  }, [pinnedSessions, hiddenSessionIds, activeSessions, isCliBackend, sidebarOrder])
 
   const startNewChat = (backend: Backend) => {
     setNewChatBackend(backend)
@@ -566,12 +928,21 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
               key={backend}
               class={`${styles.filterPill} ${backendFilter === backend ? `${styles.filterPillActive} ${BACKEND_PILL_CLASS[backend]}` : ''}`}
               onClick={() => {
-                if (backendFilter === backend) {
+                const isCliBackend = backend === 'claude-code' || backend === 'codex-cli'
+                if (backendFilter === backend && !isCliBackend) {
+                  // Gemini keeps the toggle-off-to-show-all behavior since
+                  // its surface is a structured chat list.
                   setBackendFilter('all')
-                } else {
-                  autoSelectRef.current = true
-                  setBackendFilter(backend)
-                  setNewChatBackend(backend)
+                  return
+                }
+                autoSelectRef.current = true
+                setBackendFilter(backend)
+                setNewChatBackend(backend)
+                // For PTY backends, drop any chat-id from the URL so the
+                // surface aligns with the clicked pill instead of staying
+                // tied to a saved chat from another assistant.
+                if (isCliBackend) {
+                  setLocation('/chat')
                 }
               }}
             >
@@ -579,15 +950,140 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
             </button>
           ))}
           <span class={styles.filterSpacer} />
-          <button
-            class={styles.newChatBtn}
-            onClick={() => startNewChat(newChatBackend)}
-            title="New chat"
-          >
-            <Pencil size={14} />
-          </button>
+          {activeBackend === 'gemini' && (
+            <button
+              class={styles.newChatBtn}
+              onClick={() => startNewChat(newChatBackend)}
+              title="New chat"
+            >
+              <Pencil size={14} />
+            </button>
+          )}
         </div>
 
+        {activeBackend === 'claude-code' || activeBackend === 'codex-cli' ? (
+          <>
+            <div class={styles.sessionLookup}>
+              <Search size={14} class={styles.sessionLookupIcon} />
+              <input
+                type="text"
+                class={styles.sessionLookupInput}
+                placeholder="Find session by name or UUID"
+                value={lookupQuery}
+                onInput={(e) => setLookupQuery((e.target as HTMLInputElement).value)}
+                onFocus={() => setLookupOpen(true)}
+                onBlur={() => setTimeout(() => setLookupOpen(false), 150)}
+              />
+              {lookupQuery && (
+                <button
+                  type="button"
+                  class={styles.sessionLookupClear}
+                  onClick={() => { setLookupQuery(''); setLookupResults([]) }}
+                  title="Clear"
+                >
+                  <X size={12} />
+                </button>
+              )}
+              {lookupOpen && lookupQuery.trim() && (
+                <div class={styles.sessionLookupResults}>
+                  {lookupLoading ? (
+                    <div class={styles.sessionLookupEmpty}><Loader2 size={14} class="spin" /></div>
+                  ) : lookupResults.length === 0 ? (
+                    <div class={styles.sessionLookupEmpty}>No matches</div>
+                  ) : (
+                    lookupResults.map(r => (
+                      <button
+                        key={r.session_id}
+                        type="button"
+                        class={styles.sessionLookupResult}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          pinSession(r)
+                          setFocusedActiveSession({
+                            session_id: r.session_id,
+                            file_path: r.file_path ?? null,
+                            nickname: r.nickname,
+                            project_name: r.project_name,
+                          })
+                          setLookupQuery('')
+                          setLookupResults([])
+                          setLookupOpen(false)
+                        }}
+                      >
+                        <span class={styles.sessionLookupResultTitle}>
+                          {r.nickname || r.session_id.slice(0, 8)}
+                        </span>
+                        {r.project_name && (
+                          <span class={styles.sessionLookupResultMeta}>{r.project_name}</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            <div class={styles.chatList}>
+              {sidebarSessions.length === 0 ? (
+                <div class={styles.sidebarEmpty}>No active sessions</div>
+              ) : (
+                sidebarSessions.map(s => (
+                  <button
+                    key={s.session_id}
+                    class={[
+                      styles.chatRow,
+                      focusedActiveSession?.session_id === s.session_id ? styles.active : '',
+                      draggingId === s.session_id ? styles.chatRowDragging : '',
+                      dragOverId === s.session_id ? styles.chatRowDropTarget : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => setFocusedActiveSession({
+                      session_id: s.session_id,
+                      file_path: s.file_path ?? null,
+                      nickname: s.nickname,
+                      project_name: s.project_name,
+                    })}
+                    onContextMenu={(e: MouseEvent) => openSessionMenu(e, s.session_id)}
+                    type="button"
+                    draggable={true}
+                    onDragStart={(e: DragEvent) => {
+                      setDraggingId(s.session_id)
+                      if (e.dataTransfer) {
+                        e.dataTransfer.setData('text/plain', s.session_id)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }
+                    }}
+                    onDragEnter={() => {
+                      if (draggingId && draggingId !== s.session_id) setDragOverId(s.session_id)
+                    }}
+                    onDragOver={(e: DragEvent) => {
+                      if (draggingId && draggingId !== s.session_id) {
+                        e.preventDefault()
+                        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverId === s.session_id) setDragOverId(null)
+                    }}
+                    onDrop={(e: DragEvent) => {
+                      e.preventDefault()
+                      const dragged = e.dataTransfer?.getData('text/plain') || draggingId
+                      if (dragged && dragged !== s.session_id) reorderSidebar(dragged, s.session_id)
+                      setDraggingId(null)
+                      setDragOverId(null)
+                    }}
+                    onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+                  >
+                    <span class={styles.chatRowTitle}>
+                      {s.nickname || s.session_id.slice(0, 8)}
+                    </span>
+                    {s.project_name && (
+                      <span class={styles.chatRowMeta}>{s.project_name}</span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        ) : (<>
         <div class={styles.sourceFilter}>
           <button
             class={`${styles.sourceTab} ${sourceFilter === 'ui' ? styles.sourceTabActive : ''}`}
@@ -656,6 +1152,7 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
             </button>
           </div>
         )}
+        </>)}
       </div>
 
       {/* ===== Main chat area ===== */}
@@ -673,6 +1170,11 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
             {activeBackendLabel && (
               <span class={styles.chatHeaderLabel}>{activeBackendLabel}</span>
             )}
+            {focusedActiveSession && (
+              <span class={styles.chatHeaderProject}>
+                {focusedActiveSession.project_name || '—'}
+              </span>
+            )}
           </div>
           <div class={styles.chatHeaderRight}>
             {currentChatId && (
@@ -687,6 +1189,71 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
           </div>
         </div>
 
+        {activeBackend === 'claude-code' || activeBackend === 'codex-cli' ? (
+          <div class={styles.terminalWrap}>
+            {focusedActiveSession ? (
+              // Resume mode — cwd is read from the session JSONL, so the
+              // picker is irrelevant. Show the focused session's identity
+              // and a button to drop back to fresh-spawn.
+              <div class={styles.cwdRow}>
+                <label class={styles.cwdLabel}>session</label>
+                <span class={styles.sessionPin}>
+                  {focusedActiveSession.nickname || focusedActiveSession.session_id.slice(0, 8)}
+                </span>
+                {focusedActiveSession.project_name && (
+                  <span class={styles.cwdHint}>{focusedActiveSession.project_name}</span>
+                )}
+                <span class={styles.cwdSpacer} />
+                <button
+                  type="button"
+                  class={styles.cwdInlineBtn}
+                  onClick={() => setFocusedActiveSession(null)}
+                  title="Stop watching this session and return to fresh-spawn"
+                >
+                  New PTY
+                </button>
+              </div>
+            ) : (
+              <div class={styles.cwdRow}>
+                <label class={styles.cwdLabel}>cwd</label>
+                <input
+                  class={styles.cwdInput}
+                  type="text"
+                  value={terminalCwd}
+                  onInput={e => setTerminalCwd((e.target as HTMLInputElement).value)}
+                  placeholder="$HOME"
+                  spellcheck={false}
+                />
+                {ptyProjects.length > 0 && (
+                  <select
+                    class={styles.cwdSelect}
+                    value=""
+                    onChange={e => {
+                      const path = (e.target as HTMLSelectElement).value
+                      if (path) setTerminalCwd(path)
+                      ;(e.target as HTMLSelectElement).value = ''
+                    }}
+                    title="Pick a khef project as cwd"
+                  >
+                    <option value="">project…</option>
+                    {ptyProjects.map(p => (
+                      <option key={p.id} value={p.path || ''}>
+                        {p.display_name || p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <span class={styles.cwdHint}>Applied on next Connect</span>
+              </div>
+            )}
+            <SessionTerminal
+              cmd={activeBackend === 'codex-cli' ? 'codex' : 'claude'}
+              cwd={focusedActiveSession ? null : (terminalCwd || null)}
+              sessionId={focusedActiveSession?.session_id || null}
+              filePath={focusedActiveSession?.file_path || null}
+            />
+          </div>
+        ) : (<>
         {/* Messages */}
         <div class={styles.messagesArea}>
           <div class={styles.messagesInner}>
@@ -880,6 +1447,7 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
             </div>
           </div>
         </div>
+        </>)}
       </div>
 
       {/* Context menu */}
@@ -891,6 +1459,19 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
           onRename={handleContextRename}
           onClose={() => setContextMenu(null)}
           onShowToast={showToast}
+        />
+      )}
+
+      {/* Sidebar session context menu */}
+      {sessionMenu && (
+        <SessionContextMenu
+          sessionId={sessionMenu.sessionId}
+          position={sessionMenu.position}
+          onClose={() => setSessionMenu(null)}
+          onShowToast={showToast}
+          onOpen={handleSessionView}
+          onCopyResume={handleSessionCopyResume}
+          onRemove={hideSidebarSession}
         />
       )}
 

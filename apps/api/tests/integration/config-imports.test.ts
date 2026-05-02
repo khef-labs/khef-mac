@@ -202,4 +202,25 @@ describe('Config Import Discovery', () => {
     const importConfigs = configs.filter((c: any) => c.is_import);
     expect(importConfigs).toHaveLength(1);
   });
+
+  it('should lazily discover installed assistants on list', async () => {
+    const codexConfigPath = path.join(tempDir, 'codex-config.toml');
+    fs.writeFileSync(codexConfigPath, '[mcp_servers.khef]\ncommand = "node"\n');
+
+    await client.query(
+      `INSERT INTO assistant_config_paths (assistant_id, scope, type, path_template, format, description, readonly)
+       SELECT a.id, 'global', 'settings', $1, 'toml', 'Test codex config', false
+       FROM assistants a WHERE a.handle = 'codex-cli'`,
+      [codexConfigPath]
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/assistants',
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { assistants } = res.json();
+    expect(assistants.some((a: any) => a.handle === 'codex-cli')).toBe(true);
+  });
 });

@@ -476,16 +476,36 @@ export class PostgresDriver implements SqlDriver {
     const queryId = options?.queryId || randomUUID();
     const timeout = options?.timeout || this.statementTimeout;
     const maxRows = options?.maxRows || 1000;
+    const params = options?.params;
+    const readOnly = options?.readOnly === true;
 
     const client = await pool.connect();
     this.activeQueries.set(queryId, client);
 
     const start = Date.now();
+    let inTx = false;
     try {
-      // Set statement timeout for this session
-      await client.query(`SET statement_timeout = ${timeout}`);
+      if (readOnly) {
+        // Wrap in a read-only transaction with a per-statement timeout. This
+        // enforces saved-query safety server-side: any DML inside the SQL
+        // (or a function the SQL calls) errors out with "read-only transaction".
+        await client.query('BEGIN');
+        inTx = true;
+        await client.query('SET TRANSACTION READ ONLY');
+        await client.query(`SET LOCAL statement_timeout = ${timeout}`);
+      } else {
+        await client.query(`SET statement_timeout = ${timeout}`);
+      }
 
-      const result = await client.query(sql);
+      const result = params && params.length > 0
+        ? await client.query(sql, params)
+        : await client.query(sql);
+
+      if (inTx) {
+        await client.query('COMMIT');
+        inTx = false;
+      }
+
       const duration = Date.now() - start;
 
       const columns = (result.fields || []).map(f => ({
@@ -516,6 +536,9 @@ export class PostgresDriver implements SqlDriver {
       };
     } catch (err: any) {
       const duration = Date.now() - start;
+      if (inTx) {
+        try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      }
       throw Object.assign(err, { duration, queryId });
     } finally {
       this.activeQueries.delete(queryId);

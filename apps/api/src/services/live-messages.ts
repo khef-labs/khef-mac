@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getRedis } from './redis';
 import { getActiveSessionBySessionId } from './active-sessions';
+import { findDaemonPtyForSession, findPtyIdByPid, writeToPty } from './pty-daemon';
 
 const execFileAsync = promisify(execFile);
 
@@ -14,6 +15,13 @@ export interface LiveMessage {
   to_session_id: string;
   content: string;
   created_at: string;
+}
+
+export interface LiveDeliveryResult {
+  message: LiveMessage;
+  delivered: boolean;
+  delivery_method?: 'iterm' | 'daemon-pty';
+  delivery_error?: string;
 }
 
 const KEY_PREFIX = 'livemsg:';
@@ -66,7 +74,7 @@ export async function deliverLiveMessage(
   toSessionId: string,
   content: string,
   opts?: { fromNickname?: string; senderLabel?: string },
-): Promise<{ message: LiveMessage; delivered: boolean }> {
+): Promise<LiveDeliveryResult> {
   const sender = opts?.senderLabel
     ?? (opts?.fromNickname
       ? `${opts.fromNickname} (${fromSessionId})`
@@ -80,20 +88,35 @@ export async function deliverLiveMessage(
     : `Message from ${sender}: ${flat.slice(0, NUDGE_PREVIEW_LEN)}… (use check_live_messages to read)`;
 
   let delivered = false;
+  let deliveryMethod: LiveDeliveryResult['delivery_method'];
+  let deliveryError: string | undefined;
   try {
     const session = await getActiveSessionBySessionId(toSessionId);
+    // iTerm-registered sessions get the osascript path. Daemon-owned PTYs
+    // (chat-spawned claude / codex) have no terminal_session_id, so we write
+    // the bytes directly into the PTY instead. Look up by PID since the
+    // daemon's terminalKey can be cwd-based or sessionId-based depending on
+    // how the PTY was spawned.
     if (session?.terminal_session_id) {
       const result = await deliverViaIterm(session.terminal_session_id, nudge);
       delivered = result.delivered;
+      deliveryMethod = 'iterm';
+      deliveryError = result.error;
+    } else if (session?.pid) {
+      const result = await deliverViaDaemonPty(toSessionId, nudge, session.pid);
+      delivered = result.delivered;
+      deliveryMethod = 'daemon-pty';
+      deliveryError = result.error;
     }
-  } catch {
+  } catch (err: any) {
     delivered = false;
+    deliveryError = err?.message || String(err);
   }
 
   // Persist only if the iTerm delivery missed or the message is too long to inline.
   const persist = !(isShort && delivered);
   const message = await sendLiveMessage(fromSessionId, toSessionId, content, { persist });
-  return { message, delivered };
+  return { message, delivered, delivery_method: deliveryMethod, delivery_error: deliveryError };
 }
 
 export async function checkLiveMessages(
@@ -152,6 +175,36 @@ export async function clearLiveMessages(sessionId: string): Promise<number> {
 }
 
 /**
+ * Deliver a nudge to a daemon-owned PTY (chat-spawned claude / codex) by
+ * writing the message bytes directly into the PTY's stdin. claude reads it
+ * as user input and submits on the trailing CR. Returns { delivered: false }
+ * if no daemon PTY is currently hosting the session.
+ *
+ * Looks up the PTY by `pid` first (works for both fresh-spawn and resume
+ * keys), then falls back to a sessionId-based key probe.
+ */
+export async function deliverViaDaemonPty(
+  sessionId: string,
+  nudgeText: string,
+  pid?: number | null,
+): Promise<{ delivered: boolean; error?: string }> {
+  try {
+    let ptyId: string | null = null;
+    if (pid) ptyId = await findPtyIdByPid(pid);
+    if (!ptyId) ptyId = await findDaemonPtyForSession(sessionId);
+    if (!ptyId) return { delivered: false };
+    // Two-step write mirrors the iTerm path: type the text first, then a
+    // separate CR to land outside any bracketed-paste envelope claude may
+    // have set up around the typed run.
+    await writeToPty(ptyId, nudgeText);
+    await writeToPty(ptyId, '\r');
+    return { delivered: true };
+  } catch (err: any) {
+    return { delivered: false, error: err?.message || String(err) };
+  }
+}
+
+/**
  * Deliver a nudge to an iTerm2 terminal session via osascript `write text`.
  * This types the message into the target terminal as user input, triggering
  * Claude Code's UserPromptSubmit hook which checks for live messages.
@@ -161,6 +214,7 @@ export async function deliverViaIterm(
   nudgeText: string
 ): Promise<{ delivered: boolean; error?: string }> {
   try {
+    const normalizedTerminalSessionId = terminalSessionId.trim().split(':').pop() || terminalSessionId;
     const escaped = nudgeText.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     // Two-step write: text without newline, then a standalone newline.
     // Claude Code's TUI uses bracketed paste mode, so a trailing \n inside the
@@ -171,7 +225,7 @@ tell application "iTerm2"
   repeat with w in windows
     repeat with t in tabs of w
       repeat with s in sessions of t
-        if id of s is "${terminalSessionId}" then
+        if id of s is "${normalizedTerminalSessionId}" then
           tell s to write text "${escaped}" newline no
           delay 0.05
           tell s to write text ""

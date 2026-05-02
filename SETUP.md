@@ -74,6 +74,41 @@ kvec uses pgvector (already in the PostgreSQL container) and a Python sidecar fo
   - If entry exists, verify the `args` path, `KHEF_API_URL` port, and `KHEF_DATABASE_URL` port match
 - If MCP config was added or changed: tell user to restart Claude Code, then re-run setup to continue from Step 6
 
+### Codex CLI setup
+
+For a fresh Codex machine, run:
+
+```bash
+npm run codex:setup
+```
+
+This script:
+
+- builds `apps/api/mcp-server/build/index.js`
+- creates `~/.codex/config.toml` with a `khef` MCP entry if missing
+- creates `~/.codex/AGENTS.md` if missing
+
+Why `~/.codex/AGENTS.md` matters: the Khef UI only lists assistants that have at least one discovered global config file. On a clean machine, Codex often has neither `~/.codex/config.toml` nor `~/.codex/AGENTS.md`, so it does not appear in the Assistants page until one of those files exists.
+
+The generated MCP entry points to:
+
+```toml
+[mcp_servers.khef]
+command = "node"
+args = ["<project-root>/apps/api/mcp-server/build/index.js"]
+startup_timeout_sec = 15
+tool_timeout_sec = 60
+
+[mcp_servers.khef.env]
+KHEF_API_URL = "http://localhost:3201"
+```
+
+After running the script:
+
+- restart Codex so it reloads `~/.codex/config.toml`
+- restart the khef API or trigger assistant config discovery in the UI
+- verify `/mcp` in Codex shows the `khef` server
+
 ## Step 6: Start and verify API server
 
 - Start API: `npm run dev:api`
@@ -94,4 +129,3 @@ kvec uses pgvector (already in the PostgreSQL container) and a Python sidecar fo
 Tell the user to run in separate terminals:
 - Terminal 1: `npm run dev:api` (API server)
 - Terminal 2: `npm run dev:ui` (UI server)
-

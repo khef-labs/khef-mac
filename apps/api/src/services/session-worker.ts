@@ -13,7 +13,12 @@
 
 import { workerLogger } from '../lib/logger';
 import { querySingle } from '../db/client';
-import { syncAllSessions, getSessionSyncStatus } from './session-sync';
+import {
+  syncAllSessions,
+  syncAssistantSessions,
+  loadSessionProjectMap,
+  getSessionSyncStatus,
+} from './session-sync';
 import { syncSessionEmbeddings } from './session-embeddings';
 
 const log = workerLogger.child({ component: 'session-worker' });
@@ -107,13 +112,17 @@ export function isSessionWorkerRunning(): boolean {
   return embeddingInterval !== null || polledInterval !== null;
 }
 
-export async function triggerSessionSync(options?: { force?: boolean }): Promise<{
+export async function triggerSessionSync(options?: { force?: boolean; assistant?: string }): Promise<{
   synced: number;
   updated: number;
   skipped: number;
   errors: number;
   chunks_created: number;
 }> {
+  if (options?.assistant) {
+    const projectMap = await loadSessionProjectMap();
+    return syncAssistantSessions(options.assistant, projectMap, { force: options.force });
+  }
   return syncAllSessions(options);
 }
 

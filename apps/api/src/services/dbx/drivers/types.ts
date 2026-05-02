@@ -107,6 +107,8 @@ export interface QueryOptions {
   timeout?: number;
   maxRows?: number;
   queryId?: string;
+  params?: any[];
+  readOnly?: boolean;
 }
 
 export interface QueryResultColumn {

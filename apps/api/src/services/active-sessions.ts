@@ -30,6 +30,13 @@ import { query, querySingle, getClient } from '../db/client';
 import pool from '../db/client';
 import { logger } from '../lib/logger';
 import { uniqueNickname, type LengthConstraints } from './nickname-generator';
+import { listDaemonPtyPids } from './pty-daemon';
+import {
+  readCodexSessionMeta,
+  syncOneSessionFile,
+  loadSessionProjectMap,
+  type CodexSessionMeta,
+} from './session-sync';
 
 const log = logger.child({ component: 'active-sessions' });
 
@@ -138,6 +145,10 @@ export interface ActiveSessionRow {
   context_window_tokens: string | null;
   nickname: string | null;
   terminal_session_id: string | null;
+  // Runtime augmentation by getCachedActiveSessionsWithLiveness — true when
+  // the row's pid matches a process currently owned by the local PTY daemon
+  // (i.e. an in-browser session, not an external iTerm/Codex instance).
+  pid_is_self?: boolean;
 }
 
 // ── OS Scanning ──────────────────────────────────────────────────────
@@ -270,13 +281,27 @@ export async function scanActiveSessions(opts?: { forceFuser?: boolean }): Promi
     // so /clear transitions (same PID, new session) don't show both.
     // Uses statement_timeout to fail fast if DB is unresponsive (e.g. after sleep/wake).
     const client = await getClient();
-    let registered: { session_id: string; pid: number; file_path: string; project_dir: string | null }[];
+    let registered: { session_id: string; pid: number; file_path: string; project_dir: string | null; assistant: string }[];
     try {
       await client.query('SET LOCAL statement_timeout = 5000');
       const result = await client.query(
-        `SELECT DISTINCT ON (pid) session_id, pid, file_path, project_dir
-         FROM sessions WHERE status = 'active' AND pid IS NOT NULL
-         ORDER BY pid, last_seen_at DESC`
+        `SELECT DISTINCT ON (s.pid)
+           s.session_id,
+           s.pid,
+           s.file_path,
+           s.project_dir,
+           a.handle as assistant
+         FROM sessions s
+         JOIN assistants a ON a.id = s.assistant_id
+         WHERE s.status = 'active'
+           AND s.pid IS NOT NULL
+           AND (
+             (a.handle = 'claude-code' AND s.file_path LIKE $1)
+             OR (a.handle = 'codex-cli' AND s.file_path LIKE $2)
+             OR a.handle NOT IN ('claude-code', 'codex-cli')
+           )
+         ORDER BY s.pid, s.last_seen_at DESC`,
+        [`${PROJECTS_DIR}/%`, `${path.join(os.homedir(), '.codex', 'sessions')}/%`]
       );
       registered = result.rows;
     } finally {
@@ -290,9 +315,9 @@ export async function scanActiveSessions(opts?: { forceFuser?: boolean }): Promi
           file_path: row.file_path,
           pid: row.pid,
           project_dir: row.project_dir,
-          assistant: 'claude-code',
+          assistant: row.assistant,
         });
-        seen.add(row.session_id);
+        seen.add(`${row.assistant}:${row.session_id}`);
       }
     }
 
@@ -302,7 +327,8 @@ export async function scanActiveSessions(opts?: { forceFuser?: boolean }): Promi
     const fuserMap = runFuser ? await scanTaskDirs() : new Map<string, number>();
     if (runFuser) lastFuserScanMs = now;
     for (const [sessionId, pid] of fuserMap) {
-      if (seen.has(sessionId)) continue;
+      const seenKey = `claude-code:${sessionId}`;
+      if (seen.has(seenKey)) continue;
       const fileInfo = findSessionFile(sessionId);
       sessions.push({
         session_id: sessionId,
@@ -311,13 +337,14 @@ export async function scanActiveSessions(opts?: { forceFuser?: boolean }): Promi
         project_dir: fileInfo?.projectDir ?? null,
         assistant: 'claude-code',
       });
-      seen.add(sessionId);
+      seen.add(seenKey);
     }
 
     // Tier 3: mtime heuristic
     const mtimeActive = scanByMtime();
     for (const entry of mtimeActive) {
-      if (seen.has(entry.session_id)) continue;
+      const seenKey = `claude-code:${entry.session_id}`;
+      if (seen.has(seenKey)) continue;
       sessions.push({
         session_id: entry.session_id,
         file_path: entry.file_path,
@@ -325,7 +352,7 @@ export async function scanActiveSessions(opts?: { forceFuser?: boolean }): Promi
         project_dir: entry.project_dir,
         assistant: 'claude-code',
       });
-      seen.add(entry.session_id);
+      seen.add(seenKey);
     }
   } catch (err) {
     log.warn({ err }, 'Failed to scan for active sessions');
@@ -402,6 +429,7 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
   try {
     await client.query('BEGIN');
 
+    const foundAssistantIds: string[] = [];
     const foundSessionIds: string[] = [];
 
     for (const session of scanned) {
@@ -418,9 +446,13 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
         projectId = projectMap.get(session.project_dir) ?? null;
       }
 
+      foundAssistantIds.push(assistantId);
       foundSessionIds.push(session.session_id);
 
-      // Upsert: uses the UNIQUE(assistant_id, session_id) constraint
+      // Upsert: uses the UNIQUE(assistant_id, session_id) constraint.
+      // pid is authoritative from the scan result — Tier 1 only emits live PIDs,
+      // Tier 3 emits null (mtime-only). Direct assignment clears stale PIDs that
+      // were set by a heartbeat for a process that has since died.
       await client.query(
         `INSERT INTO sessions (session_id, assistant_id, project_id, file_path, project_dir, pid, status, last_seen_at, first_seen_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'active', NOW(), NOW())
@@ -428,7 +460,7 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
            project_id = COALESCE(EXCLUDED.project_id, sessions.project_id),
            file_path = EXCLUDED.file_path,
            project_dir = COALESCE(EXCLUDED.project_dir, sessions.project_dir),
-           pid = COALESCE(EXCLUDED.pid, sessions.pid),
+           pid = EXCLUDED.pid,
            status = 'active',
            last_seen_at = NOW(),
            updated_at = NOW()`,
@@ -441,8 +473,14 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
       await client.query(
         `UPDATE sessions
          SET status = 'inactive', updated_at = NOW()
-         WHERE status = 'active' AND session_id != ALL($1)`,
-        [foundSessionIds]
+         WHERE status = 'active'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM unnest($1::uuid[], $2::text[]) AS found(assistant_id, session_id)
+             WHERE found.assistant_id = sessions.assistant_id
+               AND found.session_id = sessions.session_id
+           )`,
+        [foundAssistantIds, foundSessionIds]
       );
     } else {
       await client.query(
@@ -527,6 +565,45 @@ export async function getCachedActiveSessions(filters?: {
 }
 
 /**
+ * Read cached active sessions and validate every non-null pid with kill -0.
+ * Dead PIDs trigger an immediate row deactivation so subsequent reads (and
+ * the UI's Connect gate) reflect reality without waiting for the next 10s
+ * background scan.
+ */
+export async function getCachedActiveSessionsWithLiveness(filters?: {
+  assistant?: string;
+  project_id?: string;
+  status?: string;
+}): Promise<ActiveSessionRow[]> {
+  const [rows, daemonOwned] = await Promise.all([
+    getCachedActiveSessions(filters),
+    listDaemonPtyPids(),
+  ]);
+  const stale: string[] = [];
+  const live: ActiveSessionRow[] = [];
+  for (const row of rows) {
+    if (row.pid != null && !isPidAlive(row.pid)) {
+      stale.push(row.id);
+    } else {
+      live.push({
+        ...row,
+        pid_is_self: row.pid != null && daemonOwned.has(row.pid),
+      });
+    }
+  }
+  if (stale.length > 0) {
+    await query(
+      `UPDATE sessions
+       SET status = 'inactive', pid = NULL, updated_at = NOW()
+       WHERE id = ANY($1::uuid[]) AND status = 'active'`,
+      [stale]
+    );
+    log.info({ count: stale.length, sessionDbIds: stale }, 'deactivated sessions with dead PIDs on read');
+  }
+  return live;
+}
+
+/**
  * Get a single active session by its session_id (file UUID).
  */
 export async function getActiveSessionBySessionId(sessionId: string): Promise<ActiveSessionRow | null> {
@@ -565,22 +642,62 @@ export async function getActiveSessionBySessionId(sessionId: string): Promise<Ac
   );
 }
 
+export interface HeartbeatOptions {
+  pid?: number;
+  terminalSessionId?: string;
+  /** Defaults to 'claude-code' for backward compatibility with the UserPromptSubmit hook. */
+  assistantHandle?: string;
+  /**
+   * Absolute working directory of the session. Used by Codex (which stores
+   * transcripts under ~/.codex/sessions/YYYY/MM/DD/) to derive project_dir
+   * from session_meta.payload.cwd. Ignored by Claude callers, which keep
+   * deriving project_dir from the ~/.claude/projects/ file path.
+   */
+  projectPath?: string;
+}
+
+function normalizeTerminalSessionId(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.includes(':') ? trimmed.split(':').pop() || null : trimmed;
+}
+
 /**
  * Register or refresh an active session via heartbeat.
- * Called by the UserPromptSubmit hook with the Claude process PID ($PPID).
+ *
+ * Claude Code: called by the UserPromptSubmit hook with $PPID; project_dir
+ *   is extracted from the ~/.claude/projects/<encoded-dir>/ file path.
+ * Codex CLI: called via the Codex registration helper with assistantHandle
+ *   'codex-cli' and projectPath from session_meta.payload.cwd.
  *
  * When a PID is provided, any other active session with that same PID
  * is marked inactive (handles /clear session transitions in the same terminal).
  */
-export async function heartbeatSession(sessionId: string, filePath: string, pid?: number, terminalSessionId?: string): Promise<void> {
-  // Derive project_dir from file_path
+export async function heartbeatSession(
+  sessionId: string,
+  filePath: string,
+  opts: HeartbeatOptions = {}
+): Promise<void> {
+  const { pid, terminalSessionId, assistantHandle = 'claude-code', projectPath } = opts;
+  const normalizedTerminalSessionId = normalizeTerminalSessionId(terminalSessionId);
+
+  // Derive project_dir. Claude: from the ~/.claude/projects/<encoded>/ path.
+  // Codex: encode the cwd the same way (slash → dash) so project_dir means
+  // the same thing across assistants and matches loadProjectMap() keys.
   let projectDir: string | null = null;
-  const projectsPrefix = PROJECTS_DIR + '/';
-  if (filePath.startsWith(projectsPrefix)) {
-    const relative = filePath.slice(projectsPrefix.length);
-    const slashIdx = relative.indexOf('/');
-    if (slashIdx > 0) {
-      projectDir = relative.slice(0, slashIdx);
+  if (projectPath) {
+    const resolved = projectPath.startsWith('~')
+      ? path.join(os.homedir(), projectPath.slice(1))
+      : projectPath;
+    projectDir = resolved.replace(/\//g, '-');
+  } else {
+    const projectsPrefix = PROJECTS_DIR + '/';
+    if (filePath.startsWith(projectsPrefix)) {
+      const relative = filePath.slice(projectsPrefix.length);
+      const slashIdx = relative.indexOf('/');
+      if (slashIdx > 0) {
+        projectDir = relative.slice(0, slashIdx);
+      }
     }
   }
 
@@ -591,9 +708,9 @@ export async function heartbeatSession(sessionId: string, filePath: string, pid?
     projectId = projectMap.get(projectDir) ?? null;
   }
 
-  const assistantId = await getAssistantId('claude-code');
+  const assistantId = await getAssistantId(assistantHandle);
   if (!assistantId) {
-    log.warn('Cannot heartbeat: claude-code assistant not found');
+    log.warn({ assistantHandle }, 'Cannot heartbeat: assistant not found');
     return;
   }
 
@@ -621,11 +738,11 @@ export async function heartbeatSession(sessionId: string, filePath: string, pid?
          file_path = EXCLUDED.file_path,
          project_dir = COALESCE(EXCLUDED.project_dir, sessions.project_dir),
          pid = COALESCE(EXCLUDED.pid, sessions.pid),
-         terminal_session_id = COALESCE(EXCLUDED.terminal_session_id, sessions.terminal_session_id),
+         terminal_session_id = EXCLUDED.terminal_session_id,
          status = 'active',
          last_seen_at = NOW(),
          updated_at = NOW()`,
-      [sessionId, assistantId, projectId, filePath, projectDir, pid ?? null, terminalSessionId ?? null]
+      [sessionId, assistantId, projectId, filePath, projectDir, pid ?? null, normalizedTerminalSessionId]
     );
 
     await client.query('COMMIT');
@@ -636,7 +753,7 @@ export async function heartbeatSession(sessionId: string, filePath: string, pid?
     client.release();
   }
 
-  log.info({ sessionId, projectDir, pid: pid ?? null }, 'Session heartbeat registered');
+  log.info({ sessionId, assistantHandle, projectDir, pid: pid ?? null }, 'Session heartbeat registered');
 }
 
 /**
@@ -679,6 +796,97 @@ export async function assignNickname(sessionId: string, requestedNickname?: stri
 
   log.info({ sessionId, nickname }, 'Nickname assigned');
   return nickname;
+}
+
+// ── Codex Session Registration ───────────────────────────────────────
+
+export interface CodexRegistrationResult {
+  session_id: string;
+  nickname: string | null;
+  file_path: string;
+  project_id: string | null;
+  project_handle: string | null;
+  cwd: string | null;
+  synced: boolean;
+}
+
+/**
+ * Register a Codex session as active using its real session UUID from
+ * session_meta.payload.id. Reads metadata from the JSONL, optionally syncs
+ * the transcript so the same row holds both runtime state and parsed
+ * messages, then heartbeats with assistantHandle 'codex-cli' and assigns
+ * (or fetches) a nickname.
+ *
+ * The Codex CLI process does not call this itself — it is invoked by the
+ * Codex wrapper (lib/shell/codeks.sh) once it discovers the new JSONL on
+ * disk, or directly via POST /api/active-sessions/register-codex.
+ */
+export async function registerCodexSessionFile(
+  filePath: string,
+  opts: {
+    pid?: number;
+    terminalSessionId?: string;
+    /** Skip nickname assignment (default: assign). */
+    assignNickname?: boolean;
+    /** Skip syncing transcript content (default: sync). */
+    syncTranscript?: boolean;
+  } = {}
+): Promise<CodexRegistrationResult> {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Codex session file does not exist: ${filePath}`);
+  }
+
+  const meta: CodexSessionMeta | null = await readCodexSessionMeta(filePath);
+  if (!meta) {
+    throw new Error(`No session_meta found in Codex JSONL: ${filePath}`);
+  }
+
+  // Sync transcript content first so chunks/messages land before the UI shows
+  // the session as active. Failure here should not block heartbeat.
+  if (opts.syncTranscript !== false) {
+    try {
+      const projectMap = await loadSessionProjectMap();
+      await syncOneSessionFile(filePath, projectMap);
+    } catch (err) {
+      log.warn({ err, filePath }, 'Codex transcript sync failed during registration');
+    }
+  }
+
+  await heartbeatSession(meta.sessionId, filePath, {
+    pid: opts.pid,
+    terminalSessionId: opts.terminalSessionId,
+    assistantHandle: 'codex-cli',
+    projectPath: meta.cwd ?? undefined,
+  });
+
+  let nickname: string | null = null;
+  if (opts.assignNickname !== false) {
+    nickname = await assignNickname(meta.sessionId);
+  } else {
+    const row = await querySingle<{ nickname: string | null }>(
+      'SELECT nickname FROM sessions WHERE session_id = $1',
+      [meta.sessionId]
+    );
+    nickname = row?.nickname ?? null;
+  }
+
+  // Look up project handle for the response (project_id was resolved during heartbeat).
+  const projectRow = await querySingle<{ project_id: string | null; project_handle: string | null }>(
+    `SELECT s.project_id, p.handle as project_handle
+     FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+     WHERE s.session_id = $1`,
+    [meta.sessionId]
+  );
+
+  return {
+    session_id: meta.sessionId,
+    nickname,
+    file_path: filePath,
+    project_id: projectRow?.project_id ?? null,
+    project_handle: projectRow?.project_handle ?? null,
+    cwd: meta.cwd,
+    synced: opts.syncTranscript !== false,
+  };
 }
 
 /**
@@ -848,6 +1056,7 @@ export function formatActiveSession(row: ActiveSessionRow) {
     file_path: row.file_path,
     project_dir: row.project_dir,
     pid: row.pid,
+    pid_is_self: row.pid_is_self ?? false,
     terminal_session_id: row.terminal_session_id,
     status: row.status,
     last_seen_at: row.last_seen_at?.toISOString() ?? null,

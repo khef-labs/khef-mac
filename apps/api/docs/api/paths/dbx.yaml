@@ -1,0 +1,1260 @@
+# Database Explorer (dbx) endpoints. All routes are mounted under /api/dbx.
+# See ctx-dbx-database-explorer (khef context memory) for the architecture
+# overview, and the dbx skill for saved-query authoring guidance.
+
+DbxConnections:
+  get:
+    operationId: listDbxConnections
+    tags: [dbx]
+    summary: List dbx connections
+    description: Returns saved connections without their credentials.
+    responses:
+      '200':
+        description: Connection list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connections:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxConnection'
+  post:
+    operationId: createDbxConnection
+    tags: [dbx]
+    summary: Create a dbx connection
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, driver, config]
+            properties:
+              name: { type: string }
+              driver: { type: string, enum: [postgres] }
+              config: { type: object, additionalProperties: true }
+              credentials: { type: object, additionalProperties: true }
+              options: { type: object, additionalProperties: true }
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connection:
+                  $ref: '#/components/schemas/DbxConnection'
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+
+DbxConnectionsTest:
+  post:
+    operationId: testDbxConnectionConfig
+    tags: [dbx]
+    summary: Test an unsaved connection config
+    description: Spins up a temporary pool to verify a config without persisting it.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [driver, config]
+            properties:
+              driver: { type: string }
+              config: { type: object, additionalProperties: true }
+              credentials: { type: object, additionalProperties: true }
+              options: { type: object, additionalProperties: true }
+    responses:
+      '200':
+        description: Test result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxConnectionTestResult'
+
+DbxConnectionsById:
+  patch:
+    operationId: updateDbxConnection
+    tags: [dbx]
+    summary: Update a dbx connection
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string }
+              config: { type: object, additionalProperties: true }
+              credentials: { type: object, additionalProperties: true }
+              options: { type: object, additionalProperties: true }
+    responses:
+      '200':
+        description: Updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connection:
+                  $ref: '#/components/schemas/DbxConnection'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteDbxConnection
+    tags: [dbx]
+    summary: Delete a dbx connection
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    responses:
+      '204':
+        description: Deleted
+      '400':
+        description: Cannot delete builtin connection
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxConnectionsByIdTest:
+  post:
+    operationId: testDbxConnection
+    tags: [dbx]
+    summary: Test a saved connection
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    responses:
+      '200':
+        description: Test result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxConnectionTestResult'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxConnectionsByIdOverview:
+  get:
+    operationId: getDbxConnectionOverview
+    tags: [dbx]
+    summary: Overview of a dbx connection
+    description: Version, uptime, database size, active connections, and schemas.
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    responses:
+      '200':
+        description: Overview
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: string }
+                uptime: { type: string, nullable: true }
+                database_size: { type: string }
+                active_connections: { type: integer }
+                schemas:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxSchemaInfo'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxConnectionsByIdSchemas:
+  get:
+    operationId: listDbxSchemas
+    tags: [dbx]
+    summary: List schemas for a dbx connection
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    responses:
+      '200':
+        description: Schema list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                schemas:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxSchemaInfo'
+
+DbxConnectionsByIdSchemasByIdTables:
+  get:
+    operationId: listDbxTables
+    tags: [dbx]
+    summary: List tables and views in a schema
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+    responses:
+      '200':
+        description: Table list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tables:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxTableInfo'
+
+DbxConnectionsByIdSchemasByIdTablesById:
+  get:
+    operationId: getDbxTableDetail
+    tags: [dbx]
+    summary: Describe a table or view
+    description: Columns, constraints, foreign keys, indexes, triggers, and (for views) the definition + dependencies.
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+      - { $ref: '#/components/parameters/DbxTable' }
+    responses:
+      '200':
+        description: Table detail
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table:
+                  $ref: '#/components/schemas/DbxTableDetail'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxConnectionsByIdSchemasByIdTablesByIdData:
+  get:
+    operationId: getDbxTableData
+    tags: [dbx]
+    summary: Browse rows from a table
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+      - { $ref: '#/components/parameters/DbxTable' }
+      - { name: limit, in: query, schema: { type: integer, default: 200 } }
+      - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      - { name: sort, in: query, schema: { type: string }, description: Column to sort by (alnum + underscore only). }
+      - { name: order, in: query, schema: { type: string, enum: [asc, desc] } }
+      - { name: where, in: query, schema: { type: string }, description: Optional raw WHERE clause. }
+    responses:
+      '200':
+        description: Query result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxQueryResult'
+
+DbxConnectionsByIdSchemasByIdFunctions:
+  get:
+    operationId: listDbxFunctions
+    tags: [dbx]
+    summary: List functions and procedures in a schema
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+    responses:
+      '200':
+        description: Function list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                functions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxFunctionInfo'
+
+DbxConnectionsByIdSchemasByIdFunctionsByName:
+  get:
+    operationId: getDbxFunctionDetail
+    tags: [dbx]
+    summary: Describe a function with its source
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: args, in: query, schema: { type: string }, description: Disambiguating argument signature for overloaded functions. }
+    responses:
+      '200':
+        description: Function detail
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                function:
+                  $ref: '#/components/schemas/DbxFunctionDetail'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxConnectionsByIdSchemasByIdTriggers:
+  get:
+    operationId: listDbxSchemaTriggers
+    tags: [dbx]
+    summary: List triggers in a schema
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+    responses:
+      '200':
+        description: Trigger list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                triggers:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxSchemaTriggerInfo'
+
+DbxConnectionsByIdSchemasByIdTablesByIdErd:
+  get:
+    operationId: getDbxTableErd
+    tags: [dbx]
+    summary: Table-level ERD data
+    description: Returns the focused table plus its FK neighbors (outgoing + reverse FKs via pg_catalog).
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+      - { $ref: '#/components/parameters/DbxTable' }
+    responses:
+      '200':
+        description: ERD data
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxTableErd'
+
+DbxConnectionsByIdSchemasByIdErd:
+  get:
+    operationId: getDbxSchemaErd
+    tags: [dbx]
+    summary: Schema-level ERD data
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { $ref: '#/components/parameters/DbxSchema' }
+      - { name: compact, in: query, schema: { type: boolean, default: false } }
+    responses:
+      '200':
+        description: ERD data
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxSchemaErd'
+
+DbxConnectionsByIdQuery:
+  post:
+    operationId: executeDbxQuery
+    tags: [dbx]
+    summary: Execute an ad-hoc SQL query
+    description: Runs raw SQL against the connection. Saved queries should use POST /saved-queries/{id}/run instead so parameters are bound and runs are read-only by default.
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [sql]
+            properties:
+              sql: { type: string }
+              timeout: { type: integer, description: Per-statement timeout in milliseconds. }
+              maxRows: { type: integer, default: 1000 }
+    responses:
+      '200':
+        description: Query result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxQueryResult'
+      '400':
+        description: Query failed
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxQueryError'
+
+DbxConnectionsByIdQueryCancel:
+  post:
+    operationId: cancelDbxQuery
+    tags: [dbx]
+    summary: Cancel an in-flight query
+    description: Issues `pg_cancel_backend` against the connection.
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [queryId]
+            properties:
+              queryId: { type: string, format: uuid }
+    responses:
+      '200':
+        description: Cancelled
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancelled: { type: boolean }
+
+DbxConnectionsByIdHistory:
+  get:
+    operationId: listDbxQueryHistory
+    tags: [dbx]
+    summary: List query history for a connection
+    parameters:
+      - { $ref: '#/components/parameters/DbxConnectionId' }
+      - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      - { name: offset, in: query, schema: { type: integer, default: 0 } }
+    responses:
+      '200':
+        description: History page
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                history:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxQueryHistoryEntry'
+                pagination:
+                  $ref: '#/components/schemas/Pagination'
+  delete:
+    operationId: clearDbxQueryHistory
+    tags: [dbx]
+    summary: Clear query history for a connection
+    parameters: [{ $ref: '#/components/parameters/DbxConnectionId' }]
+    responses:
+      '204':
+        description: Cleared
+
+DbxScripts:
+  get:
+    operationId: listDbxScripts
+    tags: [dbx]
+    summary: List dbx scripts
+    parameters:
+      - { name: connection_id, in: query, schema: { type: string, format: uuid } }
+    responses:
+      '200':
+        description: Script list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scripts:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxScript'
+  post:
+    operationId: createDbxScript
+    tags: [dbx]
+    summary: Create a dbx script
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              content: { type: string }
+              connection_id: { type: string, format: uuid, nullable: true }
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script:
+                  $ref: '#/components/schemas/DbxScript'
+
+DbxScriptsById:
+  get:
+    operationId: getDbxScript
+    tags: [dbx]
+    summary: Read a dbx script
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    responses:
+      '200':
+        description: Script
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script:
+                  $ref: '#/components/schemas/DbxScript'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateDbxScript
+    tags: [dbx]
+    summary: Update a dbx script
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name: { type: string }
+              content: { type: string }
+              connection_id: { type: string, format: uuid, nullable: true }
+    responses:
+      '200':
+        description: Updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                script:
+                  $ref: '#/components/schemas/DbxScript'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteDbxScript
+    tags: [dbx]
+    summary: Delete a dbx script
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    responses:
+      '204':
+        description: Deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxSavedQueries:
+  get:
+    operationId: listDbxSavedQueries
+    tags: [dbx]
+    summary: List saved queries
+    parameters:
+      - { name: connection_id, in: query, schema: { type: string, format: uuid } }
+      - { name: session_id, in: query, schema: { type: string }, description: Resolves favorite status when present. }
+      - { name: favorite, in: query, schema: { type: boolean }, description: When true, requires session_id. }
+      - { name: shared, in: query, schema: { type: boolean } }
+      - { name: q, in: query, schema: { type: string }, description: Fuzzy match on name, handle, description (ILIKE). }
+      - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      - { name: offset, in: query, schema: { type: integer, default: 0 } }
+    responses:
+      '200':
+        description: Saved query list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saved_queries:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxSavedQuery'
+  post:
+    operationId: createDbxSavedQuery
+    tags: [dbx]
+    summary: Create a saved query
+    description: Saved queries reference parameters via :name tokens in the SQL and declare each one in `params[]`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DbxSavedQueryCreate'
+    responses:
+      '201':
+        description: Created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saved_query:
+                  $ref: '#/components/schemas/DbxSavedQuery'
+      '400':
+        description: Validation error (e.g. handle not kebab-case)
+      '409':
+        description: Handle conflict for the bound connection
+
+DbxSavedQueriesRecent:
+  get:
+    operationId: listDbxRecentSavedQueries
+    tags: [dbx]
+    summary: List recent saved-query runs for a session
+    parameters:
+      - { name: session_id, in: query, required: true, schema: { type: string } }
+      - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+    responses:
+      '200':
+        description: Recent runs
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recent:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxRecentSavedQuery'
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+
+DbxSavedQueriesById:
+  get:
+    operationId: getDbxSavedQuery
+    tags: [dbx]
+    summary: Read a saved query with its declared parameters
+    parameters:
+      - { $ref: '#/components/parameters/DbxSavedQueryId' }
+      - { name: session_id, in: query, schema: { type: string }, description: Resolves is_favorite. }
+    responses:
+      '200':
+        description: Saved query
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saved_query:
+                  $ref: '#/components/schemas/DbxSavedQuery'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  patch:
+    operationId: updateDbxSavedQuery
+    tags: [dbx]
+    summary: Update a saved query
+    description: Editing the SQL or params no longer auto-creates a snapshot — call POST /saved-queries/{id}/snapshots to capture one explicitly.
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DbxSavedQueryUpdate'
+    responses:
+      '200':
+        description: Updated
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saved_query:
+                  $ref: '#/components/schemas/DbxSavedQuery'
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Handle conflict
+  delete:
+    operationId: deleteDbxSavedQuery
+    tags: [dbx]
+    summary: Delete a saved query
+    description: Cascades to params, favorites, and snapshots. `query_history.query_id` is nulled but the run rows remain.
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    responses:
+      '204':
+        description: Deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxSavedQueriesByIdFavorite:
+  post:
+    operationId: favoriteDbxSavedQuery
+    tags: [dbx]
+    summary: Mark a saved query as favorite for a session
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [session_id]
+            properties:
+              session_id: { type: string }
+    responses:
+      '204':
+        description: Favorited
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: unfavoriteDbxSavedQuery
+    tags: [dbx]
+    summary: Unmark favorite
+    parameters:
+      - { $ref: '#/components/parameters/DbxSavedQueryId' }
+      - { name: session_id, in: query, required: true, schema: { type: string } }
+    responses:
+      '204':
+        description: Unfavorited
+
+DbxSavedQueriesByIdRun:
+  post:
+    operationId: runDbxSavedQuery
+    tags: [dbx]
+    summary: Run a saved query
+    description: |
+      Binds `:name` parameters via `bindNamedParams()`, executes against the
+      saved query's connection (or the builtin khef connection when
+      connection_id is null), and logs to `dbx.query_history` with `query_id`,
+      `session_id`, `params_snapshot`, and `status`. Wraps in a read-only
+      transaction with `SET LOCAL statement_timeout = <ms>` when
+      `is_readonly` is true (default).
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              params:
+                type: object
+                additionalProperties: true
+                description: Map of declared parameter name → runtime value.
+              session_id: { type: string, description: Session id recorded on the history row. }
+              timeout: { type: integer, description: Per-statement timeout in ms (default 10000). }
+              maxRows: { type: integer, default: 1000 }
+    responses:
+      '200':
+        description: Query result
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DbxQueryResult'
+      '400':
+        description: Parameter binding error or query failure
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
+                field: { type: string, description: For binding errors, the offending parameter name. }
+                duration: { type: integer }
+                queryId: { type: string, format: uuid }
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxSavedQueriesByIdSnapshots:
+  get:
+    operationId: listDbxSavedQuerySnapshots
+    tags: [dbx]
+    summary: List snapshots for a saved query
+    description: Returned newest-first. Includes the live `current_snapshot` pointer so the UI can highlight the current entry.
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    responses:
+      '200':
+        description: Snapshot list
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshots:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DbxSavedQuerySnapshot'
+                current_snapshot:
+                  type: integer
+                  nullable: true
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  post:
+    operationId: createDbxSavedQuerySnapshot
+    tags: [dbx]
+    summary: Capture a manual snapshot
+    description: Snapshots the current SQL + declared params and advances `current_snapshot` to the new number. Source = `manual`.
+    parameters: [{ $ref: '#/components/parameters/DbxSavedQueryId' }]
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              edited_by: { type: string, description: Session id recorded on the snapshot row. }
+    responses:
+      '201':
+        description: Captured
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot_number: { type: integer }
+                current_snapshot: { type: integer }
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxSavedQueriesByIdSnapshotsByNum:
+  get:
+    operationId: getDbxSavedQuerySnapshot
+    tags: [dbx]
+    summary: Read a single snapshot
+    parameters:
+      - { $ref: '#/components/parameters/DbxSavedQueryId' }
+      - { $ref: '#/components/parameters/DbxSnapshotNumber' }
+    responses:
+      '200':
+        description: Snapshot
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snapshot:
+                  $ref: '#/components/schemas/DbxSavedQuerySnapshot'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+  delete:
+    operationId: deleteDbxSavedQuerySnapshot
+    tags: [dbx]
+    summary: Delete a snapshot
+    description: The snapshot matching `current_snapshot` cannot be deleted (HTTP 409). Capture a new one or restore a different snapshot first.
+    parameters:
+      - { $ref: '#/components/parameters/DbxSavedQueryId' }
+      - { $ref: '#/components/parameters/DbxSnapshotNumber' }
+    responses:
+      '204':
+        description: Deleted
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+      '409':
+        description: Cannot delete the current snapshot
+
+DbxSavedQueriesByIdSnapshotsByNumRestore:
+  post:
+    operationId: restoreDbxSavedQuerySnapshot
+    tags: [dbx]
+    summary: Restore a snapshot to live
+    description: |
+      Captures the current state as a `pre-restore` safety snapshot, then
+      overwrites the live SQL + params from the chosen snapshot and points
+      `current_snapshot` at the restored snapshot's number.
+    parameters:
+      - { $ref: '#/components/parameters/DbxSavedQueryId' }
+      - { $ref: '#/components/parameters/DbxSnapshotNumber' }
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              edited_by: { type: string, description: Session id recorded on the pre-restore safety snapshot. }
+    responses:
+      '200':
+        description: Restored
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                saved_query:
+                  $ref: '#/components/schemas/DbxSavedQuery'
+      '404':
+        $ref: ../components/responses.yaml#/NotFound
+
+DbxErdSave:
+  post:
+    operationId: saveDbxErd
+    tags: [dbx]
+    summary: Persist an ERD as a diagram memory
+    description: Stores a Mermaid ERD as a diagram-type memory under the `dbx` project, organised in collections per connection.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [connection_name, schema, mermaid]
+            properties:
+              connection_name: { type: string }
+              schema: { type: string }
+              table: { type: string, description: Omit for schema-level ERDs. }
+              mermaid: { type: string }
+    responses:
+      '201':
+        description: Saved
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                memory_id: { type: string, format: uuid }
+                project_id: { type: string, format: uuid }
+                collection_id: { type: string, format: uuid }
+                created: { type: boolean }
+                url: { type: string }
+      '400':
+        $ref: ../components/responses.yaml#/BadRequest
+
+# ── Local component definitions ──
+# Inline schemas/parameters keep dbx self-contained without polluting the
+# global components.yaml/parameters.yaml files for this single-feature surface.
+
+components:
+  parameters:
+    DbxConnectionId:
+      name: id
+      in: path
+      required: true
+      description: dbx.connections.id
+      schema: { type: string, format: uuid }
+    DbxSchema:
+      name: schema
+      in: path
+      required: true
+      schema: { type: string }
+    DbxTable:
+      name: table
+      in: path
+      required: true
+      schema: { type: string }
+    DbxSavedQueryId:
+      name: id
+      in: path
+      required: true
+      description: dbx.saved_queries.id
+      schema: { type: string, format: uuid }
+    DbxSnapshotNumber:
+      name: num
+      in: path
+      required: true
+      description: dbx.saved_query_snapshots.snapshot_number for this query.
+      schema: { type: integer, minimum: 1 }
+
+  schemas:
+    DbxConnection:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        driver: { type: string, enum: [postgres] }
+        config: { type: object, additionalProperties: true }
+        is_builtin: { type: boolean }
+        options: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DbxConnectionTestResult:
+      type: object
+      properties:
+        ok: { type: boolean }
+        version: { type: string }
+        error: { type: string }
+    DbxSchemaInfo:
+      type: object
+      properties:
+        name: { type: string }
+        table_count: { type: integer }
+        view_count: { type: integer }
+        size: { type: string, nullable: true }
+    DbxTableInfo:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [table, view] }
+        row_estimate: { type: integer }
+        size: { type: string, nullable: true }
+        comment: { type: string, nullable: true }
+    DbxColumnInfo:
+      type: object
+      properties:
+        position: { type: integer }
+        name: { type: string }
+        data_type: { type: string }
+        is_nullable: { type: boolean }
+        column_default: { type: string, nullable: true }
+        identity: { type: string, nullable: true }
+        comment: { type: string, nullable: true }
+    DbxConstraint:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        columns: { type: array, items: { type: string } }
+        expression: { type: string, nullable: true }
+    DbxForeignKey:
+      type: object
+      properties:
+        name: { type: string }
+        columns: { type: array, items: { type: string } }
+        referenced_schema: { type: string }
+        referenced_table: { type: string }
+        referenced_columns: { type: array, items: { type: string } }
+        on_update: { type: string }
+        on_delete: { type: string }
+    DbxIndex:
+      type: object
+      properties:
+        name: { type: string }
+        columns: { type: array, items: { type: string } }
+        is_unique: { type: boolean }
+        type: { type: string }
+        size: { type: string, nullable: true }
+        definition: { type: string }
+    DbxTrigger:
+      type: object
+      properties:
+        name: { type: string }
+        event: { type: string }
+        timing: { type: string }
+        function_name: { type: string }
+        definition: { type: string }
+    DbxSchemaTriggerInfo:
+      type: object
+      properties:
+        name: { type: string }
+        table_name: { type: string }
+        timing: { type: string }
+        events: { type: string }
+        function_name: { type: string }
+        enabled: { type: string }
+        definition: { type: string }
+    DbxFunctionInfo:
+      type: object
+      properties:
+        name: { type: string }
+        return_type: { type: string }
+        arguments: { type: string }
+        kind: { type: string }
+        language: { type: string }
+        volatility: { type: string }
+        comment: { type: string, nullable: true }
+    DbxFunctionDetail:
+      allOf:
+        - $ref: '#/components/schemas/DbxFunctionInfo'
+        - type: object
+          properties:
+            security_definer: { type: boolean }
+            definition: { type: string, nullable: true }
+    DbxTableDetail:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [table, view] }
+        schema: { type: string }
+        oid: { type: integer }
+        row_estimate: { type: integer }
+        size: { type: string, nullable: true }
+        tablespace: { type: string, nullable: true }
+        has_rls: { type: boolean }
+        comment: { type: string, nullable: true }
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxColumnInfo'
+        constraints:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxConstraint'
+        foreign_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxForeignKey'
+        indexes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxIndex'
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxTrigger'
+        definition: { type: string, nullable: true }
+        dependencies:
+          type: array
+          nullable: true
+          items: { type: string }
+    DbxQueryColumn:
+      type: object
+      properties:
+        name: { type: string }
+        type: { type: string }
+        type_oid: { type: integer }
+    DbxQueryResult:
+      type: object
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxQueryColumn'
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+        rowCount: { type: integer }
+        duration: { type: integer, description: Duration in milliseconds. }
+        affectedRows: { type: integer, nullable: true }
+        truncated: { type: boolean }
+        queryId: { type: string, format: uuid }
+    DbxQueryError:
+      type: object
+      properties:
+        error: { type: string }
+        duration: { type: integer }
+        queryId: { type: string, format: uuid }
+    DbxQueryHistoryEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        connection_id: { type: string, format: uuid }
+        sql: { type: string }
+        row_count: { type: integer, nullable: true }
+        duration_ms: { type: integer, nullable: true }
+        error: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        query_id: { type: string, format: uuid, nullable: true }
+        session_id: { type: string, nullable: true }
+        params_snapshot: { type: object, nullable: true, additionalProperties: true }
+        status: { type: string, enum: [success, error, canceled] }
+    DbxScript:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        connection_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DbxSavedQueryParam:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string, format: uuid }
+        query_id: { type: string, format: uuid }
+        name: { type: string, description: '`:name` token in the SQL.' }
+        value_type: { type: string, enum: [text, number, bool, enum] }
+        required: { type: boolean }
+        default_value: { type: string, nullable: true }
+        options:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: For `value_type: enum`, the allowed values.
+        sort_order: { type: integer }
+    DbxSavedQuery:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        connection_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        handle: { type: string, description: Kebab-case unique within the connection (NULL connections share one bucket). }
+        description: { type: string, nullable: true }
+        sql: { type: string }
+        schema_scope: { type: string, nullable: true }
+        is_shared: { type: boolean }
+        is_readonly: { type: boolean }
+        owner_session_id: { type: string, nullable: true }
+        current_snapshot: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        is_favorite: { type: boolean }
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxSavedQueryParam'
+    DbxSavedQueryCreate:
+      type: object
+      required: [name, handle]
+      properties:
+        connection_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        handle: { type: string, description: Kebab-case (`^[a-z0-9]+(?:-[a-z0-9]+)*$`). }
+        description: { type: string }
+        sql: { type: string }
+        schema_scope: { type: string }
+        is_shared: { type: boolean, default: false }
+        is_readonly: { type: boolean, default: true }
+        owner_session_id: { type: string }
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/DbxSavedQueryParam'
+    DbxSavedQueryUpdate:
+      type: object
+      properties:
+        connection_id: { type: string, format: uuid, nullable: true }
+        name: { type: string }
+        handle: { type: string }
+        description: { type: string }
+        sql: { type: string }
+        schema_scope: { type: string }
+        is_shared: { type: boolean }
+        is_readonly: { type: boolean }
+        params:
+          type: array
+          description: Replaces all existing param rows when supplied.
+          items:
+            $ref: '#/components/schemas/DbxSavedQueryParam'
+        edited_by: { type: string }
+    DbxRecentSavedQuery:
+      type: object
+      properties:
+        query_id: { type: string, format: uuid }
+        last_run_at: { type: string, format: date-time }
+        name: { type: string }
+        handle: { type: string }
+        connection_id: { type: string, format: uuid, nullable: true }
+        schema_scope: { type: string, nullable: true }
+        connection_name: { type: string, nullable: true }
+    DbxSavedQuerySnapshot:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        snapshot_number: { type: integer }
+        sql: { type: string }
+        params_snapshot:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/DbxSavedQueryParam'
+        edited_by: { type: string, nullable: true }
+        source: { type: string, enum: [manual, pre-restore] }
+        edited_at: { type: string, format: date-time }
+    DbxTableErd:
+      type: object
+      properties:
+        focused:
+          $ref: '#/components/schemas/DbxTableDetail'
+        related:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DbxTableDetail'
+        reverse_fks:
+          type: array
+          items:
+            type: object
+            properties:
+              source_schema: { type: string }
+              source_table: { type: string }
+              source_column: { type: string }
+              target_column: { type: string }
+    DbxSchemaErd:
+      type: object
+      properties:
+        schema: { type: string }
+        tables:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DbxTableDetail'
+        table_count: { type: integer }
+    Pagination:
+      type: object
+      properties:
+        total_count: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        has_more: { type: boolean }

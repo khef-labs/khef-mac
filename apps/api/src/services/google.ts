@@ -457,6 +457,17 @@ export function parseGoogleDocId(input: string): string | null {
 }
 
 /**
+ * Extract the tab ID from a multi-tab Google Doc URL.
+ * Tab IDs look like `t.abc123def456` and appear as `?tab=...` (or `&tab=...`).
+ * Also tolerates a `#tab=...` fragment form some clients emit.
+ */
+export function parseGoogleDocTabId(input: string): string | null {
+  if (!input || !input.includes('tab=')) return null
+  const match = input.match(/[?&#]tab=(t\.[a-zA-Z0-9_-]+)/)
+  return match ? match[1] : null
+}
+
+/**
  * Invalidate cached status (useful after auth changes).
  */
 export function invalidateGoogleStatusCache(): void {

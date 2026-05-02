@@ -41,7 +41,8 @@ interface RuleMemoryRow {
 /**
  * Calculate the current aggregate size of knowledge memories for a project.
  * Returns the estimated total size and how many files it would span.
- * Only counts non-deprecated memories (deprecated ones are excluded from sync).
+ * Mirrors the disk-sync filter: excludes deprecated and any memory with
+ * sync_to_disk metadata = 'false'.
  */
 export async function getKnowledgeAggregateSize(projectId: string): Promise<SizeInfo> {
   const rows = await query<KnowledgeMemoryRow>(
@@ -52,7 +53,14 @@ export async function getKnowledgeAggregateSize(projectId: string): Promise<Size
      WHERE m.project_id = $1
        AND (mt.name IN ('commands', 'context', 'pattern')
             OR mt.parent_id = (SELECT id FROM memory_types WHERE name = 'knowledge'))
-       AND mts.status_value NOT IN ('deprecated', 'inactive')`,
+       AND mts.status_value <> 'deprecated'
+       AND COALESCE(
+         (SELECT mm.value FROM memory_metadata mm
+          JOIN metadata md ON md.id = mm.metadata_id
+          WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+          LIMIT 1),
+         'true'
+       ) <> 'false'`,
     [projectId]
   );
 
@@ -99,7 +107,8 @@ export async function getKnowledgeAggregateSize(projectId: string): Promise<Size
 /**
  * Calculate the current aggregate size of assistant-rule memories for a project.
  * Returns the estimated total size and how many files it would span.
- * Only counts active rules (deprecated ones are excluded from sync).
+ * Mirrors the disk-sync filter: excludes deprecated and any rule with
+ * sync_to_disk metadata = 'false'.
  */
 export async function getRulesAggregateSize(projectId: string): Promise<SizeInfo> {
   const rows = await query<RuleMemoryRow>(
@@ -107,7 +116,16 @@ export async function getRulesAggregateSize(projectId: string): Promise<SizeInfo
      FROM memories m
      JOIN memory_types mt ON m.memory_type_id = mt.id
      JOIN memory_type_statuses mts ON m.status_id = mts.id
-     WHERE m.project_id = $1 AND mt.name = 'assistant-rule' AND mts.status_value NOT IN ('deprecated', 'inactive')`,
+     WHERE m.project_id = $1
+       AND mt.name = 'assistant-rule'
+       AND mts.status_value <> 'deprecated'
+       AND COALESCE(
+         (SELECT mm.value FROM memory_metadata mm
+          JOIN metadata md ON md.id = mm.metadata_id
+          WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+          LIMIT 1),
+         'true'
+       ) <> 'false'`,
     [projectId]
   );
 

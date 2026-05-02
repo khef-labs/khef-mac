@@ -33,6 +33,7 @@ import { MemoryRelationsSection } from './memory-page/MemoryRelationsSection'
 import { MemoryCommentsSection } from './memory-page/MemoryCommentsSection'
 import { MemoryContentSection } from './memory-page/MemoryContentSection'
 import { MemoryMetadataSection } from './memory-page/MemoryMetadataSection'
+import { SnapshotsManageModal } from './memory-page/SnapshotsManageModal'
 import { MemoryTopNav } from './memory-page/MemoryTopNav'
 import { MemoryDiagramViewer } from './memory-page/MemoryDiagramViewer'
 import { MemorySlideshowOverlay } from './memory-page/MemorySlideshowOverlay'
@@ -84,6 +85,7 @@ export function MemoryPage({ id }: Props) {
   const [showDeleteSnapshotConfirm, setShowDeleteSnapshotConfirm] = useState(false)
   const [showRestoreSnapshotConfirm, setShowRestoreSnapshotConfirm] = useState(false)
   const [snapshotBeforeRestore, setSnapshotBeforeRestore] = useState(true)
+  const [showManageSnapshots, setShowManageSnapshots] = useState(false)
 
   const [contentMode, setContentMode] = useState<'edit' | 'preview'>('edit')
   const [csvViewMode, setCsvViewMode] = useState<'table' | 'raw'>('table')
@@ -552,6 +554,11 @@ export function MemoryPage({ id }: Props) {
         setShowDeleteConfirm={setShowDeleteConfirm}
         setShowDeleteSnapshotConfirm={setShowDeleteSnapshotConfirm}
         setShowRestoreSnapshotConfirm={setShowRestoreSnapshotConfirm}
+        onOpenManageSnapshots={
+          snapshotsData && snapshotsData.total > 0
+            ? () => setShowManageSnapshots(true)
+            : undefined
+        }
       />
 
       {/* Historical Snapshot Banner */}
@@ -693,6 +700,28 @@ export function MemoryPage({ id }: Props) {
             setShowDeleteSnapshotConfirm(false)
           }}
           onCancel={() => setShowDeleteSnapshotConfirm(false)}
+        />
+      )}
+
+      {showManageSnapshots && snapshotsData && (
+        <SnapshotsManageModal
+          memoryId={memory.id}
+          snapshots={snapshotsData.snapshots}
+          currentSnapshot={snapshotsData.current_snapshot}
+          onClose={() => setShowManageSnapshots(false)}
+          onChanged={async () => {
+            const fresh = await refreshSnapshots()
+            // If the user was viewing a historical snapshot that just got deleted,
+            // drop them back to the current snapshot so the page stays consistent.
+            if (
+              viewingSnapshot !== null &&
+              fresh &&
+              viewingSnapshot !== fresh.current_snapshot &&
+              !fresh.snapshots.some((s) => s.snapshot_number === viewingSnapshot)
+            ) {
+              handleSnapshotChange(null)
+            }
+          }}
         />
       )}
 

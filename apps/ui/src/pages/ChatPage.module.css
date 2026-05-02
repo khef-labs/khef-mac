@@ -209,6 +209,15 @@
   font-weight: 500;
 }
 
+.chatRowDragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.chatRowDropTarget {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
 .chatRowTitle {
   flex: 1;
   min-width: 0;
@@ -296,6 +305,111 @@
   font-size: var(--text-sm);
 }
 
+.sessionLookup {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) var(--space-2) 0;
+  padding: 0 var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.sessionLookupIcon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.sessionLookupInput {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-2) 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-size: var(--text-sm);
+
+  &::placeholder {
+    color: var(--muted);
+  }
+}
+
+.sessionLookupClear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--fg);
+    background: var(--surface-hover);
+  }
+}
+
+.sessionLookupResults {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  scrollbar-width: thin;
+}
+
+.sessionLookupEmpty {
+  padding: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.sessionLookupResult {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+  gap: var(--space-2);
+
+  &:hover {
+    background: var(--bg);
+  }
+}
+
+.sessionLookupResultTitle {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sessionLookupResultMeta {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 .sidebarLoading {
   padding: var(--space-6);
   display: flex;
@@ -367,6 +481,16 @@
   color: var(--fg);
 }
 
+.chatHeaderProject {
+  font-size: 0.8rem;
+  color: var(--muted, #888);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-elevated, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+}
+
 .chatHeaderRight {
   display: flex;
   align-items: center;
@@ -388,6 +512,100 @@
     color: var(--fg);
     background: var(--surface);
   }
+}
+
+/* PTY terminal fills the chat area below the sticky header (52px). */
+.terminalWrap {
+  flex: 1;
+  min-height: 0;
+  padding-top: 52px;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminalWrap > :global([data-testid='session-terminal']) {
+  flex: 1;
+  min-height: 0;
+}
+
+.cwdRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated, var(--bg));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.cwdLabel {
+  color: var(--muted, #888);
+  font-family: var(--font-mono, monospace);
+}
+
+.cwdInput {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+}
+
+.cwdSelect {
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.8rem;
+}
+
+.cwdHint {
+  color: var(--muted, #888);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.cwdSpacer {
+  flex: 1;
+}
+
+.cwdInlineBtn {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.cwdInlineBtn:hover {
+  background: var(--bg-elevated, var(--bg));
+}
+
+.sessionPin {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  color: var(--fg);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.chatRowMeta {
+  font-size: 0.75rem;
+  color: var(--muted, #888);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
 }
 
 /* Messages scroll area */

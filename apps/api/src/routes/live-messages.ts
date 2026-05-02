@@ -1,13 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { isRedisHealthy } from '../services/redis';
-import { resolveSessionId, resolveSessionIds, findInactiveSession, getActiveSessionBySessionId } from '../services/active-sessions';
+import { resolveSessionId, resolveSessionIds, findInactiveSession } from '../services/active-sessions';
 import {
-  sendLiveMessage,
   checkLiveMessages,
   countLiveMessages,
   deleteLiveMessage,
   clearLiveMessages,
-  deliverViaIterm,
+  deliverLiveMessage,
 } from '../services/live-messages';
 
 interface SendBody {
@@ -61,42 +60,25 @@ export default async function liveMessageRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Cannot send a message to yourself' });
     }
 
-    // Build the nudge payload. Short messages embed the full content so the
-    // receiver can respond without calling check_live_messages. Long messages
-    // include a short preview and direct the agent to read via the tool.
-    const SHORT_THRESHOLD = 500;
-    const PREVIEW_LEN = 140;
-    const sender = from_nickname
-      ? `${from_nickname} (${from_session_id})`
-      : from_session_id;
-    const flat = content.replace(/\s+/g, ' ').trim();
-    const isShort = flat.length <= SHORT_THRESHOLD;
-    const nudge = isShort
-      ? (from_nickname ? `Live message from ${sender}: ${flat}` : `${flat}`)
-      : `Message from ${sender}: ${flat.slice(0, PREVIEW_LEN)}… (use check_live_messages to read)`;
-
-    // Per-recipient: attempt iTerm delivery synchronously so we can decide
-    // whether Redis persistence is needed. Persist only when the nudge can't
-    // carry the full payload (long message) or when iTerm delivery failed.
-    const messages = await Promise.all(
-      recipients.map(async (toId) => {
-        let delivered = false;
-        try {
-          const session = await getActiveSessionBySessionId(toId);
-          if (session?.terminal_session_id) {
-            const result = await deliverViaIterm(session.terminal_session_id, nudge);
-            delivered = result.delivered;
-          }
-        } catch {
-          delivered = false;
-        }
-        const persist = !(isShort && delivered);
-        return sendLiveMessage(resolvedFrom, toId, content, { persist });
-      })
+    // Per-recipient delivery via the centralized helper so iTerm + daemon-PTY
+    // + Redis fallbacks stay consistent across callers.
+    const results = await Promise.all(
+      recipients.map((toId) =>
+        deliverLiveMessage(resolvedFrom, toId, content, { fromNickname: from_nickname })
+      )
     );
+    const messages = results.map((r) => r.message);
+    const deliveries = results.map((r) => ({
+      to_session_id: r.message.to_session_id,
+      message_id: r.message.id,
+      delivered: r.delivered,
+      delivery_method: r.delivery_method,
+      delivery_error: r.delivery_error,
+    }));
 
     return reply.status(201).send({
       messages,
+      deliveries,
       recipients: messages.length,
     });
   });

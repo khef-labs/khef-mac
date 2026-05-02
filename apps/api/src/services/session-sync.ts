@@ -74,6 +74,7 @@ interface ParsedSession {
   name?: string;
   summary?: string;
   messages: ParsedMessage[];
+  projectPath?: string;
   startedAt?: Date;
   endedAt?: Date;
   fileSize: number;
@@ -276,15 +277,71 @@ async function parseClaudeSession(filePath: string): Promise<ParsedSession> {
   };
 }
 
+export interface CodexSessionMeta {
+  sessionId: string;
+  cwd: string | null;
+  startedAt: Date | null;
+  filePath: string;
+  mtime: Date;
+}
+
+/**
+ * Read just session_meta from a Codex JSONL without parsing the whole file.
+ * Modern Codex transcripts emit session_meta as the first record; we still
+ * scan a small head-of-file window in case future versions reorder.
+ */
+export async function readCodexSessionMeta(
+  filePath: string,
+  opts?: { maxLines?: number }
+): Promise<CodexSessionMeta | null> {
+  const stat = fs.statSync(filePath);
+  const maxLines = opts?.maxLines ?? 20;
+
+  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  let scanned = 0;
+  try {
+    for await (const line of rl) {
+      if (scanned++ >= maxLines) break;
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (entry?.type !== 'session_meta') continue;
+        const payload = entry.payload ?? {};
+        if (typeof payload.id !== 'string' || !payload.id) continue;
+        const startedAt = typeof payload.timestamp === 'string' && payload.timestamp
+          ? new Date(payload.timestamp)
+          : (typeof entry.timestamp === 'string' ? new Date(entry.timestamp) : null);
+        return {
+          sessionId: payload.id,
+          cwd: typeof payload.cwd === 'string' && payload.cwd ? payload.cwd : null,
+          startedAt,
+          filePath,
+          mtime: stat.mtime,
+        };
+      } catch {
+        // Malformed JSON line — skip and keep scanning the head window
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+  return null;
+}
+
 /**
  * Parse a Codex CLI session file.
  */
-async function parseCodexSession(filePath: string): Promise<ParsedSession> {
+export async function parseCodexSession(filePath: string): Promise<ParsedSession> {
   const stat = fs.statSync(filePath);
   const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
   const messages: ParsedMessage[] = [];
+  let sessionIdFromMeta: string | undefined;
+  let projectPath: string | undefined;
   let startedAt: Date | undefined;
   let endedAt: Date | undefined;
   const modelCounts = new Map<string, number>();
@@ -294,6 +351,47 @@ async function parseCodexSession(filePath: string): Promise<ParsedSession> {
   let totalCacheReadTokens = 0;
   let lastContextWindowTokens = 0;
   const toolUseIdToName = new Map<string, string>();
+
+  const addMessage = (role: 'user' | 'assistant', content: string, timestamp?: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    messages.push({
+      role,
+      content: trimmed,
+      timestamp: timestamp ? new Date(timestamp) : undefined,
+    });
+  };
+
+  const extractCodexContent = (content: unknown): string => {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+
+    return content
+      .map((block: any) => {
+        if (!block || typeof block !== 'object') return '';
+        if (
+          ['text', 'input_text', 'output_text'].includes(block.type)
+          && typeof block.text === 'string'
+        ) {
+          return block.text;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const trackTokenUsage = (usage: any) => {
+    if (!usage || typeof usage !== 'object') return;
+    const total = usage.total_token_usage ?? usage;
+    const last = usage.last_token_usage ?? total;
+
+    totalInputTokens = total.input_tokens || 0;
+    totalOutputTokens = total.output_tokens || 0;
+    totalCacheCreationTokens = total.cache_creation_input_tokens || 0;
+    totalCacheReadTokens = total.cached_input_tokens || total.cache_read_input_tokens || 0;
+    lastContextWindowTokens = last.input_tokens || 0;
+  };
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -310,13 +408,74 @@ async function parseCodexSession(filePath: string): Promise<ParsedSession> {
 
       // Session meta
       if (entry.type === 'session_meta') {
-        if (entry.payload?.timestamp) {
-          startedAt = new Date(entry.payload.timestamp);
+        const payload = entry.payload ?? {};
+        if (typeof payload.id === 'string' && payload.id) {
+          sessionIdFromMeta = payload.id;
+        }
+        if (typeof payload.cwd === 'string' && payload.cwd) {
+          projectPath = payload.cwd;
+        }
+        if (typeof payload.timestamp === 'string' && payload.timestamp) {
+          startedAt = new Date(payload.timestamp);
+        }
+        if (typeof payload.model === 'string' && payload.model) {
+          modelCounts.set(payload.model, (modelCounts.get(payload.model) || 0) + 1);
         }
         continue;
       }
 
-      // Messages
+      // Current Codex CLI JSONL format: response_item records wrap messages,
+      // tool calls, tool outputs, and reasoning under payload.type.
+      if (entry.type === 'response_item') {
+        const payload = entry.payload ?? {};
+
+        if (payload.type === 'message') {
+          const role = payload.role as 'user' | 'assistant' | 'developer' | 'system';
+          if (role !== 'user' && role !== 'assistant') continue;
+          addMessage(role, extractCodexContent(payload.content), entry.timestamp);
+          continue;
+        }
+
+        if (payload.type === 'function_call' || payload.type === 'custom_tool_call') {
+          const toolName = typeof payload.name === 'string' ? payload.name : payload.type;
+          if (typeof payload.call_id === 'string') {
+            toolUseIdToName.set(payload.call_id, toolName);
+          }
+          const rawInput = payload.arguments ?? payload.input ?? '';
+          const inputText = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput).slice(0, 200);
+          addMessage('assistant', `[Tool: ${toolName}] ${inputText}`, entry.timestamp);
+          continue;
+        }
+
+        if (payload.type === 'tool_search_call') {
+          const rawInput = payload.arguments ?? payload.query ?? payload.input ?? '';
+          const inputText = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput).slice(0, 200);
+          addMessage('assistant', `[Tool: tool_search] ${inputText}`, entry.timestamp);
+          continue;
+        }
+
+        if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+          const toolName = typeof payload.call_id === 'string'
+            ? toolUseIdToName.get(payload.call_id)
+            : undefined;
+          if (toolName && WHITELISTED_TOOL_RESULTS.has(toolName)) {
+            const resultText = extractToolResultText(payload.output);
+            if (resultText) {
+              addMessage('user', `[Tool Result: ${toolName}] ${resultText}`, entry.timestamp);
+            }
+          }
+          continue;
+        }
+
+        continue;
+      }
+
+      if (entry.type === 'event_msg' && entry.payload?.type === 'token_count') {
+        trackTokenUsage(entry.payload.info);
+        continue;
+      }
+
+      // Legacy Codex message format.
       if (entry.type === 'message') {
         const role = entry.role as 'user' | 'assistant';
         if (!['user', 'assistant'].includes(role)) continue;
@@ -377,13 +536,7 @@ async function parseCodexSession(filePath: string): Promise<ParsedSession> {
           content = entry.content;
         }
 
-        if (content) {
-          messages.push({
-            role,
-            content,
-            timestamp: entry.timestamp ? new Date(entry.timestamp) : undefined,
-          });
-        }
+        addMessage(role, content, entry.timestamp);
       }
     } catch {
       // Skip unparseable lines
@@ -404,9 +557,10 @@ async function parseCodexSession(filePath: string): Promise<ParsedSession> {
   }
 
   return {
-    sessionId,
+    sessionId: sessionIdFromMeta ?? sessionId,
     name,
     messages,
+    projectPath,
     startedAt,
     endedAt,
     fileSize: stat.size,
@@ -519,17 +673,31 @@ async function loadProjectMap(): Promise<Map<string, string>> {
     const resolvedPath = proj.path.startsWith('~')
       ? path.join(os.homedir(), proj.path.slice(1))
       : proj.path;
-    const encoded = resolvedPath.replace(/\//g, '-');
+    const encoded = encodeProjectPath(resolvedPath);
     map.set(encoded, proj.id);
   }
   return map;
+}
+
+function encodeProjectPath(projectPath: string): string {
+  const resolvedPath = projectPath.startsWith('~')
+    ? path.join(os.homedir(), projectPath.slice(1))
+    : projectPath;
+  return resolvedPath.replace(/\//g, '-');
 }
 
 /**
  * Try to match a session file path to a khef project.
  * Uses pre-loaded project map to avoid per-session DB queries.
  */
-function matchProject(filePath: string, projectMap: Map<string, string>): string | null {
+export function matchProject(filePath: string, projectMap: Map<string, string>, projectPath?: string): string | null {
+  // Codex CLI stores transcripts under ~/.codex/sessions, so the file path
+  // carries no project identity. Use session_meta.payload.cwd when available.
+  if (projectPath) {
+    const projectId = projectMap.get(encodeProjectPath(projectPath));
+    if (projectId) return projectId;
+  }
+
   // For Claude Code: extract dir name from session path
   // e.g., ~/.claude/projects/-Users-roger-projects-khef/session.jsonl
   const claudeMatch = filePath.match(/\.claude\/projects\/(-[^/]+)\//);
@@ -782,7 +950,7 @@ export async function syncAssistantSessions(
       }
 
       // Try to match project
-      const projectId = matchProject(filePath, projectMap);
+      const projectId = matchProject(filePath, projectMap, parsed.projectPath);
 
       // Upsert session and chunks
       const { isNew, chunksCreated } = await upsertSession(assistantId, parsed, projectId);
@@ -852,9 +1020,9 @@ export async function syncOneSessionFile(
   if (!fs.existsSync(filePath)) return null;
   const stat = fs.statSync(filePath);
   const filename = path.basename(filePath);
-  const { sessionId } = extractSessionId(filename, config.structure);
+  const { sessionId: sessionIdFromFile } = extractSessionId(filename, config.structure);
 
-  const existing = await getExistingSession(assistantId, sessionId);
+  const existing = await getExistingSession(assistantId, sessionIdFromFile);
   if (existing && existing.file_size === stat.size) {
     return {
       skipped: true,
@@ -865,7 +1033,7 @@ export async function syncOneSessionFile(
       tokenOutputDelta: 0,
       parseMs: 0,
       upsertMs: 0,
-      sessionId,
+      sessionId: sessionIdFromFile,
       projectId: null,
       messageCount: 0,
       model: null,
@@ -874,14 +1042,37 @@ export async function syncOneSessionFile(
     };
   }
 
-  const priorMessageCount = await getSessionMessageCount(assistantId, sessionId);
-  const priorTokens = await getSessionTokenTotals(assistantId, sessionId);
-
   const parseStart = Date.now();
   const parsed = config.structure === 'project'
     ? await parseClaudeSession(filePath)
     : await parseCodexSession(filePath);
   const parseMs = Date.now() - parseStart;
+  const sessionId = parsed.sessionId;
+
+  if (sessionId !== sessionIdFromFile) {
+    const existingByParsedId = await getExistingSession(assistantId, sessionId);
+    if (existingByParsedId && existingByParsedId.file_size === stat.size) {
+      return {
+        skipped: true,
+        isNew: false,
+        chunksCreated: 0,
+        messageDelta: 0,
+        tokenInputDelta: 0,
+        tokenOutputDelta: 0,
+        parseMs,
+        upsertMs: 0,
+        sessionId,
+        projectId: null,
+        messageCount: 0,
+        model: null,
+        startedAt: parsed.startedAt ? parsed.startedAt.toISOString() : null,
+        endedAt: parsed.endedAt ? parsed.endedAt.toISOString() : null,
+      };
+    }
+  }
+
+  const priorMessageCount = await getSessionMessageCount(assistantId, sessionId);
+  const priorTokens = await getSessionTokenTotals(assistantId, sessionId);
 
   if (parsed.messages.length === 0) {
     return {
@@ -902,7 +1093,7 @@ export async function syncOneSessionFile(
     };
   }
 
-  const projectId = matchProject(filePath, projectMap);
+  const projectId = matchProject(filePath, projectMap, parsed.projectPath);
   const upsertStart = Date.now();
   const { isNew, chunksCreated } = await upsertSession(assistantId, parsed, projectId);
   const upsertMs = Date.now() - upsertStart;

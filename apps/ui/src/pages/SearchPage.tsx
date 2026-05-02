@@ -283,7 +283,7 @@ export function SearchPage() {
   // Load projects for filter dropdown
   useEffect(() => {
     getProjects()
-      .then(setProjects)
+      .then((list) => setProjects([...list].sort((a, b) => a.name.localeCompare(b.name))))
       .catch(() => {
         // Silently fail - projects dropdown will be empty
       })

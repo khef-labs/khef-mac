@@ -62,6 +62,7 @@ export interface KhefState {
   // Database explorer
   dbx: {
     scriptsHeight: number
+    savedQueriesHeight: number
     resultsHeight: number
     sidebarWidth: number
     openNodes: string[]
@@ -124,7 +125,12 @@ const DEFAULTS: KhefState = {
   mcpDismissedServers: [],
   splashSeen: false,
   dbx: {
-    scriptsHeight: -1, // -1 = 50/50 split
+    // Section heights must stay >= the SECTION_HEIGHT_MIN enforced in
+    // DatabasePage.tsx (96px). Below that the section's filter + items get
+    // clipped because each panel uses overflow-y: auto. Stale localStorage
+    // values are migrated up via loadSectionHeight() on mount.
+    scriptsHeight: 140,
+    savedQueriesHeight: 140,
     resultsHeight: 280,
     sidebarWidth: 260,
     openNodes: [],

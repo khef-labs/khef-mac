@@ -109,10 +109,13 @@ export function parseExternalUrl(url: string): { type: string; id: string | null
   const googleDocMatch = trimmed.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/)
   if (googleDocMatch) {
     const docId = googleDocMatch[1]
+    // Preserve the ?tab=t.<id> segment so multi-tab docs round-trip to the right tab.
+    const tabMatch = trimmed.match(/[?&#]tab=(t\.[a-zA-Z0-9_-]+)/)
+    const tabSuffix = tabMatch ? `?tab=${tabMatch[1]}` : ''
     return {
       type: 'google-doc',
       id: docId,
-      url: `https://docs.google.com/document/d/${docId}/edit`,
+      url: `https://docs.google.com/document/d/${docId}/edit${tabSuffix}`,
     }
   }
 

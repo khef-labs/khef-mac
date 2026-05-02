@@ -9,6 +9,7 @@ import { saveSnapshot } from '../services/snapshots';
 import { getDriver, removeDriver } from '../services/dbx/connection-manager';
 import { encrypt, decrypt, isEncrypted } from '../services/dbx/crypto';
 import type { DbxConnection } from '../services/dbx/drivers/types';
+import { bindNamedParams, ParamBindError, type ParamDecl } from '../services/dbx/sql-params';
 import { logger } from '../lib/logger';
 
 const log = logger.child({ component: 'dbx-routes' });
@@ -71,6 +72,15 @@ async function getConnection(id: string): Promise<DbxConnection | null> {
   return rows[0];
 }
 
+async function getBuiltinConnection(): Promise<DbxConnection | null> {
+  const rows = await query<DbxConnection>(
+    "SELECT * FROM dbx.connections WHERE is_builtin = true AND driver = 'postgres' LIMIT 1"
+  );
+  if (!rows[0]) return null;
+  rows[0].credentials = decryptCredentials(rows[0].credentials);
+  return rows[0];
+}
+
 async function requireConnection(id: string, reply: FastifyReply): Promise<DbxConnection | null> {
   const conn = await getConnection(id);
   if (!conn) {
@@ -82,18 +92,81 @@ async function requireConnection(id: string, reply: FastifyReply): Promise<DbxCo
 
 const HISTORY_CAP = 500;
 
+/**
+ * Insert a snapshot of a saved query's current SQL + params. Returns the
+ * assigned snapshot_number (monotonically increasing per query). Used by the
+ * manual snapshot endpoint and as a pre-restore safety net.
+ */
+async function captureSavedQuerySnapshot(
+  queryId: string,
+  source: 'manual' | 'pre-restore',
+  editedBy: string | null,
+): Promise<{ snapshot_number: number } | null> {
+  const queryRow = await querySingle<{ sql: string }>(
+    'SELECT sql FROM dbx.saved_queries WHERE id = $1',
+    [queryId]
+  );
+  if (!queryRow) return null;
+
+  const paramRows = await query(
+    'SELECT * FROM dbx.saved_query_params WHERE query_id = $1 ORDER BY sort_order, name',
+    [queryId]
+  );
+
+  const next = await querySingle<{ next: number }>(
+    `SELECT COALESCE(MAX(snapshot_number), 0) + 1 AS next
+     FROM dbx.saved_query_snapshots WHERE query_id = $1`,
+    [queryId]
+  );
+  const snapshotNumber = next?.next ?? 1;
+
+  await query(
+    `INSERT INTO dbx.saved_query_snapshots
+       (query_id, snapshot_number, sql, params_snapshot, edited_by, source)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      queryId,
+      snapshotNumber,
+      queryRow.sql,
+      JSON.stringify(paramRows),
+      editedBy,
+      source,
+    ]
+  );
+
+  return { snapshot_number: snapshotNumber };
+}
+
 async function recordHistory(
   connectionId: string,
   sql: string,
   rowCount: number | null,
   durationMs: number | null,
-  error: string | null
+  error: string | null,
+  extra?: {
+    queryId?: string | null;
+    sessionId?: string | null;
+    paramsSnapshot?: Record<string, unknown> | null;
+    status?: 'success' | 'error' | 'canceled';
+  }
 ): Promise<void> {
   try {
+    const status = extra?.status ?? (error ? 'error' : 'success');
     await query(
-      `INSERT INTO dbx.query_history (connection_id, sql, row_count, duration_ms, error)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [connectionId, sql, rowCount, durationMs, error]
+      `INSERT INTO dbx.query_history
+         (connection_id, sql, row_count, duration_ms, error, query_id, session_id, params_snapshot, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        connectionId,
+        sql,
+        rowCount,
+        durationMs,
+        error,
+        extra?.queryId ?? null,
+        extra?.sessionId ?? null,
+        extra?.paramsSnapshot ? JSON.stringify(extra.paramsSnapshot) : null,
+        status,
+      ]
     );
     // Prune old entries beyond cap
     await query(
@@ -610,6 +683,580 @@ export default async function dbxRoutes(fastify: FastifyInstance) {
     const existing = await querySingle('SELECT id FROM dbx.scripts WHERE id = $1', [req.params.id]);
     if (!existing) return reply.code(404).send({ error: 'Script not found' });
     await query('DELETE FROM dbx.scripts WHERE id = $1', [req.params.id]);
+    return reply.code(204).send();
+  });
+
+  // ── Saved Queries CRUD ──
+
+  fastify.get('/saved-queries', async (req: FastifyRequest<{
+    Querystring: {
+      connection_id?: string;
+      session_id?: string;
+      favorite?: string;
+      shared?: string;
+      q?: string;
+      limit?: string;
+      offset?: string;
+    }
+  }>, _reply) => {
+    const limit = Math.min(parseInt(req.query.limit || '50', 10), 200);
+    const offset = parseInt(req.query.offset || '0', 10);
+
+    const where: string[] = [];
+    const values: any[] = [];
+
+    if (req.query.connection_id) {
+      where.push(`q.connection_id = $${values.length + 1}`);
+      values.push(req.query.connection_id);
+    }
+    if (req.query.shared === 'true') where.push('q.is_shared = true');
+    if (req.query.q) {
+      const i = values.length + 1;
+      where.push(`(q.name ILIKE $${i} OR q.description ILIKE $${i} OR q.handle ILIKE $${i})`);
+      values.push(`%${req.query.q}%`);
+    }
+
+    let joinFav = '';
+    let favCol = ', false AS is_favorite';
+    if (req.query.session_id) {
+      const i = values.length + 1;
+      const kind = req.query.favorite === 'true' ? 'INNER' : 'LEFT';
+      joinFav = `${kind} JOIN dbx.saved_query_favorites f ON f.query_id = q.id AND f.session_id = $${i}`;
+      favCol = ', f.session_id IS NOT NULL AS is_favorite';
+      values.push(req.query.session_id);
+    } else if (req.query.favorite === 'true') {
+      where.push('false');
+    }
+
+    const sqlText = `
+      SELECT q.*${favCol}
+      FROM dbx.saved_queries q
+      ${joinFav}
+      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+      ORDER BY q.updated_at DESC
+      LIMIT $${values.length + 1} OFFSET $${values.length + 2}
+    `;
+    values.push(limit, offset);
+
+    const rows = await query(sqlText, values);
+    return { saved_queries: rows };
+  });
+
+  fastify.get('/saved-queries/recent', async (req: FastifyRequest<{
+    Querystring: { session_id: string; limit?: string }
+  }>, reply) => {
+    if (!req.query.session_id) {
+      return reply.code(400).send({ error: 'session_id is required' });
+    }
+    const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+    const rows = await query(
+      `SELECT DISTINCT ON (h.query_id)
+              h.query_id,
+              h.created_at AS last_run_at,
+              q.name, q.handle, q.connection_id, q.schema_scope,
+              c.name AS connection_name
+       FROM dbx.query_history h
+       INNER JOIN dbx.saved_queries q ON q.id = h.query_id
+       LEFT JOIN dbx.connections c ON c.id = q.connection_id
+       WHERE h.session_id = $1
+         AND h.query_id IS NOT NULL
+         AND h.created_at > NOW() - INTERVAL '7 days'
+       ORDER BY h.query_id, h.created_at DESC
+       LIMIT $2`,
+      [req.query.session_id, limit]
+    );
+    return { recent: rows };
+  });
+
+  fastify.get('/saved-queries/:id', async (req: FastifyRequest<{
+    Params: { id: string };
+    Querystring: { session_id?: string }
+  }>, reply) => {
+    const queryRow = await querySingle<any>(
+      'SELECT * FROM dbx.saved_queries WHERE id = $1',
+      [req.params.id]
+    );
+    if (!queryRow) return reply.code(404).send({ error: 'Saved query not found' });
+
+    const params = await query(
+      'SELECT * FROM dbx.saved_query_params WHERE query_id = $1 ORDER BY sort_order, name',
+      [req.params.id]
+    );
+
+    let isFavorite = false;
+    if (req.query.session_id) {
+      const fav = await querySingle(
+        'SELECT 1 FROM dbx.saved_query_favorites WHERE query_id = $1 AND session_id = $2',
+        [req.params.id, req.query.session_id]
+      );
+      isFavorite = !!fav;
+    }
+
+    return { saved_query: { ...queryRow, params, is_favorite: isFavorite } };
+  });
+
+  fastify.post('/saved-queries', async (req: FastifyRequest<{
+    Body: {
+      connection_id?: string | null;
+      name: string;
+      handle: string;
+      description?: string;
+      sql?: string;
+      schema_scope?: string;
+      is_shared?: boolean;
+      is_readonly?: boolean;
+      owner_session_id?: string;
+      params?: Array<{
+        name: string;
+        value_type?: 'text'|'number'|'bool'|'enum';
+        required?: boolean;
+        default_value?: string;
+        options?: string[];
+        sort_order?: number;
+      }>;
+    }
+  }>, reply) => {
+    const b = req.body;
+    if (!b.name || !b.handle) {
+      return reply.code(400).send({ error: 'name and handle are required' });
+    }
+    if (!b.connection_id) {
+      return reply.code(400).send({ error: 'connection_id is required' });
+    }
+    // owner_session_id is required for API-created queries. The only path
+    // that legitimately produces null-owner rows is the seed file
+    // (apps/api/db/seed/seeds/dbx_saved_queries.sql); enforcing this here
+    // means "owner IS NULL" reliably means "built-in / seed-installed".
+    if (!b.owner_session_id) {
+      return reply.code(400).send({ error: 'owner_session_id is required (pass your session id or nickname)' });
+    }
+
+    // is_readonly is no longer a user-facing toggle: it's strictly derived
+    // from ownership. Built-in (no owner) → true; user-owned → false. The
+    // executor still consumes the column to wrap runs in BEGIN READ ONLY.
+    const ownerSessionId = b.owner_session_id;
+    const isReadonly = false;
+
+    try {
+      const queryRow = await querySingle<any>(
+        `INSERT INTO dbx.saved_queries
+           (connection_id, name, handle, description, sql, schema_scope, is_shared, is_readonly, owner_session_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          b.connection_id,
+          b.name,
+          b.handle,
+          b.description || null,
+          b.sql || '',
+          b.schema_scope || null,
+          b.is_shared ?? false,
+          isReadonly,
+          ownerSessionId,
+        ]
+      );
+
+      const paramRows: any[] = [];
+      if (b.params && b.params.length > 0) {
+        for (let i = 0; i < b.params.length; i++) {
+          const p = b.params[i];
+          const row = await querySingle(
+            `INSERT INTO dbx.saved_query_params
+               (query_id, name, value_type, required, default_value, options, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING *`,
+            [
+              queryRow!.id,
+              p.name,
+              p.value_type || 'text',
+              p.required ?? false,
+              p.default_value || null,
+              p.options ? JSON.stringify(p.options) : null,
+              p.sort_order ?? i,
+            ]
+          );
+          paramRows.push(row);
+        }
+      }
+
+      return reply.code(201).send({ saved_query: { ...queryRow, params: paramRows } });
+    } catch (err: any) {
+      if (err.code === '23505') {
+        return reply.code(409).send({ error: 'A saved query with that handle already exists for this connection' });
+      }
+      if (err.code === '23514') {
+        return reply.code(400).send({ error: 'handle must be kebab-case (lowercase letters, digits, hyphens)' });
+      }
+      throw err;
+    }
+  });
+
+  fastify.patch('/saved-queries/:id', async (req: FastifyRequest<{
+    Params: { id: string };
+    Body: {
+      connection_id?: string | null;
+      name?: string;
+      handle?: string;
+      description?: string;
+      sql?: string;
+      schema_scope?: string;
+      is_shared?: boolean;
+      is_readonly?: boolean;
+      params?: Array<{
+        name: string;
+        value_type?: 'text'|'number'|'bool'|'enum';
+        required?: boolean;
+        default_value?: string;
+        options?: string[];
+        sort_order?: number;
+      }>;
+      edited_by?: string;
+    }
+  }>, reply) => {
+    const existing = await querySingle<any>(
+      'SELECT * FROM dbx.saved_queries WHERE id = $1',
+      [req.params.id]
+    );
+    if (!existing) return reply.code(404).send({ error: 'Saved query not found' });
+
+    const paramsChanged = req.body.params !== undefined;
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (req.body.connection_id !== undefined) {
+      if (!req.body.connection_id) {
+        return reply.code(400).send({ error: 'connection_id is required (saved queries must always be bound to a connection)' });
+      }
+      updates.push(`connection_id = $${idx++}`); values.push(req.body.connection_id);
+    }
+    if (req.body.name !== undefined) { updates.push(`name = $${idx++}`); values.push(req.body.name); }
+    if (req.body.handle !== undefined) { updates.push(`handle = $${idx++}`); values.push(req.body.handle); }
+    if (req.body.description !== undefined) { updates.push(`description = $${idx++}`); values.push(req.body.description || null); }
+    if (req.body.sql !== undefined) { updates.push(`sql = $${idx++}`); values.push(req.body.sql); }
+    if (req.body.schema_scope !== undefined) { updates.push(`schema_scope = $${idx++}`); values.push(req.body.schema_scope || null); }
+    if (req.body.is_shared !== undefined) { updates.push(`is_shared = $${idx++}`); values.push(req.body.is_shared); }
+    // is_readonly is derived from ownership and not user-settable via PATCH —
+    // ignore the field if a client sends it.
+
+    if (updates.length === 0 && !paramsChanged) {
+      return reply.code(400).send({ error: 'No fields to update' });
+    }
+
+    let updated = existing;
+    if (updates.length > 0) {
+      values.push(req.params.id);
+      try {
+        const r = await query<any>(
+          `UPDATE dbx.saved_queries SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+          values
+        );
+        updated = r[0];
+      } catch (err: any) {
+        if (err.code === '23505') {
+          return reply.code(409).send({ error: 'A saved query with that handle already exists for this connection' });
+        }
+        if (err.code === '23514') {
+          return reply.code(400).send({ error: 'handle must be kebab-case' });
+        }
+        throw err;
+      }
+    }
+
+    let paramRows: any[];
+    if (paramsChanged) {
+      await query('DELETE FROM dbx.saved_query_params WHERE query_id = $1', [req.params.id]);
+      paramRows = [];
+      const list = req.body.params || [];
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        const row = await querySingle(
+          `INSERT INTO dbx.saved_query_params
+             (query_id, name, value_type, required, default_value, options, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING *`,
+          [
+            req.params.id,
+            p.name,
+            p.value_type || 'text',
+            p.required ?? false,
+            p.default_value || null,
+            p.options ? JSON.stringify(p.options) : null,
+            p.sort_order ?? i,
+          ]
+        );
+        paramRows.push(row);
+      }
+    } else {
+      paramRows = await query(
+        'SELECT * FROM dbx.saved_query_params WHERE query_id = $1 ORDER BY sort_order, name',
+        [req.params.id]
+      );
+    }
+
+    return { saved_query: { ...updated, params: paramRows } };
+  });
+
+  fastify.delete('/saved-queries/:id', async (req: FastifyRequest<{
+    Params: { id: string }
+  }>, reply) => {
+    const existing = await querySingle('SELECT id FROM dbx.saved_queries WHERE id = $1', [req.params.id]);
+    if (!existing) return reply.code(404).send({ error: 'Saved query not found' });
+    await query('DELETE FROM dbx.saved_queries WHERE id = $1', [req.params.id]);
+    return reply.code(204).send();
+  });
+
+  fastify.post('/saved-queries/:id/favorite', async (req: FastifyRequest<{
+    Params: { id: string };
+    Body: { session_id: string }
+  }>, reply) => {
+    if (!req.body.session_id) return reply.code(400).send({ error: 'session_id is required' });
+    const existing = await querySingle('SELECT id FROM dbx.saved_queries WHERE id = $1', [req.params.id]);
+    if (!existing) return reply.code(404).send({ error: 'Saved query not found' });
+    await query(
+      `INSERT INTO dbx.saved_query_favorites (query_id, session_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [req.params.id, req.body.session_id]
+    );
+    return reply.code(204).send();
+  });
+
+  fastify.delete('/saved-queries/:id/favorite', async (req: FastifyRequest<{
+    Params: { id: string };
+    Querystring: { session_id: string }
+  }>, reply) => {
+    if (!req.query.session_id) return reply.code(400).send({ error: 'session_id is required' });
+    await query(
+      'DELETE FROM dbx.saved_query_favorites WHERE query_id = $1 AND session_id = $2',
+      [req.params.id, req.query.session_id]
+    );
+    return reply.code(204).send();
+  });
+
+  // ── Run a saved query ──
+  // Binds :name params via bindNamedParams, runs read-only against the
+  // saved query's connection (or the builtin if connection_id is null), and
+  // logs the run to dbx.query_history with query_id + session_id +
+  // params_snapshot. is_readonly=false on the saved query opts out of the
+  // read-only transaction wrapper.
+  fastify.post('/saved-queries/:id/run', async (req: FastifyRequest<{
+    Params: { id: string };
+    Body: {
+      params?: Record<string, unknown>;
+      session_id?: string;
+      timeout?: number;
+      maxRows?: number;
+    }
+  }>, reply) => {
+    const savedQuery = await querySingle<any>(
+      'SELECT * FROM dbx.saved_queries WHERE id = $1',
+      [req.params.id]
+    );
+    if (!savedQuery) return reply.code(404).send({ error: 'Saved query not found' });
+
+    if (!savedQuery.sql || !savedQuery.sql.trim()) {
+      return reply.code(400).send({ error: 'Saved query has no SQL to run' });
+    }
+
+    const declaredRows = await query<any>(
+      'SELECT * FROM dbx.saved_query_params WHERE query_id = $1 ORDER BY sort_order, name',
+      [req.params.id]
+    );
+    const declared: ParamDecl[] = declaredRows.map((r) => ({
+      name: r.name,
+      value_type: r.value_type,
+      required: r.required,
+      default_value: r.default_value,
+      options: Array.isArray(r.options) ? r.options : null,
+    }));
+
+    let bound;
+    try {
+      bound = bindNamedParams(savedQuery.sql, declared, req.body.params || {});
+    } catch (err) {
+      if (err instanceof ParamBindError) {
+        return reply.code(400).send({ error: err.message, field: err.field });
+      }
+      throw err;
+    }
+
+    // Resolve connection: explicit FK first, fall back to the builtin khef DB
+    // for connection-agnostic saved queries.
+    const conn = savedQuery.connection_id
+      ? await getConnection(savedQuery.connection_id)
+      : await getBuiltinConnection();
+    if (!conn) {
+      return reply.code(400).send({
+        error: savedQuery.connection_id
+          ? 'Connection no longer exists'
+          : 'No builtin connection available to run connection-agnostic query',
+      });
+    }
+
+    const driver = await getDriver(conn);
+    const sessionId = req.body.session_id || null;
+
+    try {
+      const result = await driver.executeQuery(bound.sql, {
+        timeout: req.body.timeout,
+        maxRows: req.body.maxRows,
+        params: bound.values,
+        readOnly: savedQuery.is_readonly !== false,
+      });
+      recordHistory(conn.id, savedQuery.sql, result.rowCount, result.duration, null, {
+        queryId: savedQuery.id,
+        sessionId,
+        paramsSnapshot: req.body.params || {},
+        status: 'success',
+      });
+      return result;
+    } catch (err: any) {
+      const duration = err.duration || 0;
+      const errorMsg = err.message || 'Query failed';
+      recordHistory(conn.id, savedQuery.sql, null, duration, errorMsg, {
+        queryId: savedQuery.id,
+        sessionId,
+        paramsSnapshot: req.body.params || {},
+        status: 'error',
+      });
+      return reply.code(400).send({
+        error: errorMsg,
+        duration,
+        queryId: err.queryId,
+      });
+    }
+  });
+
+  // ── Saved-query snapshots ──
+  // Mirrors memory_snapshots semantics: editing the SQL is free, snapshots
+  // are explicit point-in-time captures the user takes themselves. Restore
+  // creates a `pre-restore` safety snapshot before overwriting the live SQL.
+
+  fastify.get('/saved-queries/:id/snapshots', async (req: FastifyRequest<{
+    Params: { id: string }
+  }>, reply) => {
+    const sq = await querySingle<{ current_snapshot: number | null }>(
+      'SELECT current_snapshot FROM dbx.saved_queries WHERE id = $1',
+      [req.params.id]
+    );
+    if (!sq) return reply.code(404).send({ error: 'Saved query not found' });
+    const snapshots = await query(
+      `SELECT id, snapshot_number, sql, params_snapshot, edited_by, source, edited_at
+       FROM dbx.saved_query_snapshots
+       WHERE query_id = $1
+       ORDER BY snapshot_number DESC`,
+      [req.params.id]
+    );
+    return { snapshots, current_snapshot: sq.current_snapshot };
+  });
+
+  fastify.get('/saved-queries/:id/snapshots/:num', async (req: FastifyRequest<{
+    Params: { id: string; num: string }
+  }>, reply) => {
+    const num = parseInt(req.params.num, 10);
+    if (!Number.isFinite(num)) return reply.code(400).send({ error: 'snapshot_number must be an integer' });
+    const snapshot = await querySingle(
+      `SELECT id, snapshot_number, sql, params_snapshot, edited_by, source, edited_at
+       FROM dbx.saved_query_snapshots
+       WHERE query_id = $1 AND snapshot_number = $2`,
+      [req.params.id, num]
+    );
+    if (!snapshot) return reply.code(404).send({ error: 'Snapshot not found' });
+    return { snapshot };
+  });
+
+  fastify.post('/saved-queries/:id/snapshots', async (req: FastifyRequest<{
+    Params: { id: string };
+    Body: { edited_by?: string }
+  }>, reply) => {
+    const exists = await querySingle('SELECT id FROM dbx.saved_queries WHERE id = $1', [req.params.id]);
+    if (!exists) return reply.code(404).send({ error: 'Saved query not found' });
+    const result = await captureSavedQuerySnapshot(req.params.id, 'manual', req.body.edited_by || null);
+    if (!result) return reply.code(500).send({ error: 'Failed to capture snapshot' });
+    // The newly captured snapshot matches the live SQL — point current there.
+    await query(
+      'UPDATE dbx.saved_queries SET current_snapshot = $1 WHERE id = $2',
+      [result.snapshot_number, req.params.id]
+    );
+    return reply.code(201).send({ snapshot_number: result.snapshot_number, current_snapshot: result.snapshot_number });
+  });
+
+  fastify.post('/saved-queries/:id/snapshots/:num/restore', async (req: FastifyRequest<{
+    Params: { id: string; num: string };
+    Body: { edited_by?: string }
+  }>, reply) => {
+    const num = parseInt(req.params.num, 10);
+    if (!Number.isFinite(num)) return reply.code(400).send({ error: 'snapshot_number must be an integer' });
+
+    const snapshot = await querySingle<any>(
+      `SELECT sql, params_snapshot FROM dbx.saved_query_snapshots
+       WHERE query_id = $1 AND snapshot_number = $2`,
+      [req.params.id, num]
+    );
+    if (!snapshot) return reply.code(404).send({ error: 'Snapshot not found' });
+
+    // Capture current state as pre-restore safety net before overwriting.
+    await captureSavedQuerySnapshot(req.params.id, 'pre-restore', req.body.edited_by || null);
+
+    // Restore SQL on the live row + point current_snapshot at the snap whose
+    // content the live SQL now matches (the historical one we restored from).
+    const updated = await querySingle<any>(
+      'UPDATE dbx.saved_queries SET sql = $1, current_snapshot = $2 WHERE id = $3 RETURNING *',
+      [snapshot.sql, num, req.params.id]
+    );
+
+    // Restore params: replace existing rows with the snapshot's captured set.
+    await query('DELETE FROM dbx.saved_query_params WHERE query_id = $1', [req.params.id]);
+    const snapParams = Array.isArray(snapshot.params_snapshot) ? snapshot.params_snapshot : [];
+    for (let i = 0; i < snapParams.length; i++) {
+      const p = snapParams[i];
+      await query(
+        `INSERT INTO dbx.saved_query_params
+           (query_id, name, value_type, required, default_value, options, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          req.params.id,
+          p.name,
+          p.value_type || 'text',
+          p.required ?? false,
+          p.default_value ?? null,
+          p.options ? JSON.stringify(p.options) : null,
+          p.sort_order ?? i,
+        ]
+      );
+    }
+
+    const paramRows = await query(
+      'SELECT * FROM dbx.saved_query_params WHERE query_id = $1 ORDER BY sort_order, name',
+      [req.params.id]
+    );
+    return { saved_query: { ...updated, params: paramRows } };
+  });
+
+  fastify.delete('/saved-queries/:id/snapshots/:num', async (req: FastifyRequest<{
+    Params: { id: string; num: string }
+  }>, reply) => {
+    const num = parseInt(req.params.num, 10);
+    if (!Number.isFinite(num)) return reply.code(400).send({ error: 'snapshot_number must be an integer' });
+
+    // Mirror memories: the snapshot the live row is currently pointing at
+    // cannot be deleted. Capture a new snapshot first to move the pointer.
+    const sq = await querySingle<{ current_snapshot: number | null }>(
+      'SELECT current_snapshot FROM dbx.saved_queries WHERE id = $1',
+      [req.params.id]
+    );
+    if (sq && sq.current_snapshot === num) {
+      return reply.code(409).send({
+        error: 'Cannot delete the current snapshot. Capture a new one first to move the pointer, or restore a different snapshot.',
+      });
+    }
+
+    const result = await query(
+      'DELETE FROM dbx.saved_query_snapshots WHERE query_id = $1 AND snapshot_number = $2 RETURNING id',
+      [req.params.id, num]
+    );
+    if (result.length === 0) return reply.code(404).send({ error: 'Snapshot not found' });
     return reply.code(204).send();
   });
 

@@ -103,6 +103,7 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: backendBase,
           changeOrigin: true,
+          ws: true, // forward WebSocket upgrades (e.g., /api/pty/spawn)
           timeout: 300000, // 5 min for long-running chat requests (Claude + MCP tools)
         },
       },

@@ -155,40 +155,38 @@ const projectKnowledgeRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(404).send({ error: 'Project not found' });
     }
 
-    // Get commands memory (handle = 'project-commands', type = 'commands')
-    // Exclude deprecated/inactive statuses
+    // GET /knowledge returns content for the UI knowledge view.
+    // Filter is semantic only — exclude deprecated. sync_to_disk is orthogonal:
+    // memories with sync_to_disk=false are still listed here; the sync route below
+    // applies the additional filter when writing to disk.
     const commandsResult = await query<KnowledgeMemory>(
       `SELECT m.id, m.handle, m.title, m.content, m.updated_at
        FROM memories m
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'commands'
-         AND mts.status_value NOT IN ('deprecated', 'inactive')`,
+         AND mts.status_value <> 'deprecated'`,
       [project.id]
     );
 
-    // Get context memories (type = 'context', child of knowledge)
-    // Exclude deprecated/inactive statuses
     const contextResult = await query<KnowledgeMemory>(
       `SELECT m.id, m.handle, m.title, m.content, m.updated_at
        FROM memories m
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'context' AND mt.parent_id IS NOT NULL
-         AND mts.status_value NOT IN ('deprecated', 'inactive')
+         AND mts.status_value <> 'deprecated'
        ORDER BY m.updated_at DESC`,
       [project.id]
     );
 
-    // Get pattern memories (type = 'pattern', child of knowledge)
-    // Exclude deprecated/inactive statuses
     const patternsResult = await query<KnowledgeMemory>(
       `SELECT m.id, m.handle, m.title, m.content, m.updated_at
        FROM memories m
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'pattern' AND mt.parent_id IS NOT NULL
-         AND mts.status_value NOT IN ('deprecated', 'inactive')
+         AND mts.status_value <> 'deprecated'
        ORDER BY m.updated_at DESC`,
       [project.id]
     );
@@ -414,15 +412,22 @@ const projectKnowledgeRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // Fetch non-deprecated knowledge for sync
-    // Excludes deprecated items to match validation behavior
+    // Fetch sync-eligible knowledge for disk sync.
+    // Excludes deprecated memories and any memory with sync_to_disk metadata = 'false'.
     const commandsResult = await query<KnowledgeMemory>(
       `SELECT m.id, m.handle, m.title, m.content, m.updated_at
        FROM memories m
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'commands'
-         AND mts.status_value NOT IN ('deprecated', 'inactive')`,
+         AND mts.status_value <> 'deprecated'
+         AND COALESCE(
+           (SELECT mm.value FROM memory_metadata mm
+            JOIN metadata md ON md.id = mm.metadata_id
+            WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+            LIMIT 1),
+           'true'
+         ) <> 'false'`,
       [project.id]
     );
 
@@ -432,7 +437,14 @@ const projectKnowledgeRoutes: FastifyPluginAsync = async (fastify) => {
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'context' AND mt.parent_id IS NOT NULL
-         AND mts.status_value NOT IN ('deprecated', 'inactive')
+         AND mts.status_value <> 'deprecated'
+         AND COALESCE(
+           (SELECT mm.value FROM memory_metadata mm
+            JOIN metadata md ON md.id = mm.metadata_id
+            WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+            LIMIT 1),
+           'true'
+         ) <> 'false'
        ORDER BY m.updated_at DESC`,
       [project.id]
     );
@@ -443,7 +455,14 @@ const projectKnowledgeRoutes: FastifyPluginAsync = async (fastify) => {
        JOIN memory_types mt ON m.memory_type_id = mt.id
        JOIN memory_type_statuses mts ON m.status_id = mts.id
        WHERE m.project_id = $1 AND mt.name = 'pattern' AND mt.parent_id IS NOT NULL
-         AND mts.status_value NOT IN ('deprecated', 'inactive')
+         AND mts.status_value <> 'deprecated'
+         AND COALESCE(
+           (SELECT mm.value FROM memory_metadata mm
+            JOIN metadata md ON md.id = mm.metadata_id
+            WHERE mm.memory_id = m.id AND md.entity_type = 'memory' AND md.field = 'sync_to_disk'
+            LIMIT 1),
+           'true'
+         ) <> 'false'
        ORDER BY m.updated_at DESC`,
       [project.id]
     );

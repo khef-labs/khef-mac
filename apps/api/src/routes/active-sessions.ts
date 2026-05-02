@@ -4,17 +4,23 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import * as os from 'os';
+import * as path from 'path';
 import {
   scanActiveSessions,
   refreshActiveSessionsCache,
   getCachedActiveSessions,
+  getCachedActiveSessionsWithLiveness,
   getActiveSessionBySessionId,
   heartbeatSession,
   assignNickname,
+  registerCodexSessionFile,
   terminateSession,
   deactivateSession,
   formatActiveSession,
 } from '../services/active-sessions';
+
+const CODEX_SESSIONS_ROOT = path.join(os.homedir(), '.codex', 'sessions');
 
 interface ActiveSessionsQuery {
   assistant?: string;
@@ -32,7 +38,7 @@ export default async function activeSessionRoutes(fastify: FastifyInstance) {
   ) => {
     const { assistant, project_id, status } = request.query;
 
-    const rows = await getCachedActiveSessions({ assistant, project_id, status });
+    const rows = await getCachedActiveSessionsWithLiveness({ assistant, project_id, status });
 
     return {
       sessions: rows.map(formatActiveSession),
@@ -72,9 +78,53 @@ export default async function activeSessionRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'session_id and file_path are required' });
     }
 
-    await heartbeatSession(session_id, file_path, pid, terminal_session_id);
+    await heartbeatSession(session_id, file_path, { pid, terminalSessionId: terminal_session_id });
 
     return reply.status(204).send();
+  });
+
+  /**
+   * POST /api/active-sessions/register-codex - Register a Codex session by file path.
+   * Reads session_meta.payload.id from the JSONL so registration uses the real
+   * Codex session UUID rather than a synthetic one. Used by the Codex wrapper
+   * once it discovers the freshly-created transcript on disk.
+   */
+  fastify.post('/register-codex', async (
+    request: FastifyRequest<{ Body: {
+      file_path: string;
+      pid?: number;
+      terminal_session_id?: string;
+      assign_nickname?: boolean;
+      sync_transcript?: boolean;
+    } }>,
+    reply: FastifyReply
+  ) => {
+    const body = request.body ?? ({} as any);
+    const { file_path, pid, terminal_session_id, assign_nickname, sync_transcript } = body;
+
+    if (!file_path) {
+      return reply.status(400).send({ error: 'file_path is required' });
+    }
+
+    const resolved = path.resolve(file_path.startsWith('~')
+      ? path.join(os.homedir(), file_path.slice(1))
+      : file_path);
+    if (!resolved.startsWith(CODEX_SESSIONS_ROOT + path.sep)) {
+      return reply.status(400).send({ error: `file_path must be inside ${CODEX_SESSIONS_ROOT}` });
+    }
+
+    try {
+      const result = await registerCodexSessionFile(resolved, {
+        pid,
+        terminalSessionId: terminal_session_id,
+        assignNickname: assign_nickname,
+        syncTranscript: sync_transcript,
+      });
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(400).send({ error: message });
+    }
   });
 
   /**

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'preact/hooks'
-import { Copy, Sparkles } from 'lucide-preact'
+import { Copy, Sparkles, ExternalLink, Terminal, EyeOff } from 'lucide-preact'
 import styles from './MemoryContextMenu.module.css'
 
 interface SessionContextMenuProps {
@@ -9,6 +9,9 @@ interface SessionContextMenuProps {
   onClose: () => void
   onShowToast?: (message: string) => void
   onDescribe?: (sessionId: string) => void
+  onOpen?: (sessionId: string) => void
+  onCopyResume?: (sessionId: string) => void
+  onRemove?: (sessionId: string) => void
 }
 
 export function SessionContextMenu({
@@ -17,6 +20,9 @@ export function SessionContextMenu({
   onClose,
   onShowToast,
   onDescribe,
+  onOpen,
+  onCopyResume,
+  onRemove,
 }: SessionContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -72,8 +78,13 @@ export function SessionContextMenu({
 
   // Clamp position to viewport
   const getClampedPosition = () => {
-    const menuWidth = 160
-    const menuHeight = 50
+    const menuWidth = 220
+    const itemCount = 1 +
+      (onDescribe ? 1 : 0) +
+      (onOpen ? 1 : 0) +
+      (onCopyResume ? 1 : 0) +
+      (onRemove ? 1 : 0)
+    const menuHeight = itemCount * 36 + 16
     const padding = 8
 
     let x = position.x
@@ -102,6 +113,19 @@ export function SessionContextMenu({
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
+      {onOpen && (
+        <button
+          type="button"
+          class={styles.menuItem}
+          onClick={() => {
+            onOpen(sessionId)
+            onClose()
+          }}
+        >
+          <span>Open session page</span>
+          <ExternalLink size={14} class={styles.copyIcon} />
+        </button>
+      )}
       {onDescribe && (
         <button
           type="button"
@@ -123,6 +147,32 @@ export function SessionContextMenu({
         <span>Copy UUID</span>
         <Copy size={14} class={styles.copyIcon} />
       </button>
+      {onCopyResume && (
+        <button
+          type="button"
+          class={styles.menuItem}
+          onClick={() => {
+            onCopyResume(sessionId)
+            onClose()
+          }}
+        >
+          <span>Copy resume command</span>
+          <Terminal size={14} class={styles.copyIcon} />
+        </button>
+      )}
+      {onRemove && (
+        <button
+          type="button"
+          class={styles.menuItem}
+          onClick={() => {
+            onRemove(sessionId)
+            onClose()
+          }}
+        >
+          <span>Remove from sidebar</span>
+          <EyeOff size={14} class={styles.copyIcon} />
+        </button>
+      )}
     </div>
   )
 }

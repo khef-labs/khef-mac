@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { logger } from './lib/logger';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import websocketPlugin from '@fastify/websocket';
 import { closePool } from './db/client';
 import projectRoutes from './routes/projects';
 import projectMemoryRoutes from './routes/project-memories';
@@ -82,12 +83,15 @@ import dbxRoutes from './routes/dbx';
 import sessionTeamRoutes from './routes/session-teams';
 import { startAutoEmbedScheduler, stopAutoEmbedScheduler } from './services/kvec-auto-embed';
 import metricsPlugin from './plugins/metrics';
+import ptyRoutes from './routes/pty';
+import { startPtyDaemon, stopPtyDaemon } from './services/pty-daemon';
 
 const fastify = Fastify({
   loggerInstance: logger
 });
 
 fastify.register(metricsPlugin);
+fastify.register(websocketPlugin);
 
 const PORT = parseInt(process.env.PORT || '3100', 10);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -173,6 +177,7 @@ fastify.register(metricsProxyRoutes, { prefix: '/api/metrics' });
 fastify.register(dbxRoutes, { prefix: '/api/dbx' });
 fastify.register(sessionTeamRoutes, { prefix: '/api/session-teams' });
 fastify.register(sessionEventRoutes, { prefix: '/api/sse' });
+fastify.register(ptyRoutes, { prefix: '/api/pty' });
 
 fastify.get('/health', async () => {
   return { status: 'ok', timestamp: new Date().toISOString() };
@@ -246,14 +251,20 @@ const start = async () => {
 
     // Start session context watcher (raises notifications at 50%/75%/90% of context window)
     startSessionContextWatcher();
+
+    // Start the PTY daemon so browser terminals survive websocket refreshes
+    startPtyDaemon().catch((err) => {
+      logger.warn({ err }, 'PTY daemon failed to start');
+    });
   } catch (err) {
     fastify.log.error(err);
+    await stopPtyDaemon();
     await closePool();
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', async () => {
+const shutdown = async () => {
   stopVectorSyncWorker();
   stopPlanFileWatcher();
   stopMemoryFileWatcher();
@@ -266,9 +277,25 @@ process.on('SIGTERM', async () => {
   stopMemoryWatcher();
   stopSessionContextWatcher();
   await closeRedis();
+  await stopPtyDaemon();
   await fastify.close();
   await closePool();
   process.exit(0);
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
+// Keep the API alive on bugs we missed. Without these, an unhandled rejection
+// (e.g. from a stray AbortController close-listener after a kapi run, an
+// async EventEmitter without an 'error' listener, etc.) takes down the whole
+// process and forces a manual restart.
+process.on('unhandledRejection', (reason: unknown) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  fastify.log.error({ err }, 'unhandledRejection');
+});
+process.on('uncaughtException', (err: Error) => {
+  fastify.log.error({ err }, 'uncaughtException');
 });
 
 start();

@@ -648,6 +648,7 @@ export interface ActiveSession {
   file_path: string
   project_dir: string | null
   pid: number | null
+  pid_is_self: boolean
   nickname: string | null
   status: 'active' | 'inactive'
   last_seen_at: string | null
@@ -1146,6 +1147,8 @@ export interface GoogleDocImportInput {
   type?: MemoryType
   tags?: string[]
   includeComments?: boolean
+  // Optional tab ID (e.g., "t.abc123") for importing a single tab of a multi-tab Google Doc.
+  tab_id?: string
 }
 
 export interface GoogleDocImportResponse {

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # codeks — Launch Codex CLI with khef session registration (codex khef session).
 #
-# Generates a synthetic session ID, registers via heartbeat, gets a nickname,
-# then launches codex with KHEF_SESSION_ID in the environment. On exit,
-# deactivates the session.
+# Launches `codex` and concurrently watches ~/.codex/sessions/**/*.jsonl for
+# the freshly-created transcript whose session_meta.payload.cwd matches the
+# current working directory. Once found, registers it with khef using the
+# real session UUID from session_meta.payload.id (no synthetic UUIDs).
 #
 # Usage: codeks [codex args...]
 #        codeks --install    Add 'codeks' alias to shell profile
@@ -14,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 API="${KHEF_API_URL:-http://localhost:3201}"
+CODEX_SESSIONS_ROOT="$HOME/.codex/sessions"
 
 # --- Install mode ---
 if [[ "${1:-}" == "--install" ]]; then
@@ -50,68 +52,120 @@ if ! command -v codex &>/dev/null; then
   exit 1
 fi
 
-# Generate a synthetic session ID (UUIDv4 via uuidgen, available on macOS)
-SESSION_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-
-# Build a synthetic file path for the heartbeat (identifies this as a codex session)
-PROJECT_DIR="$(pwd)"
-FILE_PATH="codex://${PROJECT_DIR}/${SESSION_ID}"
-
-# Capture iTerm2 terminal session ID if available
+CWD="$(pwd)"
 TERM_SID="${ITERM_SESSION_ID:-}"
-NICKNAME=""
+TERM_SID="${TERM_SID##*:}"
+STATUS_FILE="${TMPDIR:-/tmp}/khef-codex-session-$$.env"
+# A zero-byte marker created at launch time. BSD find on macOS rejects
+# -newermt "@<epoch>", so we use -newer <marker> instead.
+TIME_MARKER="${TMPDIR:-/tmp}/khef-codex-marker-$$"
+: > "$TIME_MARKER"
+DISCOVERY_PID=""
 
-# --- Register session ---
-register() {
-  local heartbeat_body
-  heartbeat_body=$(printf '{"session_id":"%s","file_path":"%s","pid":%d' \
-    "$SESSION_ID" "$FILE_PATH" "$$")
-  if [ -n "$TERM_SID" ]; then
-    heartbeat_body="${heartbeat_body},\"terminal_session_id\":\"${TERM_SID}\"}"
-  else
-    heartbeat_body="${heartbeat_body}}"
-  fi
-
-  curl -sf -X POST "$API/api/active-sessions/heartbeat" \
-    -H "Content-Type: application/json" \
-    -d "$heartbeat_body" > /dev/null 2>&1 || true
-
-  # Get nickname
-  local nick_response
-  nick_response=$(curl -sf -X POST "$API/api/active-sessions/$SESSION_ID/nickname" \
-    -H "Content-Type: application/json" \
-    -d '{}' 2>/dev/null) || true
-
-  NICKNAME=$(echo "$nick_response" | grep -o '"nickname":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-  if [ -n "$NICKNAME" ]; then
-    printf "\033[0;90mSession: %s | Nickname: \033[1;36m%s\033[0m\n" "$SESSION_ID" "$NICKNAME"
-  else
-    printf "\033[0;90mSession: %s\033[0m\n" "$SESSION_ID"
-  fi
+# Read a JSON field from stdin using python3 (always present on macOS).
+# Returns empty on any parse failure.
+json_field() {
+  python3 -c "import sys, json
+try:
+  data = json.loads(sys.stdin.read())
+  parts = '$1'.split('.')
+  for p in parts:
+    if data is None: break
+    data = data.get(p) if isinstance(data, dict) else None
+  print(data if isinstance(data, str) else '')
+except Exception:
+  pass" 2>/dev/null || true
 }
 
-# --- Deactivate session ---
-deactivate_session() {
-  curl -sf -X POST "$API/api/active-sessions/$SESSION_ID/deactivate" \
-    -H "Content-Type: application/json" > /dev/null 2>&1 || true
+# --- Background discovery: find this run's Codex JSONL and register it ---
+discover_session() {
+  set +e  # don't let pipefail/errexit kill the watcher
+  local cwd="$1"
+  local timeout_s=180
+  local elapsed=0
+  local poll=1
+
+  while [ "$elapsed" -lt "$timeout_s" ]; do
+    sleep "$poll"
+    elapsed=$((elapsed + poll))
+    # Gentle backoff so we don't hammer the filesystem
+    if [ "$elapsed" -ge 10 ]; then poll=5
+    elif [ "$elapsed" -ge 4 ]; then poll=2
+    fi
+
+    local match=""
+    while IFS= read -r f; do
+      [ -f "$f" ] || continue
+      local meta_cwd
+      meta_cwd=$(head -n1 "$f" 2>/dev/null | json_field "payload.cwd")
+      if [ "$meta_cwd" = "$cwd" ]; then
+        match="$f"
+        break
+      fi
+    done < <(find "$CODEX_SESSIONS_ROOT" -type f -name '*.jsonl' -newer "$TIME_MARKER" 2>/dev/null)
+
+    [ -z "$match" ] && continue
+
+    local body
+    body=$(printf '{"file_path":"%s","pid":%d' "$match" "$$")
+    if [ -n "$TERM_SID" ]; then
+      body="${body},\"terminal_session_id\":\"${TERM_SID}\""
+    fi
+    body="${body}}"
+
+    local response
+    response=$(curl -sf -X POST "$API/api/active-sessions/register-codex" \
+      -H "Content-Type: application/json" \
+      -d "$body" 2>/dev/null) || return 0
+
+    local session_id nickname
+    session_id=$(printf '%s' "$response" | json_field "session_id")
+    nickname=$(printf '%s' "$response" | json_field "nickname")
+
+    {
+      echo "KHEF_SESSION_ID=$session_id"
+      echo "KHEF_NICKNAME=$nickname"
+      echo "KHEF_SESSION_FILE=$match"
+    } > "$STATUS_FILE"
+    return 0
+  done
 }
+
+# --- Cleanup ---
+cleanup() {
+  if [ -n "$DISCOVERY_PID" ]; then
+    kill "$DISCOVERY_PID" 2>/dev/null || true
+  fi
+  if [ -f "$STATUS_FILE" ]; then
+    local sid nick
+    sid=$(grep '^KHEF_SESSION_ID=' "$STATUS_FILE" | cut -d= -f2- || true)
+    nick=$(grep '^KHEF_NICKNAME=' "$STATUS_FILE" | cut -d= -f2- || true)
+    if [ -n "${sid:-}" ]; then
+      curl -sf -X POST "$API/api/active-sessions/$sid/deactivate" \
+        -H "Content-Type: application/json" > /dev/null 2>&1 || true
+      if [ -n "${nick:-}" ]; then
+        printf "\033[0;90mCodex session: %s | nickname: \033[1;36m%s\033[0m\n" "$sid" "$nick"
+      else
+        printf "\033[0;90mCodex session: %s\033[0m\n" "$sid"
+      fi
+    fi
+    rm -f "$STATUS_FILE"
+  fi
+  rm -f "$TIME_MARKER"
+}
+
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 # --- Main ---
-trap deactivate_session EXIT
-trap 'deactivate_session; exit 130' INT
-trap 'deactivate_session; exit 143' TERM
-
-# Register and show nickname
 if curl -sf "$API/health" > /dev/null 2>&1; then
-  register
+  discover_session "$CWD" &
+  DISCOVERY_PID=$!
 else
-  printf "\033[1;33mWarning: khef API not reachable at %s — session not registered.\033[0m\n" "$API"
+  printf "\033[1;33mWarning: khef API not reachable at %s — Codex session won't be registered.\033[0m\n" "$API"
 fi
 
-# Export session ID and nickname so Codex MCP tools can use them
-export KHEF_SESSION_ID="$SESSION_ID"
-export KHEF_NICKNAME="$NICKNAME"
-
-# Launch codex, passing all arguments through
+# Hand the TTY to Codex. Discovery, registration, and deactivation all run
+# out of band; the TUI is never touched.
 codex "$@"

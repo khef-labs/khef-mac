@@ -73,6 +73,8 @@ tags:
     description: Database backup file management
   - name: seed
     description: Database seeding (memory types, statuses, definitions, memories)
+  - name: dbx
+    description: Database Explorer — connections, schema browsing, ad-hoc queries, saved queries with parameters and snapshots
 paths:
   /health:
     $ref: paths/health.yaml#/Health
@@ -432,6 +434,62 @@ paths:
     $ref: paths/backups.yaml#/BackupsByIdRestore
   /api/seed:
     $ref: paths/seed.yaml#/Seed
+  /api/dbx/connections:
+    $ref: paths/dbx.yaml#/DbxConnections
+  /api/dbx/connections/test:
+    $ref: paths/dbx.yaml#/DbxConnectionsTest
+  /api/dbx/connections/{id}:
+    $ref: paths/dbx.yaml#/DbxConnectionsById
+  /api/dbx/connections/{id}/test:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdTest
+  /api/dbx/connections/{id}/overview:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdOverview
+  /api/dbx/connections/{id}/schemas:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemas
+  /api/dbx/connections/{id}/schemas/{schema}/tables:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdTables
+  /api/dbx/connections/{id}/schemas/{schema}/tables/{table}:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdTablesById
+  /api/dbx/connections/{id}/schemas/{schema}/tables/{table}/data:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdTablesByIdData
+  /api/dbx/connections/{id}/schemas/{schema}/tables/{table}/erd:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdTablesByIdErd
+  /api/dbx/connections/{id}/schemas/{schema}/erd:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdErd
+  /api/dbx/connections/{id}/schemas/{schema}/functions:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdFunctions
+  /api/dbx/connections/{id}/schemas/{schema}/functions/{name}:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdFunctionsByName
+  /api/dbx/connections/{id}/schemas/{schema}/triggers:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdSchemasByIdTriggers
+  /api/dbx/connections/{id}/query:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdQuery
+  /api/dbx/connections/{id}/query/cancel:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdQueryCancel
+  /api/dbx/connections/{id}/history:
+    $ref: paths/dbx.yaml#/DbxConnectionsByIdHistory
+  /api/dbx/scripts:
+    $ref: paths/dbx.yaml#/DbxScripts
+  /api/dbx/scripts/{id}:
+    $ref: paths/dbx.yaml#/DbxScriptsById
+  /api/dbx/saved-queries:
+    $ref: paths/dbx.yaml#/DbxSavedQueries
+  /api/dbx/saved-queries/recent:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesRecent
+  /api/dbx/saved-queries/{id}:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesById
+  /api/dbx/saved-queries/{id}/favorite:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesByIdFavorite
+  /api/dbx/saved-queries/{id}/run:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesByIdRun
+  /api/dbx/saved-queries/{id}/snapshots:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesByIdSnapshots
+  /api/dbx/saved-queries/{id}/snapshots/{num}:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesByIdSnapshotsByNum
+  /api/dbx/saved-queries/{id}/snapshots/{num}/restore:
+    $ref: paths/dbx.yaml#/DbxSavedQueriesByIdSnapshotsByNumRestore
+  /api/dbx/erd/save:
+    $ref: paths/dbx.yaml#/DbxErdSave
 components:
   parameters:
     ProjectId:

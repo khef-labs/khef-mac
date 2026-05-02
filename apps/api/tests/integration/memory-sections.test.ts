@@ -519,6 +519,100 @@ Final thoughts here.`;
       expect(JSON.parse(testingResponse.payload).content).toContain('Unit tests');
     });
 
+    it('should reject body whose subsection headings collide with existing children when replace_subsections is false', async () => {
+      const newContent =
+        'Rewritten intro.\n\n### API Changes\n\nAttempted inline subsection.\n\n### Database Schema\n\nAnother attempt.';
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/memories/${memoryId}/sections/Technical%20Design`,
+        payload: { content: newContent }
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.payload);
+      expect(body.error).toMatch(/replace_subsections=true/);
+      expect(body.error).toMatch(/API Changes/);
+      expect(body.error).toMatch(/Database Schema/);
+
+      // Outline should be unchanged — original subsections still exactly once
+      const outlineResponse = await app.inject({
+        method: 'GET',
+        url: `/api/memories/${memoryId}/outline?include_content=false`
+      });
+      const outline = JSON.parse(outlineResponse.payload);
+      const apiHeadings = outline.sections.filter((s: any) => s.heading === 'API Changes');
+      const dbHeadings = outline.sections.filter((s: any) => s.heading === 'Database Schema');
+      expect(apiHeadings).toHaveLength(1);
+      expect(dbHeadings).toHaveLength(1);
+    });
+
+    it('should insert a new (non-colliding) subsection before existing children', async () => {
+      const newContent =
+        'Updated intro.\n\n### Architecture Overview\n\nNew subsection content that does not collide.';
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/memories/${memoryId}/sections/Technical%20Design`,
+        payload: { content: newContent }
+      });
+      expect(response.statusCode).toBe(200);
+
+      const outlineResponse = await app.inject({
+        method: 'GET',
+        url: `/api/memories/${memoryId}/outline?include_content=false`
+      });
+      const outline = JSON.parse(outlineResponse.payload);
+
+      // New subsection appears exactly once; existing children also exactly once
+      const newOnes = outline.sections.filter((s: any) => s.heading === 'Architecture Overview');
+      const apiOnes = outline.sections.filter((s: any) => s.heading === 'API Changes');
+      const dbOnes = outline.sections.filter((s: any) => s.heading === 'Database Schema');
+      expect(newOnes).toHaveLength(1);
+      expect(apiOnes).toHaveLength(1);
+      expect(dbOnes).toHaveLength(1);
+
+      // Order check: Architecture Overview comes before API Changes
+      const newIdx = outline.sections.findIndex((s: any) => s.heading === 'Architecture Overview');
+      const apiIdx = outline.sections.findIndex((s: any) => s.heading === 'API Changes');
+      expect(newIdx).toBeLessThan(apiIdx);
+    });
+
+    it('should accept body with child-level headings when replace_subsections is true', async () => {
+      const newContent =
+        'Rewritten intro.\n\n### New Subsection\n\nFresh content.';
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/memories/${memoryId}/sections/Technical%20Design`,
+        payload: { content: newContent, replace_subsections: true }
+      });
+
+      expect(response.statusCode).toBe(200);
+
+      const outlineResponse = await app.inject({
+        method: 'GET',
+        url: `/api/memories/${memoryId}/outline?include_content=false`
+      });
+      const outline = JSON.parse(outlineResponse.payload);
+      const subHeadings = outline.sections.filter(
+        (s: any) => s.heading === 'New Subsection'
+      );
+      expect(subHeadings).toHaveLength(1);
+      // Original subsections should be gone
+      const apiHeadings = outline.sections.filter((s: any) => s.heading === 'API Changes');
+      expect(apiHeadings).toHaveLength(0);
+    });
+
+    it('should allow body without child headings on a parent that has subsections', async () => {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/memories/${memoryId}/sections/Technical%20Design`,
+        payload: { content: 'Just an intro paragraph, no subsection markdown.' }
+      });
+      expect(response.statusCode).toBe(200);
+    });
+
     it('should not change behavior for leaf sections (no children)', async () => {
       const newContent = 'Updated conclusion text.';
 

@@ -28,13 +28,20 @@ export async function getCurrentSnapshot(memoryId: string, client?: PoolClient):
   return result[0].current;
 }
 
+export type SnapshotSource =
+  | 'manual'
+  | 'external-sync'
+  | 'pre-sync'
+  | 'pre-restore'
+  | 'pre-update';
+
 /**
  * Save a snapshot of a memory's current content (and optionally comments).
  * Skips if the memory doesn't exist. Returns true if a snapshot was created.
  */
 export async function saveSnapshot(
   memoryId: string,
-  source: 'manual' | 'external-sync' | 'pre-sync' | 'pre-restore' = 'manual',
+  source: SnapshotSource = 'manual',
   client?: PoolClient,
 ): Promise<boolean> {
   const q = client
@@ -62,4 +69,33 @@ export async function saveSnapshot(
   );
 
   return true;
+}
+
+/**
+ * Save a snapshot only if the proposed `newContent` differs from the memory's
+ * current content. Used by content-changing routes to auto-snapshot the
+ * "pre-update" state without churning a snapshot per metadata-only call or
+ * per write that happens to set content to its existing value.
+ *
+ * Returns true if a snapshot was created, false if skipped.
+ */
+export async function saveSnapshotIfContentChanged(
+  memoryId: string,
+  newContent: string,
+  source: SnapshotSource = 'pre-update',
+  client?: PoolClient,
+): Promise<boolean> {
+  const q = client
+    ? (sql: string, params: any[]) => client.query(sql, params).then(r => r.rows)
+    : query;
+
+  const rows = await q('SELECT content FROM memories WHERE id = $1', [memoryId]);
+  if (!rows.length) return false;
+
+  const currentContent = (rows[0] as any).content as string;
+  if (currentContent === newContent) {
+    return false;
+  }
+
+  return saveSnapshot(memoryId, source, client);
 }

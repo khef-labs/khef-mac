@@ -1,4 +1,4 @@
-import type { DbxTableDetail, DbxQueryResult, DbxErdData, DbxSchemaErdData } from '../../lib/dbx-api'
+import type { DbxTableDetail, DbxQueryResult, DbxErdData, DbxSchemaErdData, DbxSavedQueryParam } from '../../lib/dbx-api'
 
 export interface TreeNode {
   type: 'connection' | 'schema' | 'folder' | 'table' | 'view' | 'column' | 'function' | 'trigger'
@@ -17,6 +17,24 @@ export interface SqlTab {
   name: string
   content: string
   scriptId?: string
+  savedQueryId?: string
+  /** Declared params for a saved query — fetched on open. Drives the params form. */
+  savedQueryParams?: DbxSavedQueryParam[]
+  /** Per-tab values keyed by param name. Persisted in sessionStorage with the tab. */
+  paramValues?: Record<string, unknown>
+  /**
+   * Server-derived pointer to the snapshot whose SQL matches the live row.
+   * Refreshed on snapshot list load and on capture/restore actions.
+   */
+  currentSnapshot?: number | null
+  /**
+   * When set, the editor displays this snapshot's SQL read-only instead of
+   * the live `content`. Picking the same number as `currentSnapshot` clears
+   * this back to null (live editing). Mirrors memories' `viewingSnapshot`.
+   */
+  viewingSnapshot?: number | null
+  /** Cached SQL of the snapshot currently being viewed (null when not in view mode). */
+  viewingSnapshotSql?: string | null
   connectionId: string
   isDirty: boolean
 }
