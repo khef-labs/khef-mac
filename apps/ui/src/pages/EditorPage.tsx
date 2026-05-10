@@ -4,6 +4,7 @@ import { Folder, FolderOpen, FolderPlus, FilePlus, X, FileCode, PanelLeftClose, 
 import clsx from 'clsx'
 import { CodeEditor, FileTree, QuickOpen, SearchPanel } from '../components/editor'
 import { ChickenIcon } from '../components/editor/ChickenIcon'
+import { useToast } from '../components/ui'
 import type { PaletteCommand } from '../components/editor'
 import type { EditorLanguage } from '../components/editor'
 import { fsRead, fsWrite, fsDelete, fsTree, fsNew, fsCompletions, fsReveal, getScratchHome, previewDiagram, getProjects, type DiagramType } from '../lib/api'
@@ -13,7 +14,7 @@ import { consumeEditorDeepLink } from '../lib/editorDeepLink'
 import { markdownProcessor } from '../lib/markdown'
 import { getDiagramTheme } from '../lib/exportPreferences'
 import { loadStore, saveStore } from '../lib/store'
-import type { FsCompletion } from '../types/api'
+import type { FsCompletion, FsEntry } from '../types/api'
 import { useDocumentTitle } from '../hooks'
 import styles from './EditorPage.module.css'
 
@@ -144,6 +145,7 @@ function findNeedlePosition(content: string, needle: string): { line: number; co
 }
 
 export function EditorPage() {
+  const { showToast } = useToast()
   const initialEditor = useRef(loadStore().editor)
   const [rootPath, setRootPath] = useState(initialEditor.current.rootPath)
   const [favoriteFolders, setFavoriteFolders] = useState<string[]>(initialEditor.current.favoriteFolders ?? [])
@@ -152,6 +154,11 @@ export function EditorPage() {
   const [isFolded, setIsFolded] = useState(false)
   const [showPathInput, setShowPathInput] = useState(false)
   const [pathInputMode, setPathInputMode] = useState<'open-folder' | 'save-as'>('open-folder')
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false)
+  const [browserCwd, setBrowserCwd] = useState('')
+  const [browserEntries, setBrowserEntries] = useState<FsEntry[]>([])
+  const [browserLoading, setBrowserLoading] = useState(false)
+  const [browserError, setBrowserError] = useState<string | null>(null)
   const [quickOpenVisible, setQuickOpenVisible] = useState(false)
   const [quickOpenInitialScope, setQuickOpenInitialScope] = useState<'commands' | 'project' | 'global'>('commands')
   const [rootCreateRequest, setRootCreateRequest] = useState<{ type: 'file' | 'directory'; parentPath: string; nonce: number } | null>(null)
@@ -162,7 +169,7 @@ export function EditorPage() {
   const [activeGroupId, setActiveGroupId] = useState(() => groups[0].id)
   const [explorerCollapsed, setExplorerCollapsed] = useState(false)
   const [showHiddenFiles, setShowHiddenFiles] = useState(false)
-  const [sidebarMode, setSidebarMode] = useState<'explorer' | 'search' | 'scratches'>('explorer')
+  const [sidebarMode, setSidebarMode] = useState<'explorer' | 'search' | 'scratches' | 'starred'>('explorer')
   const [scratchDrawerEnabled, setScratchDrawerEnabled] = useState(false)
   const [scratchHome, setScratchHome] = useState<string | null>(null)
   const [scratchTreeNonce, setScratchTreeNonce] = useState(0)
@@ -770,7 +777,9 @@ export function EditorPage() {
   // Revert active tab to saved content from disk
   const executeRevertActiveTab = useCallback(async () => {
     if (!activeTab) return
-    if (activeTab.content === activeTab.savedContent) return
+
+    const prevSaved = activeTab.savedContent
+    const wasDirty = activeTab.content !== prevSaved
 
     try {
       const result = await fsRead(activeTab.path)
@@ -794,32 +803,48 @@ export function EditorPage() {
           ),
         }
       }))
+      const diskChanged = result.content !== prevSaved
+      if (wasDirty) {
+        showToast(diskChanged ? 'Reloaded — disk had external changes' : 'Reverted to saved file')
+      } else {
+        showToast(diskChanged ? 'File changed on disk — reloaded' : 'File unchanged on disk')
+      }
     } catch (err: any) {
       console.error('Failed to revert file:', err)
+      showToast(`Revert failed: ${err?.message ?? 'unknown error'}`, undefined, { variant: 'error' })
     }
-  }, [activeTab, activeGroupId])
+  }, [activeTab, activeGroupId, showToast])
 
-  // Revert active tab to saved content from disk (with modal confirmation)
+  // Revert active tab to saved content from disk
+  // - Dirty buffer: prompt for confirmation before discarding edits
+  // - Clean buffer: re-read from disk silently (handles external modifications)
   const revertActiveTab = useCallback(async () => {
     if (!activeTab) return
-    if (activeTab.content === activeTab.savedContent) return
-    setPendingRevert(true)
-  }, [activeTab])
+    if (activeTab.content !== activeTab.savedContent) {
+      setPendingRevert(true)
+      return
+    }
+    await executeRevertActiveTab()
+  }, [activeTab, executeRevertActiveTab])
 
-  // Revert a file by path — activates the tab first, then triggers the modal
+  // Revert a file by path — activates the tab first, then either prompts (dirty) or re-reads silently (clean)
   const revertFileByPath = useCallback((path: string) => {
-    // Find and activate the tab, then trigger revert
     for (const g of groups) {
       const idx = g.tabs.findIndex(t => t.path === path)
       if (idx >= 0) {
-        if (g.tabs[idx].content === g.tabs[idx].savedContent) return
+        const isDirtyTab = g.tabs[idx].content !== g.tabs[idx].savedContent
         setActiveGroupId(g.id)
         setGroups(prev => prev.map(gr => gr.id === g.id ? { ...gr, activeTabIndex: idx } : gr))
-        setPendingRevert(true)
+        if (isDirtyTab) {
+          setPendingRevert(true)
+        } else {
+          // Defer to next tick so the activation above commits before the revert reads activeTab
+          window.setTimeout(() => { void executeRevertActiveTab() }, 0)
+        }
         return
       }
     }
-  }, [groups])
+  }, [groups, executeRevertActiveTab])
 
   const handleRevertCancel = useCallback(() => {
     setPendingRevert(false)
@@ -1256,6 +1281,14 @@ export function EditorPage() {
         return
       }
 
+      // Escape dismisses folder browser modal (returns to path input)
+      if (e.key === 'Escape' && showFolderBrowser) {
+        e.preventDefault()
+        setShowFolderBrowser(false)
+        setShowPathInput(true)
+        return
+      }
+
       // Escape dismisses save modal
       if (e.key === 'Escape' && (pendingCloseIndex !== null || pendingRevert || pendingCloseAll)) {
         e.preventDefault()
@@ -1469,7 +1502,7 @@ export function EditorPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [activeGroup, isSplit, groups, activeGroupId, activeTab, closeTab, zoomIn, zoomOut, zoomReset, revertActiveTab, pendingCloseIndex, pendingRevert, handleRevertConfirm, handleCloseSave, quickOpenVisible, rootPath, saveTabAs, openScratchTab, showPathInput])
+  }, [activeGroup, isSplit, groups, activeGroupId, activeTab, closeTab, zoomIn, zoomOut, zoomReset, revertActiveTab, pendingCloseIndex, pendingRevert, handleRevertConfirm, handleCloseSave, quickOpenVisible, rootPath, saveTabAs, openScratchTab, showPathInput, showFolderBrowser])
 
   // Fetch directory completions (debounced)
   const fetchCompletions = useCallback((prefix: string) => {
@@ -1574,6 +1607,55 @@ export function EditorPage() {
     fetchCompletions(value)
   }, [fetchCompletions])
 
+  const loadBrowserDir = useCallback(async (dir: string) => {
+    setBrowserLoading(true)
+    setBrowserError(null)
+    try {
+      const tree = await fsTree(dir, 1, showHiddenFiles)
+      const dirs = (tree.entries || [])
+        .filter((e) => e.type === 'directory')
+        .sort((a, b) => a.name.localeCompare(b.name))
+      setBrowserCwd(tree.path)
+      setBrowserEntries(dirs)
+    } catch (err) {
+      setBrowserError(err instanceof Error ? err.message : 'Failed to load directory')
+      setBrowserEntries([])
+    } finally {
+      setBrowserLoading(false)
+    }
+  }, [showHiddenFiles])
+
+  const openFolderBrowser = useCallback(() => {
+    const v = pathValue.trim()
+    let start = '~/'
+    if (v) {
+      if (v.endsWith('/')) {
+        start = v.length > 1 ? v.slice(0, -1) : v
+      } else if (v.includes('/')) {
+        const idx = v.lastIndexOf('/')
+        start = v.slice(0, idx) || '/'
+      } else {
+        start = v
+      }
+    }
+    // Backend only expands "~/", not bare "~"
+    if (start === '~') start = '~/'
+    setShowPathInput(false)
+    setShowFolderBrowser(true)
+    void loadBrowserDir(start)
+  }, [pathValue, loadBrowserDir])
+
+  const cancelFolderBrowser = useCallback(() => {
+    setShowFolderBrowser(false)
+    setShowPathInput(true)
+  }, [])
+
+  const confirmFolderBrowser = useCallback(() => {
+    if (!browserCwd) return
+    setShowFolderBrowser(false)
+    handlePathSubmit(browserCwd)
+  }, [browserCwd, handlePathSubmit])
+
   const acceptCompletion = useCallback((completion: FsCompletion) => {
     const newValue = completion.path + '/'
     setPathValue(newValue)
@@ -1671,6 +1753,27 @@ export function EditorPage() {
       action: () => {
         // Trigger the keyboard shortcut handler logic via a synthetic keydown
         window.dispatchEvent(new KeyboardEvent('keydown', { key: '\\', code: 'Backslash', metaKey: true, shiftKey: true }))
+      },
+    },
+    {
+      id: 'format-json',
+      label: 'Format JSON',
+      action: () => {
+        const tab = activeGroup.tabs[activeGroup.activeTabIndex]
+        if (!tab) return
+        try {
+          const formatted = JSON.stringify(JSON.parse(tab.content), null, 2)
+          if (formatted === tab.content) return
+          setGroups((prev) => prev.map((g) => {
+            if (g.id !== activeGroup.id) return g
+            return {
+              ...g,
+              tabs: g.tabs.map((t, i) => (i === g.activeTabIndex ? { ...t, content: formatted } : t)),
+            }
+          }))
+        } catch (err) {
+          window.alert(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
+        }
       },
     },
     {
@@ -1863,6 +1966,13 @@ export function EditorPage() {
               >
                 <Search size={14} />
               </button>
+              <button
+                class={clsx(styles.explorerModeTab, sidebarMode === 'starred' && styles.explorerModeTabActive)}
+                onClick={() => { setSidebarMode('starred'); setExplorerCollapsed(false) }}
+                title="Starred Folders"
+              >
+                <Star size={14} />
+              </button>
               {scratchDrawerEnabled && (
                 <button
                   class={clsx(styles.explorerModeTab, sidebarMode === 'scratches' && styles.explorerModeTabActive)}
@@ -1874,26 +1984,36 @@ export function EditorPage() {
               )}
             </div>
             <div class={styles.explorerActions}>
-              {sidebarMode === 'explorer' && (
-                <>
-                  <button
-                    class={styles.explorerToggle}
-                    onClick={handleOpenFolder}
-                    title="Open Folder"
-                  >
-                    <FolderOpen size={14} />
-                  </button>
-                  <button
-                    class={styles.explorerToggle}
-                    onClick={() => requestRootCreate('directory')}
-                    title={rootPath ? 'New Folder (root)' : 'Open a folder first'}
-                    disabled={!rootPath}
-                  >
-                    <FolderPlus size={14} />
-                  </button>
-                </>
+              {(sidebarMode === 'explorer' || sidebarMode === 'starred') && (
+                <button
+                  class={styles.explorerToggle}
+                  onClick={handleOpenFolder}
+                  title="Open Folder"
+                >
+                  <FolderOpen size={14} />
+                </button>
               )}
-              {sidebarMode !== 'search' && (
+              {sidebarMode === 'explorer' && rootPath && (
+                <button
+                  class={clsx(styles.explorerToggle, isFavorite(rootPath) && styles.explorerToggleStarred)}
+                  onClick={() => toggleFavorite(rootPath)}
+                  title={isFavorite(rootPath) ? 'Unstar this folder' : 'Star this folder'}
+                  aria-pressed={isFavorite(rootPath)}
+                >
+                  <Star size={14} fill={isFavorite(rootPath) ? 'currentColor' : 'none'} />
+                </button>
+              )}
+              {sidebarMode === 'explorer' && (
+                <button
+                  class={styles.explorerToggle}
+                  onClick={() => requestRootCreate('directory')}
+                  title={rootPath ? 'New Folder (root)' : 'Open a folder first'}
+                  disabled={!rootPath}
+                >
+                  <FolderPlus size={14} />
+                </button>
+              )}
+              {(sidebarMode === 'explorer' || sidebarMode === 'scratches') && (
                 <button
                   class={styles.explorerToggle}
                   onClick={() => void openScratchTab()}
@@ -1918,6 +2038,55 @@ export function EditorPage() {
                 visible={!explorerCollapsed}
                 onOpenFile={openFileAtLine}
               />
+            ) : sidebarMode === 'starred' ? (
+              favoriteFolders.length === 0 ? (
+                <div class={styles.starredEmpty}>
+                  <div class={styles.starredEmptyGlyph}><Star size={26} /></div>
+                  <h3 class={styles.starredEmptyTitle}>No starred folders</h3>
+                  <p class={styles.starredEmptyBody}>
+                    Star a folder from the Open Folder dialog (or while it's open) and it will show up here for quick access.
+                  </p>
+                </div>
+              ) : (
+                <div class={styles.starredList}>
+                  {favoriteFolders.map((folder) => {
+                    const label = folder.split('/').filter(Boolean).pop() || folder
+                    const isActive = rootPath === folder
+                    return (
+                      <div
+                        key={folder}
+                        class={clsx(
+                          styles.starredItem,
+                          isActive && styles.starredItemActive,
+                          shimmerPath === folder && styles.starredItemShimmer
+                        )}
+                      >
+                        <button
+                          type="button"
+                          class={styles.starredItemOpen}
+                          onClick={() => { handlePathSubmit(folder); setSidebarMode('explorer') }}
+                          title={`Open ${folder}`}
+                        >
+                          <FolderOpen size={14} class={styles.starredItemIcon} />
+                          <span class={styles.starredItemBody}>
+                            <span class={styles.starredItemName}>{label}</span>
+                            <span class={styles.starredItemPath}>{folder}</span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          class={styles.starredItemUnstar}
+                          onClick={(e: Event) => { e.stopPropagation(); toggleFavorite(folder) }}
+                          title="Unstar"
+                          aria-label={`Unstar ${folder}`}
+                        >
+                          <Star size={13} fill="currentColor" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
             ) : sidebarMode === 'scratches' ? (
               scratchHome ? (
                 <FileTree
@@ -2157,11 +2326,11 @@ export function EditorPage() {
         {activeTab ? (
           <>
             <span class={styles.statusPath}>{activeTab.path}</span>
-            {isDirty && !isImageTab && (
+            {!isImageTab && (
               <button
                 class={styles.statusAction}
                 onClick={revertActiveTab}
-                title="Revert to saved"
+                title={isDirty ? 'Discard edits and reload from disk' : 'Reload from disk'}
               >
                 <Undo2 size={12} />
                 Revert
@@ -2282,7 +2451,7 @@ export function EditorPage() {
           }}>
             <FilePlus size={14} /> Save As...
           </button>
-          {activeGroup.tabs[tabContextMenu.index] && activeGroup.tabs[tabContextMenu.index].content !== activeGroup.tabs[tabContextMenu.index].savedContent && (
+          {activeGroup.tabs[tabContextMenu.index] && (
             <button class={styles.tabContextMenuItem} onClick={() => {
               setTabContextMenu(null)
               setGroups(prev => prev.map(g => g.id === activeGroupId ? { ...g, activeTabIndex: tabContextMenu.index } : g))
@@ -2432,6 +2601,17 @@ export function EditorPage() {
                 placeholder={pathInputMode === 'save-as' ? '/path/to/file.md' : '/path/to/folder'}
                 autoFocus
               />
+              {pathInputMode === 'open-folder' && (
+                <button
+                  type="button"
+                  class={styles.browseButton}
+                  onClick={openFolderBrowser}
+                  title="Browse for a folder"
+                >
+                  <FolderOpen size={13} />
+                  <span>Browse…</span>
+                </button>
+              )}
               {pathInputMode === 'open-folder' && pathValue.trim().length > 0 && (
                 <button
                   type="button"
@@ -2614,6 +2794,90 @@ export function EditorPage() {
                 </>
               )
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Folder browser modal */}
+      {showFolderBrowser && (
+        <div class={styles.pathInputOverlay} onClick={cancelFolderBrowser}>
+          <div class={clsx(styles.pathInput, styles.folderBrowser)} onClick={(e: Event) => e.stopPropagation()}>
+            <label class={styles.pathInputLabel}>Browse folders</label>
+            <div class={styles.browserCrumbs}>
+              {(() => {
+                const isAbsolute = browserCwd.startsWith('/')
+                const isHome = browserCwd === '~' || browserCwd.startsWith('~/')
+                const segments = browserCwd.split('/').filter(Boolean)
+                const items: { label: string; path: string }[] = []
+                if (isAbsolute) {
+                  items.push({ label: '/', path: '/' })
+                  let acc = ''
+                  for (const seg of segments) {
+                    acc = `${acc}/${seg}`
+                    items.push({ label: seg, path: acc })
+                  }
+                } else if (isHome) {
+                  items.push({ label: '~', path: '~' })
+                  let acc = '~'
+                  for (let i = 1; i < segments.length; i++) {
+                    acc = `${acc}/${segments[i]}`
+                    items.push({ label: segments[i], path: acc })
+                  }
+                } else {
+                  let acc = ''
+                  segments.forEach((seg, i) => {
+                    acc = i === 0 ? seg : `${acc}/${seg}`
+                    items.push({ label: seg, path: acc })
+                  })
+                }
+                return items.map((it, i) => (
+                  <Fragment key={`${it.path}-${i}`}>
+                    {i > 0 && <span class={styles.browserCrumbSep}>/</span>}
+                    <button
+                      type="button"
+                      class={clsx(styles.browserCrumbBtn, i === items.length - 1 && styles.browserCrumbCurrent)}
+                      onClick={() => loadBrowserDir(it.path)}
+                      title={it.path}
+                    >
+                      {it.label}
+                    </button>
+                  </Fragment>
+                ))
+              })()}
+            </div>
+            <div class={styles.browserList}>
+              {browserLoading && <div class={styles.browserStatus}>Loading…</div>}
+              {browserError && <div class={styles.browserError}>{browserError}</div>}
+              {!browserLoading && !browserError && browserEntries.length === 0 && (
+                <div class={styles.browserStatus}>No subfolders</div>
+              )}
+              {!browserLoading && !browserError && browserEntries.map((entry) => (
+                <button
+                  key={entry.path}
+                  type="button"
+                  class={styles.browserItem}
+                  onClick={() => loadBrowserDir(entry.path)}
+                  title={entry.path}
+                >
+                  <Folder size={14} />
+                  <span class={styles.browserItemName}>{entry.name}</span>
+                  <ChevronRight size={14} class={styles.browserItemChevron} />
+                </button>
+              ))}
+            </div>
+            <div class={styles.browserActions}>
+              <button type="button" class={clsx(styles.modalBtn)} onClick={cancelFolderBrowser}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                class={clsx(styles.modalBtnPrimary)}
+                onClick={confirmFolderBrowser}
+                disabled={!browserCwd}
+              >
+                Open this folder
+              </button>
+            </div>
           </div>
         </div>
       )}

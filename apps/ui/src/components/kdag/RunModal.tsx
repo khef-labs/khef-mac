@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'preact/hooks'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'preact/hooks'
 import { Play } from 'lucide-preact'
 import {
   getJobDefinition,
   createKdagJob,
   runKdagJob,
 } from '../../lib/api'
-import type { JobDefinitionInput } from '../../types'
+import type { JobDefinitionInput, JobDefinitionStep } from '../../types'
 import { ModelCombobox } from '../ui'
 import { useKdagBackends } from '../../hooks/useKdagBackends'
 import styles from './RunModal.module.css'
@@ -24,6 +24,7 @@ function inputLabel(key: string) {
 
 export function RunModal({ definitionKey, definitionName, inputs: inputsProp, onClose, onCreated }: RunModalProps) {
   const [defInputs, setDefInputs] = useState<JobDefinitionInput[]>(inputsProp || [])
+  const [defSteps, setDefSteps] = useState<JobDefinitionStep[]>([])
   const [loading, setLoading] = useState(!inputsProp)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,27 +42,42 @@ export function RunModal({ definitionKey, definitionName, inputs: inputsProp, on
   }, [backends])
   const [assistant, setAssistant] = useState('claude-code')
   const [model, setModel] = useState('')
+  const userTouchedAssistantRef = useRef(false)
   const selectedBackend = useMemo(() => backends.find(b => b.key === assistant), [backends, assistant])
 
   useEffect(() => {
-    if (inputsProp) return
+    let cancelled = false
     async function load() {
       try {
         const data = await getJobDefinition(definitionKey)
+        if (cancelled) return
         setDefInputs(data.inputs)
+        setDefSteps(data.steps)
         const initial: Record<string, string> = {}
         for (const inp of data.inputs) {
           initial[inp.input_type] = ''
         }
         setValues(initial)
       } catch {
-        setError('Failed to load definition inputs')
+        if (!cancelled) setError('Failed to load definition inputs')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     load()
-  }, [definitionKey, inputsProp])
+    return () => { cancelled = true }
+  }, [definitionKey])
+
+  // Default the run-level assistant to the steps' shared assistant_handle (if any).
+  useEffect(() => {
+    if (userTouchedAssistantRef.current) return
+    if (defSteps.length === 0 || availableBackends.length === 0) return
+    const handles = Array.from(new Set(defSteps.map(s => s.assistant_handle).filter((h): h is string => !!h)))
+    if (handles.length !== 1) return
+    if (availableBackends.some(b => b.key === handles[0])) {
+      setAssistant(handles[0])
+    }
+  }, [defSteps, availableBackends])
 
   const handleSubmit = useCallback(async () => {
     for (const inp of defInputs) {
@@ -104,6 +120,7 @@ export function RunModal({ definitionKey, definitionName, inputs: inputsProp, on
             class={styles.select}
             value={assistant}
             onChange={(e) => {
+              userTouchedAssistantRef.current = true
               setAssistant((e.target as HTMLSelectElement).value)
               setModel('')
             }}
@@ -125,28 +142,47 @@ export function RunModal({ definitionKey, definitionName, inputs: inputsProp, on
           <p class={styles.hint}>No declared inputs. Will run with defaults.</p>
         ) : (
           <div class={styles.body}>
-            {defInputs.map(inp => (
-              <div key={inp.input_type} class={styles.field}>
-                <label class={styles.label}>
-                  {inputLabel(inp.input_type)}
-                  {inp.required ? (
-                    <span class={styles.req}>required</span>
-                  ) : (
-                    <span class={styles.opt}>optional</span>
-                  )}
-                </label>
-                <textarea
-                  class={styles.textarea}
-                  value={values[inp.input_type] || ''}
-                  onInput={(e) => setValues(prev => ({
-                    ...prev,
-                    [inp.input_type]: (e.target as HTMLTextAreaElement).value,
-                  }))}
-                  rows={inp.input_type === 'transcript' ? 8 : 4}
-                  placeholder={`Enter ${inputLabel(inp.input_type).toLowerCase()}...`}
-                />
-              </div>
-            ))}
+            {defInputs.map(inp => {
+              const example = inp.example?.trim() || ''
+              const description = inp.description?.trim() || ''
+              const placeholder = example || `Enter ${inputLabel(inp.input_type).toLowerCase()}...`
+              return (
+                <div key={inp.input_type} class={styles.field}>
+                  <div class={styles.labelRow}>
+                    <label class={styles.label}>
+                      {inputLabel(inp.input_type)}
+                      {inp.required && <span class={styles.req} aria-label="required" title="required">*</span>}
+                    </label>
+                    {example && (
+                      <button
+                        type="button"
+                        class={styles.useExampleBtn}
+                        onClick={() => {
+                          setValues(prev => ({ ...prev, [inp.input_type]: example }))
+                          if (error) setError(null)
+                        }}
+                      >
+                        Use example
+                      </button>
+                    )}
+                  </div>
+                  {description && <p class={styles.fieldHelp}>{description}</p>}
+                  <textarea
+                    class={styles.textarea}
+                    value={values[inp.input_type] || ''}
+                    onInput={(e) => {
+                      setValues(prev => ({
+                        ...prev,
+                        [inp.input_type]: (e.target as HTMLTextAreaElement).value,
+                      }))
+                      if (error) setError(null)
+                    }}
+                    rows={inp.input_type === 'transcript' ? 8 : 4}
+                    placeholder={placeholder}
+                  />
+                </div>
+              )
+            })}
           </div>
         )}
 

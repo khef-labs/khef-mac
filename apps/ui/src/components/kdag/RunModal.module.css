@@ -67,6 +67,34 @@
   gap: var(--space-1);
 }
 
+.fieldHelp {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.useExampleBtn {
+  font-size: var(--text-xs);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.useExampleBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .req {
   font-size: var(--text-xs);
   color: var(--error);

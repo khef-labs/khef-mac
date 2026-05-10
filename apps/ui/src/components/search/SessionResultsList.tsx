@@ -3,6 +3,7 @@ import { SearchX, MessageSquare, Bot, Brain } from 'lucide-preact'
 import clsx from 'clsx'
 import { getSyncedSession } from '../../lib/api'
 import type { SessionSearchResult } from '../../types'
+import { AssistantBadge } from '../ui'
 import styles from './SessionResultsList.module.css'
 
 interface SessionResultsListProps {
@@ -123,6 +124,9 @@ export function SessionResultsList({ results, isLoading, hasQuery }: SessionResu
             onClick={() => handleResultClick(result)}
           >
             <div class={styles.cardHeader}>
+              {result.assistant_handle && (
+                <AssistantBadge handle={result.assistant_handle} size="sm" />
+              )}
               <span class={styles.projectBadge}>
                 {decodeProjectDir(result.project_dir).split('/').pop()}
               </span>

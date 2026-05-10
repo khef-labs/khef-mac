@@ -86,6 +86,11 @@
   color: var(--muted);
 }
 
+.requiredMark {
+  color: var(--muted-2);
+  margin-left: 2px;
+}
+
 .createInput,
 .createTextarea {
   padding: var(--space-2) var(--space-3);

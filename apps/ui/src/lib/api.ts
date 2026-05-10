@@ -118,6 +118,7 @@ export async function createProject(data: {
   name: string
   display_name?: string
   description?: string | null
+  path?: string | null
 }): Promise<Project> {
   return client.post('projects', { json: data }).json()
 }
@@ -1235,6 +1236,20 @@ export async function getSessionTranscript(
       `assistants/${encodeURIComponent(handle)}/sessions/${encodeURIComponent(projectDir)}/${encodeURIComponent(sessionId)}`,
       { searchParams }
     )
+    .json()
+}
+
+// Read a synced session's raw transcript by id (DB row id or file UUID). Works
+// for both Claude and Codex — the API resolves file_path from the sessions row.
+export async function getSessionRaw(
+  sessionId: string,
+  params?: { limit?: number; offset?: number }
+): Promise<SessionFileDetailResponse> {
+  const searchParams = new URLSearchParams()
+  if (params?.limit !== undefined) searchParams.set('limit', String(params.limit))
+  if (params?.offset !== undefined) searchParams.set('offset', String(params.offset))
+  return client
+    .get(`sessions/${encodeURIComponent(sessionId)}/raw`, { searchParams })
     .json()
 }
 

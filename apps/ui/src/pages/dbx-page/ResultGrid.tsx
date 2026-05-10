@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'preact/hooks'
 import { ChevronRight, ChevronLeft, List, Grid3X3, Download, ArrowUp, ArrowDown, Copy, Check } from 'lucide-preact'
 import clsx from 'clsx'
 import type { DbxQueryResult } from '../../lib/dbx-api'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 /** Parse pg array string like "{a,b,c}" into ["a","b","c"], or pass through if already an array */
 export function pgArray(val: any): string[] {

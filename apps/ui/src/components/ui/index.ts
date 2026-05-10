@@ -1,4 +1,5 @@
-export { TypeBadge, StatusBadge, TagBadge } from './Badge'
+export { TypeBadge, StatusBadge, TagBadge, AssistantBadge } from './Badge'
+export { AssistantIcon, ClaudeIcon, CodexIcon } from './AssistantIcon'
 export { Card, CardSkeleton, cardStyles } from './Card'
 export { ConfirmModal } from './ConfirmModal'
 export { TypeToConfirmModal } from './TypeToConfirmModal'

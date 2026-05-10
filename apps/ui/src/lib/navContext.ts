@@ -1,18 +1,14 @@
 /**
  * Navigation context for memory list navigation.
  * Stores the current list of memory IDs and position for arrow key navigation.
+ *
+ * Backed by sessionStorage['khef-state'].memoryNav via lib/store. Legacy
+ * top-level 'khefNavContext' keys are migrated lazily on first read.
  */
 
-const STORAGE_KEY = 'khefNavContext'
+import { loadSession, saveSession, type NavListContext } from './store'
 
-export interface NavContext {
-  /** Ordered list of memory IDs in the current view */
-  ids: string[]
-  /** Current position in the list (0-indexed) */
-  currentIndex: number
-  /** Source URL to return to (e.g., /search?q=test or /projects/abc) */
-  source: string
-}
+export type NavContext = NavListContext
 
 /**
  * Store navigation context when entering a memory from a list view.
@@ -21,9 +17,7 @@ export function setNavContext(ids: string[], currentId: string, source: string):
   if (typeof window === 'undefined') return
   const currentIndex = ids.indexOf(currentId)
   if (currentIndex === -1) return
-
-  const context: NavContext = { ids, currentIndex, source }
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context))
+  saveSession({ memoryNav: { ids, currentIndex, source } })
 }
 
 /**
@@ -31,13 +25,7 @@ export function setNavContext(ids: string[], currentId: string, source: string):
  */
 export function getNavContext(): NavContext | null {
   if (typeof window === 'undefined') return null
-  try {
-    const stored = window.sessionStorage.getItem(STORAGE_KEY)
-    if (!stored) return null
-    return JSON.parse(stored) as NavContext
-  } catch {
-    return null
-  }
+  return loadSession().memoryNav
 }
 
 /**
@@ -48,9 +36,7 @@ export function updateNavIndex(newIndex: number): void {
   const context = getNavContext()
   if (!context) return
   if (newIndex < 0 || newIndex >= context.ids.length) return
-
-  context.currentIndex = newIndex
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context))
+  saveSession({ memoryNav: { ...context, currentIndex: newIndex } })
 }
 
 /**
@@ -58,7 +44,7 @@ export function updateNavIndex(newIndex: number): void {
  */
 export function clearNavContext(): void {
   if (typeof window === 'undefined') return
-  window.sessionStorage.removeItem(STORAGE_KEY)
+  saveSession({ memoryNav: null })
 }
 
 /**

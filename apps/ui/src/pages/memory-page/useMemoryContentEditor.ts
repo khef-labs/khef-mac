@@ -22,7 +22,7 @@ import {
 } from '../../lib/exportPreferences'
 import { exportTimestamp } from '../../lib/format'
 import { getSettings } from '../../lib/settings'
-import { getExternalSource, isGoogleDocType } from './lib'
+import { loadSession } from '../../lib/store'
 import type { Memory, Project } from '../../types'
 import type { HeadingPosition } from './lib'
 
@@ -78,7 +78,6 @@ export function useMemoryContentEditor({
   const contentEditingDisabledReason = useMemo(() => {
     if (!memory) return null
     if (memory.metadata?.['seed-path']) return 'Seeded memory — edit the seed file'
-    if (isGoogleDocType(memory) && !!getExternalSource(memory.metadata)) return 'Editing disabled - content synced from Google Doc'
     return null
   }, [memory?.metadata, memory?.type, memory?.parent_type])
 
@@ -584,9 +583,7 @@ export function useMemoryContentEditor({
     try {
       await deleteMemory(projectId, memory.id)
       const lastLocation =
-        typeof window !== 'undefined'
-          ? window.sessionStorage.getItem('khefLastLocation')
-          : null
+        typeof window !== 'undefined' ? loadSession().lastLocation : null
       if (lastLocation && !lastLocation.startsWith('/memories/')) {
         setLocation(lastLocation)
       } else if (project?.id) {

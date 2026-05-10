@@ -1,6 +1,7 @@
 import clsx from 'clsx'
 import type { MemoryType, MemoryStatus } from '../../types'
 import { getTypeLabel } from '../../lib/memoryTypes'
+import { ClaudeIcon, CodexIcon } from './AssistantIcon'
 import styles from './Badge.module.css'
 
 interface TypeBadgeProps {
@@ -153,4 +154,46 @@ interface TagBadgeProps {
 
 export function TagBadge({ name }: TagBadgeProps) {
   return <span class={clsx(styles.badge, styles.tag)} data-testid={`tag-badge--${name}`}>{name}</span>
+}
+
+interface AssistantBadgeProps {
+  handle: string
+  name?: string
+  size?: 'sm' | 'md'
+}
+
+const ASSISTANT_LABELS: Record<string, string> = {
+  'claude-code': 'Claude',
+  'codex-cli': 'Codex',
+  'gemini-cli': 'Gemini',
+}
+
+function getAssistantVariant(handle: string): string {
+  if (handle === 'codex-cli') return styles.assistantCodex
+  if (handle === 'claude-code') return styles.assistantClaude
+  if (handle === 'gemini-cli') return styles.assistantGemini
+  return styles.assistantOther
+}
+
+function AssistantGlyph({ handle, size }: { handle: string; size: number }) {
+  if (handle === 'claude-code') return <ClaudeIcon size={size} />
+  if (handle === 'codex-cli') return <CodexIcon size={size} />
+  return <span aria-hidden="true">●</span>
+}
+
+export function AssistantBadge({ handle, name, size = 'md' }: AssistantBadgeProps) {
+  const label = name ?? ASSISTANT_LABELS[handle] ?? handle
+  const glyphSize = size === 'sm' ? 11 : 13
+  return (
+    <span
+      class={clsx(styles.badge, getAssistantVariant(handle), size === 'sm' && styles.assistantSm)}
+      data-testid={`assistant-badge--${handle}`}
+      title={label}
+    >
+      <span class={styles.assistantGlyph}>
+        <AssistantGlyph handle={handle} size={glyphSize} />
+      </span>
+      <span class={styles.assistantLabel}>{label}</span>
+    </span>
+  )
 }

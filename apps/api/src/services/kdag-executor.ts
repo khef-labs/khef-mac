@@ -125,6 +125,8 @@ interface JobInputRow {
 interface JobMeta {
   model?: string;
   assistant: string;
+  /** Input type keys declared with required=false on this definition. */
+  optionalInputs: Set<string>;
 }
 
 /** Metadata about a completed step, available as {{meta.<step_key>.*}} in templates. */
@@ -358,7 +360,7 @@ async function runGemini(args: {
   useThinking?: boolean;
   thinkingBudget?: number;
   maxRetries?: number;
-}): Promise<{ text: string; grounding?: { searchQueries: string[]; sources: Array<{ uri: string; title: string }> }; thinking?: { text: string; tokenCount: number } }> {
+}): Promise<{ text: string; grounding?: { searchQueries: string[]; sources: Array<{ uri: string; title: string }> }; urlContext?: { fetched: Array<{ url: string; status: string }> }; thinking?: { text: string; tokenCount: number } }> {
   log.info({ model: args.model, promptLen: args.promptText.length, useGoogleSearch: args.useGoogleSearch, useUrlContext: args.useUrlContext, useThinking: args.useThinking }, 'Calling Gemini');
   try {
     const result = await generateContent(args.promptText, {
@@ -369,7 +371,7 @@ async function runGemini(args: {
       thinkingBudget: args.thinkingBudget,
       maxRetries: args.maxRetries,
     });
-    return { text: result.response, grounding: result.grounding, thinking: result.thinking };
+    return { text: result.response, grounding: result.grounding, urlContext: result.urlContext, thinking: result.thinking };
   } catch (err: any) {
     log.error({ model: args.model, promptLen: args.promptText.length, err: err.message }, 'Gemini call failed');
     throw err;
@@ -440,6 +442,7 @@ async function runPrompt(args: {
     }
     const metadata: Record<string, any> = {};
     if (geminiResult.grounding) metadata.grounding = geminiResult.grounding;
+    if (geminiResult.urlContext) metadata.url_context = geminiResult.urlContext;
     if (geminiResult.thinking) metadata.thinking = geminiResult.thinking;
     return { text, ...(Object.keys(metadata).length > 0 && { metadata }) };
   }
@@ -869,6 +872,9 @@ function resolveStepInput(
     const inputTypeKey = input_config.input_type as string;
     const jobInput = jobInputs.find(i => i.input_type_key === inputTypeKey);
     if (!jobInput?.content) {
+      if (jobMeta.optionalInputs.has(inputTypeKey)) {
+        return '';
+      }
       throw new Error(`Step '${step.key}': missing job input '${inputTypeKey}'`);
     }
     return normalizeJobInputContent(inputTypeKey, jobInput.content);
@@ -949,7 +955,24 @@ async function executeDefinitionJob(
 
   const stepOutputs = new Map<string, string>();
   const stepMeta = new Map<string, StepMeta>();
-  const jobMeta: JobMeta = { model: opts?.model, assistant: job.assistant_handle };
+
+  // Resolve which declared inputs are optional so resolveStepInput can pass an
+  // empty string to steps that depend on a job_input the user omitted.
+  const optionalInputs = new Set<string>();
+  if (job.definition_id) {
+    const declared = await query<{ input_type_key: string; required: boolean }>(
+      `SELECT it.key as input_type_key, jdi.required
+       FROM kdag.job_definition_inputs jdi
+       JOIN kdag.input_types it ON it.id = jdi.input_type_id
+       WHERE jdi.definition_id = $1`,
+      [job.definition_id]
+    );
+    for (const row of declared) {
+      if (!row.required) optionalInputs.add(row.input_type_key);
+    }
+  }
+
+  const jobMeta: JobMeta = { model: opts?.model, assistant: job.assistant_handle, optionalInputs };
   let lastOutput = '';
 
   // On retry, load outputs from previously completed steps so we can skip them

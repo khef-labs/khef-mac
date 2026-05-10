@@ -638,6 +638,7 @@ export function JobPage({ id }: Props) {
       <PageHeader
         title={detail.job.definition_name || detail.job.job_type}
         breadcrumbs={[{ label: 'Kdag', href: '/kdag' }, { label: 'Jobs', href: '/kdag/jobs' }]}
+        hideTitle
       />
       <div class={styles.header}>
         <div class={styles.headerTop}>

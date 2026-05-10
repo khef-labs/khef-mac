@@ -18,6 +18,7 @@ import {
   getActiveSessions,
   getSessions,
 } from '../lib/api'
+import { loadSession, saveSession, loadStore, saveStore } from '../lib/store'
 import type {
   ActiveSession, AssistantChat, AssistantChatMessage, ChatDelegation, Project, SendChatResponse,
 } from '../types'
@@ -83,11 +84,7 @@ function getModelsForBackend(backend: Backend): { value: string; label: string }
   return CLAUDE_MODELS
 }
 
-const SIDEBAR_KEY = 'khef-chat-sidebar-collapsed'
 const SIDEBAR_SESSION_CAP = 25
-const PINNED_KEY = (backend: Backend) => `khefChatSidebarPinned:${backend}`
-const HIDDEN_KEY = (backend: Backend) => `khefChatSidebarHidden:${backend}`
-const ORDER_KEY = (backend: Backend) => `khefChatSidebarOrder:${backend}`
 
 interface PinnedSession {
   session_id: string
@@ -96,56 +93,37 @@ interface PinnedSession {
   project_name?: string | null
 }
 
+// All chat sidebar state for a backend lives at khef-state.chat[backend]
+// in localStorage. Legacy top-level khefChatSidebar*:<backend> keys are
+// migrated lazily by lib/store on first load.
 function readPinnedSessions(backend: Backend): PinnedSession[] {
-  try {
-    const raw = window.localStorage.getItem(PINNED_KEY(backend))
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((p): p is PinnedSession => p && typeof p === 'object' && typeof p.session_id === 'string')
-  } catch {
-    return []
-  }
+  const slot = loadStore().chat[backend]?.pinned
+  if (!Array.isArray(slot)) return []
+  return slot.filter((p): p is PinnedSession =>
+    !!p && typeof p === 'object' && typeof (p as any).session_id === 'string',
+  )
 }
 
 function writePinnedSessions(backend: Backend, list: PinnedSession[]): void {
-  try {
-    window.localStorage.setItem(PINNED_KEY(backend), JSON.stringify(list))
-  } catch { /* ignore quota / private-mode failures */ }
+  saveStore({ chat: { [backend]: { pinned: list } } })
 }
 
 function readHiddenSessions(backend: Backend): string[] {
-  try {
-    const raw = window.localStorage.getItem(HIDDEN_KEY(backend))
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
-  } catch {
-    return []
-  }
+  const slot = loadStore().chat[backend]?.hidden
+  return Array.isArray(slot) ? slot.filter((s): s is string => typeof s === 'string') : []
 }
 
 function writeHiddenSessions(backend: Backend, list: string[]): void {
-  try {
-    window.localStorage.setItem(HIDDEN_KEY(backend), JSON.stringify(list))
-  } catch { /* ignore */ }
+  saveStore({ chat: { [backend]: { hidden: list } } })
 }
 
 function readSidebarOrder(backend: Backend): string[] {
-  try {
-    const raw = window.localStorage.getItem(ORDER_KEY(backend))
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : []
-  } catch {
-    return []
-  }
+  const slot = loadStore().chat[backend]?.order
+  return Array.isArray(slot) ? slot.filter((s): s is string => typeof s === 'string') : []
 }
 
 function writeSidebarOrder(backend: Backend, list: string[]): void {
-  try {
-    window.localStorage.setItem(ORDER_KEY(backend), JSON.stringify(list))
-  } catch { /* ignore */ }
+  saveStore({ chat: { [backend]: { order: list } } })
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -170,12 +148,12 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
 
   // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    return sessionStorage.getItem(SIDEBAR_KEY) === '1'
+    return loadSession().chatSidebarCollapsed
   })
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
       const next = !prev
-      sessionStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+      saveSession({ chatSidebarCollapsed: next })
       return next
     })
   }
@@ -348,20 +326,13 @@ export function ChatPage({ id, isNew }: ChatPageProps) {
   // Load persisted PTY cwd whenever the active CLI backend changes (claude/codex).
   useEffect(() => {
     if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') return
-    try {
-      const saved = window.localStorage.getItem(`khefChatCwd:${activeBackend}`) || ''
-      setTerminalCwd(saved)
-    } catch {
-      setTerminalCwd('')
-    }
+    setTerminalCwd(loadStore().chat[activeBackend]?.cwd ?? '')
   }, [activeBackend])
 
   // Persist PTY cwd as the user types so it survives refresh.
   useEffect(() => {
     if (activeBackend !== 'claude-code' && activeBackend !== 'codex-cli') return
-    try {
-      window.localStorage.setItem(`khefChatCwd:${activeBackend}`, terminalCwd)
-    } catch { /* ignore quota/private-mode failures */ }
+    saveStore({ chat: { [activeBackend]: { cwd: terminalCwd } } })
   }, [activeBackend, terminalCwd])
 
   // Pull khef projects with a known path so the user can pick one as cwd.

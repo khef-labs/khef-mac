@@ -3,6 +3,7 @@ import type { KhefClient } from "../clients/khef-client.js";
 import type { DbClient } from "../clients/db-client.js";
 import type { ToolResult } from "../types.js";
 import { formatActiveSessionsList, formatCurrentSession } from "../formatters/active-sessions.js";
+import { resolveCurrentSession } from "../lib/current-session.js";
 
 export const tools: Tool[] = [
   {
@@ -19,16 +20,16 @@ export const tools: Tool[] = [
   {
   name: "get_current_session",
   description:
-    "Look up a specific session by its file UUID. Returns session status (active/inactive), project, assistant, PID, timestamps, and transcript metadata when available. Use with the session ID injected by the pre-hook.",
+    "Look up the current session, or a specific session by file UUID. If session_id is omitted, resolves from KHEF_SESSION_ID or the iTerm2 terminal session ID.",
   inputSchema: {
     type: "object",
     properties: {
       session_id: {
         type: "string",
-        description: "Session file UUID (from the hook-injected context or JSONL filename)",
+        description: "Optional session file UUID. Omit to resolve the current session automatically.",
       },
     },
-    required: ["session_id"],
+    required: [],
   },
 },
 
@@ -52,30 +53,30 @@ export const tools: Tool[] = [
     properties: {
       session_id: {
         type: "string",
-        description: "Your session ID (from the hook-injected Session ID in system prompt)",
+        description: "Optional current session ID. Omit to resolve from KHEF_SESSION_ID or the iTerm2 terminal session ID.",
       },
       nickname: {
         type: "string",
         description: "The nickname to claim (e.g., 'dulci', 'ridge')",
       },
     },
-    required: ["session_id", "nickname"],
+    required: ["nickname"],
   },
 },
 
   {
   name: "get_nickname",
   description:
-    "Get the nickname assigned to this session. Returns the short human-friendly name (e.g., 'jasper', 'lark') for the current active session. Useful for self-identification when communicating with other sessions.",
+    "Get the nickname assigned to the current session, or a specific session. Returns the short human-friendly name (e.g., 'jasper', 'lark').",
   inputSchema: {
     type: "object",
     properties: {
       session_id: {
         type: "string",
-        description: "Session file UUID (from the hook-injected context or JSONL filename)",
+        description: "Optional session file UUID. Omit to resolve the current session automatically.",
       },
     },
-    required: ["session_id"],
+    required: [],
   },
 },
 ];
@@ -102,9 +103,9 @@ export async function handleTool(
     }
 
     case "get_current_session": {
-      const result = await client.getActiveSessionBySessionId(
-        args.session_id as string
-      );
+      const result = args.session_id
+        ? await client.getActiveSessionBySessionId(args.session_id as string)
+        : { session: (await resolveCurrentSession(client)).session };
       return {
         content: [{ type: "text", text: formatCurrentSession(result) }],
       };
@@ -143,8 +144,11 @@ export async function handleTool(
     }
 
     case "claim_nickname": {
+      const sessionId = args.session_id
+        ? args.session_id as string
+        : (await resolveCurrentSession(client)).session?.session_id;
       const result = await client.claimNickname(
-        args.session_id as string,
+        sessionId,
         args.nickname as string
       );
       const nickname = result?.nickname;
@@ -154,10 +158,9 @@ export async function handleTool(
     }
 
     case "get_nickname": {
-      const result = await client.getActiveSessionBySessionId(
-        args.session_id as string
-      );
-      const session = result?.session || result;
+      const session = args.session_id
+        ? (await client.getActiveSessionBySessionId(args.session_id as string))?.session
+        : (await resolveCurrentSession(client)).session;
       const nickname = session?.nickname || null;
       return {
         content: [{ type: "text", text: nickname ? `Your nickname is **${nickname}**` : 'No nickname assigned to this session.' }],

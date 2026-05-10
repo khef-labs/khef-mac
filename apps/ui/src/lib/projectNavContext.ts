@@ -1,18 +1,13 @@
 /**
  * Navigation context for project list navigation.
  * Stores the current list of project IDs and position for arrow key navigation.
+ *
+ * Backed by sessionStorage['khef-state'].projectNav via lib/store.
  */
 
-const STORAGE_KEY = 'khefProjectNavContext'
+import { loadSession, saveSession, type NavListContext } from './store'
 
-export interface ProjectNavContext {
-  /** Ordered list of project IDs in the current view */
-  ids: string[]
-  /** Current position in the list (0-indexed) */
-  currentIndex: number
-  /** Source URL to return to */
-  source: string
-}
+export type ProjectNavContext = NavListContext
 
 /**
  * Store navigation context when entering a project from a list view.
@@ -21,9 +16,7 @@ export function setProjectNavContext(ids: string[], currentId: string, source: s
   if (typeof window === 'undefined') return
   const currentIndex = ids.indexOf(currentId)
   if (currentIndex === -1) return
-
-  const context: ProjectNavContext = { ids, currentIndex, source }
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context))
+  saveSession({ projectNav: { ids, currentIndex, source } })
 }
 
 /**
@@ -31,13 +24,7 @@ export function setProjectNavContext(ids: string[], currentId: string, source: s
  */
 export function getProjectNavContext(): ProjectNavContext | null {
   if (typeof window === 'undefined') return null
-  try {
-    const stored = window.sessionStorage.getItem(STORAGE_KEY)
-    if (!stored) return null
-    return JSON.parse(stored) as ProjectNavContext
-  } catch {
-    return null
-  }
+  return loadSession().projectNav
 }
 
 /**
@@ -48,9 +35,7 @@ export function updateProjectNavIndex(newIndex: number): void {
   const context = getProjectNavContext()
   if (!context) return
   if (newIndex < 0 || newIndex >= context.ids.length) return
-
-  context.currentIndex = newIndex
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context))
+  saveSession({ projectNav: { ...context, currentIndex: newIndex } })
 }
 
 /**
@@ -58,7 +43,7 @@ export function updateProjectNavIndex(newIndex: number): void {
  */
 export function clearProjectNavContext(): void {
   if (typeof window === 'undefined') return
-  window.sessionStorage.removeItem(STORAGE_KEY)
+  saveSession({ projectNav: null })
 }
 
 /**

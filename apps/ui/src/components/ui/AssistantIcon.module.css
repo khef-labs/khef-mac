@@ -1,0 +1,18 @@
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.claude {
+  color: #cc785c;
+}
+
+.codex {
+  color: #74aa9c;
+}
+
+.other {
+  color: var(--muted);
+}

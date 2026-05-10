@@ -7,7 +7,7 @@ import { saveErd } from '../../lib/dbx-api'
 import { previewDiagram } from '../../lib/api'
 import type { DetailViewTab, PropsSubtab, Tab } from './types'
 import { ResultGrid, pgArray } from './ResultGrid'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 function generateErdMermaid(data: DbxErdData): string {
   const lines: string[] = ['erDiagram']

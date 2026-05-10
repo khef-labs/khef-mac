@@ -557,6 +557,72 @@ async function resolveBackupPath(
 }
 
 /**
+ * Read a session transcript with paginated entries from an absolute file path.
+ * Used directly by the synced-session raw endpoint (assistant-agnostic — works
+ * for both Claude `<projectDir>/<id>.jsonl` and Codex `YYYY/MM/DD/<id>.jsonl`).
+ */
+export async function readSessionByFilePath(
+  filePath: string,
+  sessionId: string,
+  options?: { limit?: number; offset?: number; source?: 'original' | 'backup' }
+): Promise<{
+  session: {
+    id: string;
+    size: number;
+    entry_count: number;
+    entries: SessionEntry[];
+    source: 'original' | 'backup';
+    file_path: string;
+  };
+  pagination: { total_count: number; limit: number; offset: number; has_more: boolean };
+} | null> {
+  if (!fs.existsSync(filePath)) return null;
+
+  const stat = fs.statSync(filePath);
+  const limit = options?.limit ?? 100;
+  const offset = options?.offset ?? 0;
+
+  // Read and parse all lines (needed for accurate count and pagination)
+  const entries: SessionEntry[] = [];
+  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  let lineIndex = 0;
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as SessionEntry;
+      if (lineIndex >= offset && lineIndex < offset + limit) {
+        entries.push(entry);
+      }
+      lineIndex++;
+    } catch {
+      // Skip unparseable lines
+      lineIndex++;
+    }
+  }
+
+  const totalCount = lineIndex;
+
+  return {
+    session: {
+      id: sessionId,
+      size: stat.size,
+      entry_count: totalCount,
+      entries,
+      source: options?.source ?? 'original',
+      file_path: filePath,
+    },
+    pagination: {
+      total_count: totalCount,
+      limit,
+      offset,
+      has_more: offset + limit < totalCount,
+    },
+  };
+}
+
+/**
  * Read a session transcript with paginated entries.
  * Falls back to the configured backup location when the original file is missing.
  */
@@ -596,48 +662,11 @@ export async function readSession(
     source = 'backup';
   }
 
-  const stat = fs.statSync(filePath);
-  const limit = options?.limit ?? 100;
-  const offset = options?.offset ?? 0;
-
-  // Read and parse all lines (needed for accurate count and pagination)
-  const entries: SessionEntry[] = [];
-  const stream = fs.createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
-
-  let lineIndex = 0;
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const entry = JSON.parse(line) as SessionEntry;
-      if (lineIndex >= offset && lineIndex < offset + limit) {
-        entries.push(entry);
-      }
-      lineIndex++;
-    } catch {
-      // Skip unparseable lines
-      lineIndex++;
-    }
-  }
-
-  const totalCount = lineIndex;
-
-  return {
-    session: {
-      id: sessionId,
-      size: stat.size,
-      entry_count: totalCount,
-      entries,
-      source,
-      file_path: filePath,
-    },
-    pagination: {
-      total_count: totalCount,
-      limit,
-      offset,
-      has_more: offset + limit < totalCount,
-    },
-  };
+  return readSessionByFilePath(filePath, sessionId, {
+    limit: options?.limit,
+    offset: options?.offset,
+    source,
+  });
 }
 
 /**

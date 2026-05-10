@@ -113,6 +113,8 @@ The MCP server (`mcp-server/`) provides 140+ tools for memory management and pip
 - `set_project_commands` / `set_project_context` / `set_project_pattern` - Update knowledge
 - `search_sessions` - Search past session transcripts (use for targeted session queries with session_id filter)
 - `grep_sessions` - Raw ripgrep over session JSONL files on disk. Searches the full transcript (including tool_result blocks that `search_sessions` strips at index time). Use for exact strings like Jira account IDs, error messages, or UUIDs that don't surface via the indexed search. Requires a scope: session_id, nickname, or project_dir.
+- `list_active_sessions` / `get_current_session` / `get_nickname` - Inspect active assistant sessions. `get_current_session` and `get_nickname` can resolve the current session automatically from `KHEF_SESSION_ID` or the iTerm2 session ID.
+- `send_live_message` / `check_live_messages` / `count_live_messages` - Inter-session live messaging. Current-session IDs are optional for sender/inbox operations when the MCP server can resolve the current registered session.
 - `search_source_code` / `search_commits` - Vector search over code and commits (use for targeted queries with language/repo filters)
 - `view_source_code_file` - Read a file by kvec-indexed `repo`+`path`, or by absolute `abs_path` (must resolve inside $HOME; `~` expanded). Optional start/end line slice and git ref (uses `git show` without touching the working tree)
 - `search_docs` / `get_doc_content` - Semantic search and paginated content retrieval for indexed documents (markdown, PDF, text)

@@ -130,3 +130,41 @@
   color: var(--muted);
   border: 1px solid var(--border);
 }
+
+/* Assistant variants */
+.assistantClaude {
+  background-color: color-mix(in srgb, #cc785c 15%, transparent);
+  color: #cc785c;
+}
+
+.assistantCodex {
+  background-color: color-mix(in srgb, #74aa9c 15%, transparent);
+  color: #74aa9c;
+}
+
+.assistantGemini {
+  background-color: color-mix(in srgb, #f59e0b 15%, transparent);
+  color: #f59e0b;
+}
+
+.assistantOther {
+  background-color: color-mix(in srgb, var(--muted) 15%, transparent);
+  color: var(--muted);
+}
+
+.assistantSm {
+  padding: 1px 6px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.assistantGlyph {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  line-height: 0;
+}
+
+.assistantLabel {
+  letter-spacing: 0.01em;
+}

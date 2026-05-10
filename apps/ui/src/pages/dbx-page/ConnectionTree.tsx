@@ -5,7 +5,7 @@ import type { DbxConnection } from '../../lib/dbx-api'
 import { deleteConnection } from '../../lib/dbx-api'
 import { ConfirmModal } from '../../components/ui'
 import type { TreeNode } from './types'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface ConnectionTreeProps {
   connections: DbxConnection[]

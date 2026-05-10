@@ -77,6 +77,13 @@ interface GroundingMetadata {
   }>
 }
 
+interface UrlContextMetadata {
+  urlMetadata?: Array<{
+    retrievedUrl?: string
+    urlRetrievalStatus?: string
+  }>
+}
+
 interface GeminiResponse {
   candidates: Array<{
     content: {
@@ -85,6 +92,7 @@ interface GeminiResponse {
     }
     finishReason: string
     groundingMetadata?: GroundingMetadata
+    urlContextMetadata?: UrlContextMetadata
   }>
   usageMetadata: {
     promptTokenCount: number
@@ -97,6 +105,11 @@ interface GeminiResponse {
 export interface GroundingSource {
   uri: string
   title: string
+}
+
+export interface UrlContextFetched {
+  url: string
+  status: string
 }
 
 export interface ResponsePart {
@@ -115,6 +128,9 @@ export interface GenerateResult {
   grounding?: {
     searchQueries: string[]
     sources: GroundingSource[]
+  }
+  urlContext?: {
+    fetched: UrlContextFetched[]
   }
   thinking?: {
     text: string
@@ -450,6 +466,19 @@ export async function generateContent(
       }
     }
 
+    // Extract url_context metadata (URLs Gemini fetched live via the urlContext tool)
+    let urlContext: GenerateResult['urlContext']
+    if (candidate.urlContextMetadata?.urlMetadata?.length) {
+      urlContext = {
+        fetched: candidate.urlContextMetadata.urlMetadata
+          .filter(m => m.retrievedUrl)
+          .map(m => ({
+            url: m.retrievedUrl!,
+            status: m.urlRetrievalStatus ?? 'UNKNOWN',
+          })),
+      }
+    }
+
     if (attempt > 0) {
       log.info({ attempt, model }, 'Gemini retry succeeded')
     }
@@ -461,6 +490,7 @@ export async function generateContent(
       outputTokens: data.usageMetadata?.candidatesTokenCount || 0,
       model,
       grounding,
+      urlContext,
       thinking,
     }
   }

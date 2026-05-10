@@ -64,6 +64,19 @@ export function useMemoryPageNavigation({
       return
     }
 
+    // Skip the fallback rebuild after a reload. main.tsx clears navContext
+    // on reload to recover from stale state (e.g. wrong sort order); auto-
+    // rebuilding here with sort=created_at would just reintroduce the same
+    // stale state. Going back to the source list page rebuilds it with the
+    // correct sort.
+    const navEntry = performance.getEntriesByType('navigation')[0] as
+      | PerformanceNavigationTiming
+      | undefined
+    if (navEntry?.type === 'reload') {
+      setHasInitializedFallbackNav(true)
+      return
+    }
+
     const source = memory.project_id ? `/projects/${memory.project_id}` : '/search'
 
     const loadFallbackNav = async () => {

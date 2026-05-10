@@ -4,6 +4,7 @@ import { RefreshCw, BarChart3, Brain, Cpu, Zap, AlertTriangle, Unlink, Network, 
 import { useToast } from '../components/ui'
 import { useFetch, useDocumentTitle } from '../hooks'
 import { getStatsOverview, getStatsMemory, getStatsUsage, getStatsSystem, getProjects } from '../lib/api'
+import { loadSession, saveSession } from '../lib/store'
 import { TabBar, SortBar } from '../components/ui'
 import type { Tab, SortState } from '../components/ui'
 import type { Project } from '../types/api'
@@ -271,7 +272,7 @@ function StatusBreakdownCard({ type, total, statuses }: { type: string; total: n
 export function StatsPage() {
   useDocumentTitle('Stats')
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
-    const saved = sessionStorage.getItem('stats-tab')
+    const saved = loadSession().statsTab
     return (saved && ['overview', 'memory', 'usage', 'system'].includes(saved)) ? saved as TabKey : 'overview'
   })
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
@@ -502,7 +503,7 @@ export function StatsPage() {
       <TabBar
         tabs={TABS}
         activeKey={activeTab}
-        onChange={(k) => { setActiveTab(k as TabKey); sessionStorage.setItem('stats-tab', k) }}
+        onChange={(k) => { setActiveTab(k as TabKey); saveSession({ statsTab: k }) }}
       />
 
       {/* Overview Tab */}

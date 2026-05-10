@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'preact/hooks'
-import { Link } from 'wouter-preact'
-import clsx from 'clsx'
+import { useState, useEffect, useCallback, useMemo } from 'preact/hooks'
 import { Trash2 } from 'lucide-preact'
 import { getAssistantConfigs, deleteAssistantConfig } from '../../lib/api'
 import type { AssistantConfig, ConfigScope, ConfigType } from '../../types'
-import { cardStyles, ConfirmModal } from '../../components/ui'
+import { ConfirmModal } from '../../components/ui'
+import { FilterInput, ResourceCard, ResourceGrid } from '../../components/assistant'
 import styles from '../AssistantPage.module.css'
 
 interface Props {
@@ -28,9 +27,28 @@ const TYPE_LABELS: Record<ConfigType, string> = {
   state: 'State',
 }
 
+const TYPE_DESCRIPTIONS: Record<ConfigType, string> = {
+  settings: 'Assistant preferences, hooks, permissions, and runtime options.',
+  instructions: 'Custom instructions the assistant reads at the start of every session.',
+  rules: 'Behavioral rules auto-imported into the instructions file.',
+  knowledge: 'Operational knowledge (commands, context, patterns) auto-imported into instructions.',
+  glossary: 'Terminology and shorthand the assistant should recognize.',
+  mcp: 'MCP server registrations that expose tools to the assistant.',
+  state: 'Persistent state, history, and session metadata.',
+}
+
+function configFilename(config: AssistantConfig): string {
+  return config.path.split('/').pop() || config.path
+}
+
+function levelName(scope: ConfigScope, type: ConfigType): string {
+  return `${SCOPE_LABELS[scope]} ${TYPE_LABELS[type]}`
+}
+
 export function ConfigsSection({ handle }: Props) {
   const [configs, setConfigs] = useState<AssistantConfig[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [filter, setFilter] = useState('')
   const [configToDelete, setConfigToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const loadConfigs = useCallback(async () => {
@@ -61,86 +79,118 @@ export function ConfigsSection({ handle }: Props) {
     }
   }
 
-  const getLevelName = (scope: ConfigScope, type: ConfigType) =>
-    `${SCOPE_LABELS[scope]} ${TYPE_LABELS[type]}`
+  // Order: each parent followed immediately by its imports, so visually-adjacent
+  // grid cells preserve the parent/child relationship.
+  const orderedConfigs = useMemo(() => {
+    const parents = configs.filter((c) => !c.is_import)
+    const childrenByParent = new Map<string, AssistantConfig[]>()
+    for (const c of configs) {
+      if (c.is_import && c.parent_config_id) {
+        const list = childrenByParent.get(c.parent_config_id) || []
+        list.push(c)
+        childrenByParent.set(c.parent_config_id, list)
+      }
+    }
+    const ordered: { config: AssistantConfig; parentName?: string }[] = []
+    for (const parent of parents) {
+      ordered.push({ config: parent })
+      const children = childrenByParent.get(parent.id) || []
+      const parentName = configFilename(parent)
+      for (const child of children) {
+        ordered.push({ config: child, parentName })
+      }
+    }
+    // Append any orphaned imports (parent_config_id missing from list)
+    for (const c of configs) {
+      if (c.is_import && !ordered.some((o) => o.config.id === c.id)) {
+        ordered.push({ config: c })
+      }
+    }
+    return ordered
+  }, [configs])
+
+  const filteredConfigs = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    if (!q) return orderedConfigs
+    return orderedConfigs.filter(({ config }) => {
+      const filename = configFilename(config)
+      const level = levelName(config.scope, config.type)
+      const desc = TYPE_DESCRIPTIONS[config.type] || ''
+      return [filename, level, desc, config.path].some((v) => v.toLowerCase().includes(q))
+    })
+  }, [orderedConfigs, filter])
+
+  const describeConfig = (config: AssistantConfig, parentName?: string): string => {
+    const base = TYPE_DESCRIPTIONS[config.type] || ''
+    if (config.is_import && parentName) {
+      return `Imported by ${parentName}. ${base}`.trim()
+    }
+    return base
+  }
 
   if (isLoading) return <div class={styles.loading}>Loading...</div>
 
-  const parentConfigs = configs.filter((c) => !c.is_import)
-  const childMap = new Map<string, AssistantConfig[]>()
-  for (const c of configs) {
-    if (c.is_import && c.parent_config_id) {
-      const children = childMap.get(c.parent_config_id) || []
-      children.push(c)
-      childMap.set(c.parent_config_id, children)
-    }
-  }
-
   return (
     <>
-      <div class={styles.configList}>
-        {configs.length === 0 ? (
-          <div class={styles.empty}>No configurations available.</div>
-        ) : (
-          parentConfigs.map((config) => {
-            const children = childMap.get(config.id) || []
-            const configName = config.path.split('/').pop() || config.path
+      <div class={styles.sectionHeader}>
+        <FilterInput
+          value={filter}
+          onChange={setFilter}
+          placeholder="Filter configs..."
+          testId="configs-filter"
+        />
+        <span />
+      </div>
+
+      {configs.length === 0 ? (
+        <div class={styles.empty}>No configurations available.</div>
+      ) : filteredConfigs.length === 0 ? (
+        <div class={styles.empty}>No configs match the filter.</div>
+      ) : (
+        <div data-testid="configs-grid">
+        <ResourceGrid>
+          {filteredConfigs.map(({ config, parentName }) => {
+            const filename = configFilename(config)
+            const level = levelName(config.scope, config.type)
             return (
-              <div key={config.id} class={styles.configGroup}>
-                <div class={styles.configCardWrapper}>
-                  <Link
-                    href={`/assistants/${handle}/configs/${config.id}?from=${encodeURIComponent(`/assistants/${handle}`)}`}
-                    class={clsx(cardStyles.card, cardStyles.interactive, styles.configCard)}
+              <div key={config.id} class={styles.configGridCardWrapper}>
+                <ResourceCard
+                  kind="config"
+                  name={filename}
+                  monoName
+                  stackMeta
+                  scope={level}
+                  description={describeConfig(config, parentName)}
+                  path={config.path}
+                  href={`/assistants/${handle}/configs/${config.id}?from=${encodeURIComponent(`/assistants/${handle}`)}`}
+                  badge={
+                    config.is_import ? (
+                      <span class={styles.importBadge} title={parentName ? `Imported by ${parentName}` : 'Import'}>
+                        Import
+                      </span>
+                    ) : undefined
+                  }
+                />
+                {config.is_import && (
+                  <button
+                    type="button"
+                    class={styles.configGridDeleteButton}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setConfigToDelete({ id: config.id, name: filename })
+                    }}
+                    title={`Delete ${filename}`}
                   >
-                    <span class={styles.configLevel}>{configName}</span>
-                    <span class={styles.configPath}>{getLevelName(config.scope, config.type)}</span>
-                  </Link>
-                  {config.is_import && (
-                    <button
-                      class={styles.configDeleteButton}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setConfigToDelete({ id: config.id, name: configName })
-                      }}
-                      title={`Delete ${configName}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-                {children.length > 0 && (
-                  <div class={styles.configImports}>
-                    {children.map((child) => {
-                      const childName = child.path.split('/').pop() || child.path
-                      return (
-                        <div key={child.id} class={styles.configCardWrapper}>
-                          <Link
-                            href={`/assistants/${handle}/configs/${child.id}?from=${encodeURIComponent(`/assistants/${handle}`)}`}
-                            class={clsx(cardStyles.card, cardStyles.interactive, styles.importCard)}
-                          >
-                            <span class={styles.configLevel}>{childName}</span>
-                            <span class={styles.importBadge}>Import</span>
-                          </Link>
-                          <button
-                            class={styles.configDeleteButton}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setConfigToDelete({ id: child.id, name: childName })
-                            }}
-                            title={`Delete ${childName}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
+                    <Trash2 size={14} />
+                  </button>
                 )}
               </div>
             )
-          })
-        )}
-      </div>
+          })}
+        </ResourceGrid>
+        </div>
+      )}
 
       {configToDelete && (
         <ConfirmModal

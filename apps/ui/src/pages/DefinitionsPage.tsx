@@ -308,6 +308,7 @@ export function DefinitionsPage() {
       <PageHeader
         title="Definitions"
         breadcrumbs={[{ label: 'Kdag', href: '/kdag' }]}
+        hideTitle
       />
       <div class={styles.header}>
         <div class={styles.headerLeft}>

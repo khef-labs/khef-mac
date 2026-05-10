@@ -3,7 +3,7 @@ import { Maximize2, X } from 'lucide-preact'
 import type { DbxTableDetail } from '../../lib/dbx-api'
 import { pgArray } from './ResultGrid'
 import { CodeEditor } from '../../components/editor/CodeEditor'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 function isLongTextType(t: string): boolean {
   const lower = t.toLowerCase()

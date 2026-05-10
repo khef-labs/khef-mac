@@ -1512,6 +1512,8 @@ export interface JobDefinitionInput {
   input_type: string
   required: boolean
   description: string | null
+  example?: string | null
+  format?: string | null
 }
 
 export interface JobDefinitionSummary {

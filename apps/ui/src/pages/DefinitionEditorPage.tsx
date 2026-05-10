@@ -328,6 +328,7 @@ export function DefinitionEditorPage({ defKey, isNew }: Props) {
       <PageHeader
         title={isNew ? 'New Definition' : (name || defKey || '')}
         breadcrumbs={[{ label: 'Kdag', href: '/kdag' }, { label: 'Definitions', href: '/kdag/definitions' }]}
+        hideTitle
       />
       <div class={styles.header}>
         <div class={styles.headerTop}>

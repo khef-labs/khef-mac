@@ -1,6 +1,6 @@
 import { useMemo } from 'preact/hooks'
 import type { DbxSavedQueryParam } from '../../lib/dbx-api'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface Props {
   params: DbxSavedQueryParam[]

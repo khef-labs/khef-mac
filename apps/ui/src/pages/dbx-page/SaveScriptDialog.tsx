@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'preact/hooks'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface SaveScriptDialogProps {
   onSave: (name: string) => void

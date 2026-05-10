@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import { query, querySingle, getClient } from '../db/client';
 import { triggerSessionSync, getSessionSyncStatus } from '../services/session-worker';
 import { markdownToSlack } from '../services/markdown-to-slack';
+import { readSessionByFilePath } from '../services/sessions';
 import { SESSION_PATHS } from '../services/session-sync';
 import { grepSessions, type GrepOptions } from '../services/session-grep';
 import { getHiddenProjectHandles } from '../utils/hidden-projects';
@@ -625,6 +626,39 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
       session: formatSession(session, true),
       chunks,
     };
+  });
+
+  /**
+   * GET /api/sessions/:id/raw - Paginated raw transcript entries from the session's file_path.
+   * Assistant-agnostic — works for both Claude `<projectDir>/<id>.jsonl` and Codex
+   * `YYYY/MM/DD/<id>.jsonl` since the path is read from the synced sessions row.
+   */
+  fastify.get('/:id/raw', async (
+    request: FastifyRequest<{
+      Params: { id: string };
+      Querystring: { limit?: string; offset?: string };
+    }>,
+    reply: FastifyReply
+  ) => {
+    const { id } = request.params;
+    const limit = request.query.limit ? parseInt(request.query.limit, 10) : 100;
+    const offset = request.query.offset ? parseInt(request.query.offset, 10) : 0;
+
+    let row = await querySingle<{ session_id: string; file_path: string }>(
+      'SELECT session_id, file_path FROM sessions WHERE id = $1',
+      [id]
+    );
+    if (!row) {
+      row = await querySingle<{ session_id: string; file_path: string }>(
+        'SELECT session_id, file_path FROM sessions WHERE session_id = $1',
+        [id]
+      );
+    }
+    if (!row) return reply.status(404).send({ error: 'Session not found' });
+
+    const result = await readSessionByFilePath(row.file_path, row.session_id, { limit, offset });
+    if (!result) return reply.status(404).send({ error: 'Session file not found on disk' });
+    return result;
   });
 
   /**

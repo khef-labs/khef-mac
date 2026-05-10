@@ -33,6 +33,7 @@ import {
   getNextProjectId,
   getProjectPositionInfo,
 } from '../lib/projectNavContext'
+import { loadSession, saveSession } from '../lib/store'
 import type { Memory, Pagination, SessionContext, MemoryType } from '../types'
 import styles from './ProjectPage.module.css'
 
@@ -330,27 +331,32 @@ export function ProjectPage({ projectId }: Props) {
   }, [navigatePrev, navigateNext])
 
   // Restore filters only when returning from a memory detail page
-  const FILTER_KEY = `khefProjectFilters:${projectId}`
-  const RETURN_KEY = `khefProjectReturn:${projectId}`
-
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const returning = window.sessionStorage.getItem(RETURN_KEY)
-    window.sessionStorage.removeItem(RETURN_KEY)
+    const session = loadSession()
+    const returning = session.projectReturn[projectId]
+
+    // Clear the return flag whether or not we restore — single-use signal.
+    if (returning) {
+      const { [projectId]: _consumed, ...remaining } = session.projectReturn
+      saveSession({ projectReturn: remaining as Record<string, true> })
+    }
 
     if (!returning) {
-      // Fresh visit — clear any stale stored filters
-      window.sessionStorage.removeItem(FILTER_KEY)
+      // Fresh visit — drop any stale stored filters for this project.
+      if (session.projectFilters[projectId]) {
+        const { [projectId]: _dropped, ...remaining } = session.projectFilters
+        saveSession({ projectFilters: remaining })
+      }
       return
     }
 
     try {
-      const stored = window.sessionStorage.getItem(FILTER_KEY)
+      const stored = session.projectFilters[projectId] as
+        | { query?: string; filters?: ProjectFilterValues }
+        | undefined
       if (!stored) return
-      const parsed = JSON.parse(stored) as {
-        query?: string
-        filters?: ProjectFilterValues
-      }
+      const parsed = stored
       if (parsed?.filters) {
         setFilters((prev) => ({ ...prev, ...parsed.filters }))
       }
@@ -547,9 +553,11 @@ export function ProjectPage({ projectId }: Props) {
 
   const saveFiltersForReturn = useCallback(() => {
     if (typeof window === 'undefined') return
-    window.sessionStorage.setItem(FILTER_KEY, JSON.stringify({ query, filters }))
-    window.sessionStorage.setItem(RETURN_KEY, '1')
-  }, [query, filters, FILTER_KEY, RETURN_KEY])
+    saveSession({
+      projectFilters: { [projectId]: { query, filters } },
+      projectReturn: { [projectId]: true },
+    })
+  }, [query, filters, projectId])
 
   const handleSummaryNavigate = useCallback(
     (memoryId: string) => {
@@ -581,7 +589,9 @@ export function ProjectPage({ projectId }: Props) {
           status: (filters.type || filters.subtype) ? filters.status || undefined : undefined,
           sort: (filters.sort_field === 'slide_order' ? 'created_at' : filters.sort_field) as any,
           order: filters.sort_dir === 'asc' ? 'asc' : undefined,
-          compact: true,
+          // slide_order needs metadata to re-sort client-side. compact responses
+          // omit metadata, which silently makes the sort fall back to API order.
+          compact: filters.sort_field === 'slide_order' ? false : true,
           limit: pagination.total_count,
           offset: 0,
         })

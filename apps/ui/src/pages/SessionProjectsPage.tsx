@@ -4,6 +4,7 @@ import { ScrollText, RefreshCw, Search } from 'lucide-preact'
 import clsx from 'clsx'
 import { getSessionProjects, getSessionSyncStatus, syncSessionEmbeddings, getSyncedSession } from '../lib/api'
 import { formatBytes, formatRelativeTime } from '../lib/format'
+import { saveSession } from '../lib/store'
 import type { SessionProject, SessionSyncStatus } from '../types'
 import { cardStyles, useToast } from '../components/ui'
 import { ActiveSessionsBanner } from '../components/session'
@@ -83,7 +84,7 @@ export function SessionProjectsPage({ handle, embedded }: Props) {
     try {
       const data = await getSyncedSession(q, false)
       if (data.session) {
-        sessionStorage.setItem('khefSessionBackUrl', `/assistants/${handle}/sessions`)
+        saveSession({ sessionBackUrl: `/assistants/${handle}/sessions` })
         setLocation(`/sessions/${data.session.id}`)
       }
     } catch {

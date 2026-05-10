@@ -5,6 +5,7 @@ import type { KhefClient } from "../clients/khef-client.js";
 import type { DbClient } from "../clients/db-client.js";
 import type { ToolResult } from "../types.js";
 import { formatLiveMessageSent, formatLiveInbox, formatLiveCount, formatLiveMessageDeleted } from "../formatters/live-messages.js";
+import { resolveCurrentSession } from "../lib/current-session.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,7 +23,7 @@ export const tools: Tool[] = [
         },
         from_session_id: {
           type: "string",
-          description: "Your session ID (from the hook-injected Session ID in system prompt)",
+          description: "Optional sender session ID. Omit to resolve the current session automatically.",
         },
         content: {
           type: "string",
@@ -33,7 +34,7 @@ export const tools: Tool[] = [
           description: "Your session nickname (from SessionStart hook). Used in the iTerm2 nudge message.",
         },
       },
-      required: ["to_session_id", "from_session_id", "content"],
+      required: ["to_session_id", "content"],
     },
   },
   {
@@ -45,7 +46,7 @@ export const tools: Tool[] = [
       properties: {
         session_id: {
           type: "string",
-          description: "Your session ID (from the hook-injected Session ID in system prompt)",
+          description: "Optional session ID. Omit to resolve the current session automatically.",
         },
         limit: {
           type: "number",
@@ -56,7 +57,7 @@ export const tools: Tool[] = [
           description: "If true, read without clearing messages (default: false)",
         },
       },
-      required: ["session_id"],
+      required: [],
     },
   },
   {
@@ -76,10 +77,10 @@ export const tools: Tool[] = [
         },
         from_session_id: {
           type: "string",
-          description: "Your session ID (must match the original sender)",
+          description: "Optional sender session ID. Omit to resolve the current session automatically.",
         },
       },
-      required: ["to_session_id", "message_id", "from_session_id"],
+      required: ["to_session_id", "message_id"],
     },
   },
   {
@@ -114,10 +115,10 @@ export const tools: Tool[] = [
       properties: {
         session_id: {
           type: "string",
-          description: "Your session ID",
+          description: "Optional session ID. Omit to resolve the current session automatically.",
         },
       },
-      required: ["session_id"],
+      required: [],
     },
   },
 ];
@@ -130,7 +131,7 @@ export async function handleTool(
 ): Promise<ToolResult | null> {
   switch (name) {
     case "send_live_message": {
-      const missing = ["to_session_id", "from_session_id", "content"].filter(k => !args[k]);
+      const missing = ["to_session_id", "content"].filter(k => !args[k]);
       if (missing.length > 0) {
         const got = Object.keys(args).join(", ") || "(none)";
         return {
@@ -138,11 +139,12 @@ export async function handleTool(
           isError: true,
         };
       }
+      const current = args.from_session_id ? null : (await resolveCurrentSession(client)).session;
       const result = await client.sendLiveMessage(
         args.to_session_id as string,
-        args.from_session_id as string,
+        (args.from_session_id as string | undefined) || current?.session_id,
         args.content as string,
-        args.from_nickname as string | undefined
+        (args.from_nickname as string | undefined) || current?.nickname
       );
       return {
         content: [{ type: "text", text: formatLiveMessageSent(result) }],
@@ -152,8 +154,11 @@ export async function handleTool(
     case "check_live_messages": {
       const limit = Math.min((args.limit as number) || 50, 100);
       const peek = (args.peek as boolean) || false;
+      const sessionId = args.session_id
+        ? args.session_id as string
+        : (await resolveCurrentSession(client)).session?.session_id;
       const result = await client.checkLiveMessages(
-        args.session_id as string,
+        sessionId,
         { limit, peek }
       );
       return {
@@ -162,10 +167,13 @@ export async function handleTool(
     }
 
     case "delete_live_message": {
+      const fromSessionId = args.from_session_id
+        ? args.from_session_id as string
+        : (await resolveCurrentSession(client)).session?.session_id;
       const result = await client.deleteLiveMessage(
         args.to_session_id as string,
         args.message_id as string,
-        args.from_session_id as string
+        fromSessionId
       );
       return {
         content: [{ type: "text", text: formatLiveMessageDeleted(result) }],
@@ -190,7 +198,10 @@ export async function handleTool(
     }
 
     case "count_live_messages": {
-      const result = await client.countLiveMessages(args.session_id as string);
+      const sessionId = args.session_id
+        ? args.session_id as string
+        : (await resolveCurrentSession(client)).session?.session_id;
+      const result = await client.countLiveMessages(sessionId);
       return {
         content: [{ type: "text", text: formatLiveCount(result) }],
       };

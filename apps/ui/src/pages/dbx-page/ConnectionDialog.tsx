@@ -5,7 +5,7 @@ import {
   type DbxConnection,
 } from '../../lib/dbx-api'
 import { ConfirmModal } from '../../components/ui'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface ConnectionDialogProps {
   existing: DbxConnection | null

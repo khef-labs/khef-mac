@@ -7,6 +7,7 @@ import { useFetch } from '../../hooks'
 import { getMcpServersHealth } from '../../lib/api'
 import { getDismissedServers } from '../../lib/mcpDismissed'
 import { isDesktopApp } from '../../lib/settings'
+import { saveSession } from '../../lib/store'
 import { PageMetaFooter } from './PageMetaFooter'
 import { NotificationsBanner } from '../shared/NotificationsBanner'
 import { QuestionHost } from '../agent-questions'
@@ -44,7 +45,7 @@ export function AppShell({ children }: Props) {
   useEffect(() => {
     if (location.startsWith('/memories/')) return
     if (typeof window === 'undefined') return
-    window.sessionStorage.setItem('khefLastLocation', location)
+    saveSession({ lastLocation: location })
   }, [location])
 
   return (
@@ -180,15 +181,15 @@ export function AppShell({ children }: Props) {
             Editor
           </Link>
           <Link
-            href="/database"
+            href="/dbx"
             class={clsx(
               styles.navLink,
-              location.startsWith('/database') && styles.navLinkActive
+              location.startsWith('/dbx') && styles.navLinkActive
             )}
             data-testid="nav--database"
           >
             <HardDrive size={18} />
-            DB
+            Dbx
           </Link>
           <Link
             href="/stats"

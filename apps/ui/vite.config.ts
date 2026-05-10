@@ -105,6 +105,28 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true, // forward WebSocket upgrades (e.g., /api/pty/spawn)
           timeout: 300000, // 5 min for long-running chat requests (Claude + MCP tools)
+          configure: (proxy) => {
+            // Suppress Vite's verbose AggregateError stack on transient API
+            // outages (tsx watch bouncing during refresh). Log a single
+            // concise line and return 503 so the client can retry.
+            proxy.on('error', (err, _req, res) => {
+              const code = (err as NodeJS.ErrnoException).code
+              const transient = code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT'
+              if (transient) {
+                console.warn(`[vite] api proxy: ${code} (api restarting?)`)
+              } else {
+                console.warn(`[vite] api proxy error: ${err.message}`)
+              }
+              if (res && 'writeHead' in res && !res.headersSent) {
+                try {
+                  res.writeHead(503, { 'Content-Type': 'application/json' })
+                  res.end(JSON.stringify({ error: 'API unavailable', code: code || 'PROXY_ERROR' }))
+                } catch {
+                  // socket already gone
+                }
+              }
+            })
+          },
         },
       },
     },

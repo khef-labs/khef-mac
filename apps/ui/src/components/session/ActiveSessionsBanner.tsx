@@ -4,7 +4,7 @@ import { Radio, RefreshCw } from 'lucide-preact'
 import clsx from 'clsx'
 import { getActiveSessions, scanActiveSessions } from '../../lib/api'
 import type { ActiveSession } from '../../types'
-import { cardStyles, useToast } from '../ui'
+import { AssistantIcon, cardStyles, useToast } from '../ui'
 import { SessionContextMenu } from '../shared/SessionContextMenu'
 import styles from './ActiveSessionsBanner.module.css'
 
@@ -88,6 +88,9 @@ export function ActiveSessionsBanner({ assistantHandle }: Props) {
             >
               <div class={styles.activeCardHeader}>
                 <span class={styles.statusDot} />
+                {session.assistant && (
+                  <AssistantIcon handle={session.assistant.handle} size={13} />
+                )}
                 <span class={styles.activeLabel}>{label}</span>
               </div>
               <div class={styles.activeMeta}>

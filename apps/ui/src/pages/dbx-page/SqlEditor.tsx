@@ -7,7 +7,7 @@ import { HighlightStyle } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, codeFolding, foldAll, unfoldAll } from '@codemirror/language'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface SqlEditorProps {
   value: string

@@ -12,7 +12,7 @@ import {
   type DbxConnection,
   type DbxSavedQuery,
 } from '../lib/dbx-api'
-import { SqlEditor } from './database-page/SqlEditor'
+import { SqlEditor } from './dbx-page/SqlEditor'
 import {
   getNavContext,
   setNavContext,
@@ -28,14 +28,14 @@ import { CloneSavedQueryModal } from '../components/dbx/CloneSavedQueryModal'
 import styles from './SavedQueryPage.module.css'
 
 const CRUMBS = [
-  { label: 'Database', href: '/database' },
-  { label: 'Saved queries', href: '/database/saved-queries' },
+  { label: 'Dbx', href: '/dbx' },
+  { label: 'Saved queries', href: '/dbx/saved-queries' },
 ]
 
 const UI_SESSION_ID = 'khef-ui'
 
 export function SavedQueryPage() {
-  const [, params] = useRoute<{ id: string }>('/database/saved-queries/:id')
+  const [, params] = useRoute<{ id: string }>('/dbx/saved-queries/:id')
   const [, setLocation] = useLocation()
   const { showToast } = useToast()
   const id = params?.id ?? null
@@ -50,6 +50,7 @@ export function SavedQueryPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [confirmingClone, setConfirmingClone] = useState(false)
   const [cloneError, setCloneError] = useState<string | null>(null)
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
 
   useDocumentTitle(query ? `${query.name} — Saved Queries` : 'Saved Queries')
 
@@ -75,7 +76,7 @@ export function SavedQueryPage() {
     try {
       await deleteSavedQuery(query.id)
       showToast(`Deleted "${query.name}"`, undefined, { variant: 'success' })
-      setLocation('/database/saved-queries')
+      setLocation('/dbx/saved-queries')
     } catch (err: any) {
       showToast(`Delete failed: ${err?.message || err}`, undefined, { variant: 'error' })
     }
@@ -125,7 +126,7 @@ export function SavedQueryPage() {
         }
         setBusy(false); setConfirmingClone(false)
         showToast(`Cloned as "${saved_query.handle}"`, undefined, { variant: 'success' })
-        setLocation(`/database/saved-queries/${saved_query.id}`)
+        setLocation(`/dbx/saved-queries/${saved_query.id}`)
         return
       } catch (err: any) {
         lastErr = err
@@ -172,17 +173,22 @@ export function SavedQueryPage() {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (e.key === 'ArrowLeft') {
         const prev = getPrevMemoryId()
-        if (prev) { setLocation(`/database/saved-queries/${prev}`); e.preventDefault() }
+        if (prev) { setLocation(`/dbx/saved-queries/${prev}`); e.preventDefault() }
       } else if (e.key === 'ArrowRight') {
         const next = getNextMemoryId()
-        if (next) { setLocation(`/database/saved-queries/${next}`); e.preventDefault() }
+        if (next) { setLocation(`/dbx/saved-queries/${next}`); e.preventDefault() }
       } else if (e.key === 'e' && !e.metaKey && !e.ctrlKey) {
-        if (query) { setLocation(`/database?open=${query.id}`); e.preventDefault() }
+        if (query) { setLocation(`/dbx?open=${query.id}`); e.preventDefault() }
+      } else if (e.key === 'Escape') {
+        if (sqlDirty && !isLocked) {
+          e.preventDefault()
+          setConfirmingDiscard(true)
+        }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [query])
+  }, [query, sqlDirty, isLocked])
 
   async function toggleFavorite() {
     if (!query || busy) return
@@ -237,7 +243,7 @@ export function SavedQueryPage() {
             <div class={styles.posIndicator}>
               <button
                 class={styles.posBtn}
-                onClick={() => prevId && setLocation(`/database/saved-queries/${prevId}`)}
+                onClick={() => prevId && setLocation(`/dbx/saved-queries/${prevId}`)}
                 disabled={!prevId}
                 title="Previous (←)"
               >
@@ -246,7 +252,7 @@ export function SavedQueryPage() {
               <span>{pos.current} of {pos.total}</span>
               <button
                 class={styles.posBtn}
-                onClick={() => nextId && setLocation(`/database/saved-queries/${nextId}`)}
+                onClick={() => nextId && setLocation(`/dbx/saved-queries/${nextId}`)}
                 disabled={!nextId}
                 title="Next (→)"
               >
@@ -273,10 +279,10 @@ export function SavedQueryPage() {
           )}
           <button
             class={styles.btn}
-            onClick={() => setLocation(`/database?open=${query.id}`)}
+            onClick={() => setLocation(`/dbx?open=${query.id}`)}
             title="Open in the run-and-results editor (press e)"
           >
-            <Edit3 size={13} /> DB Editor
+            <Edit3 size={13} /> Dbx Editor
           </button>
         </div>
       </PageHeader>
@@ -322,11 +328,14 @@ export function SavedQueryPage() {
               Read-only — edits aren't allowed. <button class={styles.lockLink} onClick={() => setConfirmingClone(true)} disabled={busy}>Clone to edit</button>
             </div>
           )}
-          <div class={styles.editorBox}>
+          <div
+            class={styles.editorBox}
+            style={{ height: `${Math.min(800, Math.max(300, sqlDraft.split('\n').length * 22 + 32))}px` }}
+          >
             <SqlEditor
               value={sqlDraft}
               onChange={setSqlDraft}
-              onRun={() => setLocation(`/database?open=${query.id}`)}
+              onRun={() => setLocation(`/dbx?open=${query.id}`)}
               onSave={isLocked ? undefined : saveSql}
               readOnly={isLocked}
             />
@@ -405,6 +414,21 @@ export function SavedQueryPage() {
           errorMessage={cloneError}
           onConfirm={clone}
           onCancel={() => { setConfirmingClone(false); setCloneError(null) }}
+        />
+      )}
+
+      {confirmingDiscard && (
+        <ConfirmModal
+          title="Discard changes?"
+          message="Discard your unsaved SQL changes?"
+          confirmLabel="Discard"
+          variant="danger"
+          onConfirm={() => {
+            setSqlDraft(query.sql)
+            setSqlError(null)
+            setConfirmingDiscard(false)
+          }}
+          onCancel={() => setConfirmingDiscard(false)}
         />
       )}
     </div>

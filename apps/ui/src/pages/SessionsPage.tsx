@@ -26,7 +26,7 @@ export function SessionsPage() {
     getSessionCounts()
       .then(({ counts }) => {
         if (!mounted) return
-        const visible = counts.filter(c => c.assistant_handle !== 'codex-cli')
+        const visible = counts
         setCounts(visible)
         // Pick the tab: URL > first with sessions > first overall
         const resolved = visible.find(c => c.assistant_handle === assistantFromUrl)?.assistant_handle

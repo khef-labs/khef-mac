@@ -5,7 +5,7 @@ import {
   favoriteSavedQuery, unfavoriteSavedQuery,
   type DbxSavedQuery, type DbxRecentSavedQuery,
 } from '../../lib/dbx-api'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 interface Props {
   sessionId: string | null

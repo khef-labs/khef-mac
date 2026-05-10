@@ -29,7 +29,7 @@ import { SaveScriptDialog } from './SaveScriptDialog'
 import { SqlEditor } from './SqlEditor'
 import { SchemaErdPanel } from './SchemaErdPanel'
 import { EditRowDialog } from './EditRowDialog'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 // Minimum keeps header + ~1 row of content visible — going below this clips the
 // section's filter input and items because each panel uses its own overflow-y:
@@ -85,8 +85,8 @@ function serializeTabs(tabs: Tab[]): any[] {
   })
 }
 
-export function DatabasePage() {
-  useDocumentTitle('Database')
+export function DbxPage() {
+  useDocumentTitle('Dbx')
   const [, setLocation] = useLocation()
   const stored = useRef(loadStore().dbx)
 
@@ -156,9 +156,9 @@ export function DatabasePage() {
     }
   }, [])
 
-  // Consume `/database?open=<saved-query-id>` once on mount: opens the query
+  // Consume `/dbx?open=<saved-query-id>` once on mount: opens the query
   // in a fresh SQL tab and strips the param from the URL so a refresh doesn't
-  // reopen it. Used by /database/saved-queries to hand off a click into the
+  // reopen it. Used by /dbx/saved-queries to hand off a click into the
   // existing editor flow.
   const openConsumedRef = useRef(false)
   useEffect(() => {
@@ -962,7 +962,7 @@ export function DatabasePage() {
           })()}
           onOpen={openSavedQueryInTab}
           onNew={createNewSavedQuery}
-          onManageAll={() => setLocation('/database/saved-queries')}
+          onManageAll={() => setLocation('/dbx/saved-queries')}
         />
 
         <div class={styles.sidebarDivider} onMouseDown={onScriptsDividerMouseDown} />

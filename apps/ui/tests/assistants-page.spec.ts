@@ -125,12 +125,12 @@ test.describe('Assistant Detail Page', () => {
 
     // Either discovered files panel or configurations section should be visible
     const discoveryPanel = page.locator('[class*="_discoveryPanel_"]')
-    const configList = page.locator('[class*="_configList_"]')
+    const configsGrid = page.locator('[data-testid="configs-grid"]')
     const emptyState = page.locator('[class*="_empty_"]')
 
     // One of these should be visible after auto-discovery
     const hasDiscovery = await discoveryPanel.count()
-    const hasConfigs = await configList.count()
+    const hasConfigs = await configsGrid.count()
     const hasEmpty = await emptyState.count()
 
     expect(hasDiscovery + hasConfigs + hasEmpty).toBeGreaterThan(0)

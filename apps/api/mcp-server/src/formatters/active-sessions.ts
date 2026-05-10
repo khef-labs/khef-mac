@@ -56,7 +56,7 @@ export function formatActiveSessionsList(data: any): string {
   }
 
   lines.push('');
-  lines.push('Tip: Use send_live_message(to_session_id) to message a session, or get_current_session(session_id) for details.');
+  lines.push('Tip: Use send_live_message(to_session_id) to message a session, or get_current_session() for your current session.');
 
   return lines.join('\n').trimEnd();
 }

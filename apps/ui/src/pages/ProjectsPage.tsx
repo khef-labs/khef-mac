@@ -22,6 +22,7 @@ export function ProjectsPage() {
   const [createHandle, setCreateHandle] = useState('')
   const [createDisplayName, setCreateDisplayName] = useState('')
   const [createDescription, setCreateDescription] = useState('')
+  const [createPath, setCreatePath] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,6 +56,7 @@ export function ProjectsPage() {
     setCreateHandle('')
     setCreateDisplayName('')
     setCreateDescription('')
+    setCreatePath('')
     setCreateError(null)
   }
 
@@ -81,6 +83,7 @@ export function ProjectsPage() {
     const handle = createHandle.trim() || slugify(name)
     const displayName = createDisplayName.trim()
     const description = createDescription.trim()
+    const path = createPath.trim()
 
     if (!name) {
       setCreateError('Project name is required.')
@@ -99,6 +102,7 @@ export function ProjectsPage() {
         name,
         display_name: displayName || undefined,
         description: description || undefined,
+        path: path || undefined,
       })
       setShowCreate(false)
       resetCreateForm()
@@ -108,7 +112,7 @@ export function ProjectsPage() {
     } finally {
       setIsCreating(false)
     }
-  }, [createName, createHandle, createDisplayName, createDescription])
+  }, [createName, createHandle, createDisplayName, createDescription, createPath])
 
   const handleCreateProject = (event: Event) => {
     event.preventDefault()
@@ -249,7 +253,7 @@ export function ProjectsPage() {
           <form class={styles.createPanel} onSubmit={handleCreateProject}>
             <div class={styles.createRow}>
               <label class={styles.createLabel} htmlFor="project-name">
-                Name
+                Name<span class={styles.requiredMark} aria-hidden="true">*</span>
               </label>
               <input
                 id="project-name"
@@ -274,7 +278,7 @@ export function ProjectsPage() {
                 onInput={(e) =>
                   setCreateHandle((e.target as HTMLInputElement).value)
                 }
-                placeholder="Optional (auto-generated from name)"
+                placeholder="Auto-generated from name"
               />
             </div>
             <div class={styles.createRow}>
@@ -289,7 +293,22 @@ export function ProjectsPage() {
                 onInput={(e) =>
                   setCreateDisplayName((e.target as HTMLInputElement).value)
                 }
-                placeholder="Optional"
+                placeholder=""
+              />
+            </div>
+            <div class={styles.createRow}>
+              <label class={styles.createLabel} htmlFor="project-path">
+                Path
+              </label>
+              <input
+                id="project-path"
+                class={styles.createInput}
+                type="text"
+                value={createPath}
+                onInput={(e) =>
+                  setCreatePath((e.target as HTMLInputElement).value)
+                }
+                placeholder="~/projects/my-project"
               />
             </div>
             <div class={styles.createRow}>
@@ -303,7 +322,7 @@ export function ProjectsPage() {
                 onInput={(e) =>
                   setCreateDescription((e.target as HTMLTextAreaElement).value)
                 }
-                placeholder="Optional"
+                placeholder=""
               />
             </div>
             {createError && <div class={styles.createError}>{createError}</div>}

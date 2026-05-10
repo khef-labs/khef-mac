@@ -6,7 +6,7 @@ import { saveErd } from '../../lib/dbx-api'
 import { previewDiagram } from '../../lib/api'
 import type { SchemaErdTab } from './types'
 import { pgArray } from './ResultGrid'
-import styles from './DatabasePage.module.css'
+import styles from './DbxPage.module.css'
 
 function generateSchemaErd(data: DbxSchemaErdData): string {
   const lines: string[] = ['erDiagram']

@@ -81,8 +81,8 @@ export function SavedQueriesPage() {
   function open(q: DbxSavedQuery) {
     // Stash the entire filtered list (not just this page) so the detail view's
     // ←/→ stepping covers everything the user is currently scoped to.
-    setNavContext(visible.map(v => v.id), q.id, '/database/saved-queries')
-    setLocation(`/database/saved-queries/${q.id}`)
+    setNavContext(visible.map(v => v.id), q.id, '/dbx/saved-queries')
+    setLocation(`/dbx/saved-queries/${q.id}`)
   }
 
   async function confirmDelete() {
@@ -127,7 +127,7 @@ export function SavedQueriesPage() {
     <div class={styles.page} tabIndex={0} onKeyDown={onKeyDown as any}>
       <PageHeader
         title="Saved queries"
-        breadcrumbs={[{ label: 'Database', href: '/database' }]}
+        breadcrumbs={[{ label: 'Dbx', href: '/dbx' }]}
       />
 
       <div class={styles.filters}>
@@ -197,7 +197,7 @@ export function SavedQueriesPage() {
         <SavedQueryContextMenu
           query={contextMenu.query}
           position={{ x: contextMenu.x, y: contextMenu.y }}
-          onOpenInEditor={() => setLocation(`/database?open=${contextMenu.query.id}`)}
+          onOpenInEditor={() => setLocation(`/dbx?open=${contextMenu.query.id}`)}
           onToggleFavorite={() => toggleFavorite(contextMenu.query)}
           onDelete={() => setPendingDelete(contextMenu.query)}
           onClose={() => setContextMenu(null)}

@@ -321,7 +321,7 @@ export function QuickOpen({ visible, rootPath, onClose, onSelect, commands = [],
       <div class={styles.modal} onClick={(e: Event) => e.stopPropagation()}>
         <div class={styles.header}>
           <Search size={14} />
-          <span class={styles.title}>Command Palette</span>
+          <span class={styles.title}>{scope === 'commands' ? 'Command Palette' : 'Find File'}</span>
           <div class={styles.scopeToggle} role="tablist" aria-label="Search scope">
             <button
               class={clsx(styles.scopeButton, scope === 'commands' && styles.scopeButtonActive)}
@@ -357,9 +357,6 @@ export function QuickOpen({ visible, rootPath, onClose, onSelect, commands = [],
               Global
             </button>
           </div>
-          {scope !== 'commands' && (
-            <span class={styles.rootPath} title={effectiveRootPath}>{effectiveRootPath}</span>
-          )}
         </div>
 
         <input
@@ -411,15 +408,19 @@ export function QuickOpen({ visible, rootPath, onClose, onSelect, commands = [],
 
         {scope !== 'commands' && (
           <div class={styles.statusLine}>
-            {scope === 'project'
-              ? (loading
-                ? 'Indexing project files...'
-                : `${files.length.toLocaleString()} files indexed`)
-              : (loading
-                ? `Searching ${effectiveRootPath}...`
-                : normalizedQuery.length >= 2
-                  ? `${files.length.toLocaleString()} matches from ${effectiveRootPath}`
-                  : 'Type at least 2 characters to search')}
+            <span class={styles.statusRoot} title={effectiveRootPath}>{effectiveRootPath}</span>
+            <span class={styles.statusSep} aria-hidden="true">·</span>
+            <span class={styles.statusInfo}>
+              {scope === 'project'
+                ? (loading
+                  ? 'Indexing project files…'
+                  : `${files.length.toLocaleString()} files indexed`)
+                : (loading
+                  ? 'Searching…'
+                  : normalizedQuery.length >= 2
+                    ? `${files.length.toLocaleString()} matches`
+                    : 'Type at least 2 characters to search')}
+            </span>
           </div>
         )}
 
@@ -492,6 +493,19 @@ export function QuickOpen({ visible, rootPath, onClose, onSelect, commands = [],
             )}
           </div>
         )}
+
+        <div class={styles.footer}>
+          <span class={styles.footerHint}>
+            <kbd class={styles.kbd}>↵</kbd> Open
+          </span>
+          <span class={styles.footerHint}>
+            <kbd class={styles.kbd}>↑</kbd>
+            <kbd class={styles.kbd}>↓</kbd> Navigate
+          </span>
+          <span class={styles.footerHint}>
+            <kbd class={styles.kbd}>Esc</kbd> Close
+          </span>
+        </div>
       </div>
     </div>
   )

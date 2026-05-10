@@ -14,7 +14,7 @@ interface SyncedPagination {
   limit: number
   offset: number
 }
-import { cardStyles, ConfirmModal, useToast } from '../components/ui'
+import { AssistantBadge, cardStyles, ConfirmModal, useToast } from '../components/ui'
 import styles from './ProjectSessionTranscriptsPage.module.css'
 
 interface Props {
@@ -269,6 +269,13 @@ export function ProjectSessionTranscriptsPage({ projectId }: Props) {
                 <div class={styles.sessionTitle}>
                   {activeSessionIds.has(session.session_id) && (
                     <span class={styles.statusDot} title="Active session" />
+                  )}
+                  {session.assistant && (
+                    <AssistantBadge
+                      handle={session.assistant.handle}
+                      name={session.assistant.name}
+                      size="sm"
+                    />
                   )}
                   {session.nickname || session.session_id}
                 </div>

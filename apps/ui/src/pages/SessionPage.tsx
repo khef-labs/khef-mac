@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks'
 import { Link, useLocation } from 'wouter-preact'
 import { Clock, FileText, User, Bot, X, ChevronLeft, ChevronRight, Sparkles, ChevronDown, ChevronUp, Loader, RefreshCw, AlertTriangle, Pencil, Check, Copy, MessageSquareText, Code, Square, Play, Trash2 } from 'lucide-preact'
-import { getSession, getActiveSessions, terminateActiveSession, getSessionSummary, getSessionSummarySnapshot, createKdagJob, runKdagJob, retryKdagJob, getKdagJob, updateSessionSummary, exportSessionSummary, deleteSessionSummarySnapshot, deleteSessionSummary, patchSession, bulkDeleteSessions, sendLiveMessage, triggerSessionSync, getSessionTranscript, getSessionLineageTokenCount, getSessionLiveMemory, type SessionLineageTokenCount, type SessionLiveMemory } from '../lib/api'
+import { getSession, getActiveSessions, terminateActiveSession, getSessionSummary, getSessionSummarySnapshot, createKdagJob, runKdagJob, retryKdagJob, getKdagJob, updateSessionSummary, exportSessionSummary, deleteSessionSummarySnapshot, deleteSessionSummary, patchSession, bulkDeleteSessions, sendLiveMessage, triggerSessionSync, getSessionRaw, getSessionLineageTokenCount, getSessionLiveMemory, type SessionLineageTokenCount, type SessionLiveMemory } from '../lib/api'
 import { CodeEditor } from '../components/editor/CodeEditor'
 import { renderMarkdown } from '../lib/markdown'
+import { normalizeRawEntries } from '../lib/sessionRawNormalize'
 import {
   getSessionNavContext,
   updateSessionNavIndex,
@@ -11,7 +12,8 @@ import {
   getNextSessionId,
   getSessionPositionInfo,
 } from '../lib/sessionNavContext'
-import { CopyButton, ConfirmModal, ModelCombobox, useToast, LoadingMessage, VirtualList } from '../components/ui'
+import { loadSession, saveSession } from '../lib/store'
+import { AssistantBadge, CopyButton, ConfirmModal, ModelCombobox, useToast, LoadingMessage, VirtualList } from '../components/ui'
 import { useDocumentTitle } from '../hooks'
 import { ArchiveBadge, ChatInput, SessionTerminal, SessionToolbar } from '../components/session'
 import type { ViewMode, SortOrder } from '../components/session'
@@ -26,8 +28,6 @@ interface SessionPageProps {
   id: string
   projectId?: string
 }
-
-const SESSION_BACK_URL_KEY = 'khefSessionBackUrl'
 
 type SegmentRole = 'user' | 'assistant' | 'thinking' | 'tool_use' | 'tool_result'
 
@@ -287,9 +287,10 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
   // Get stored back URL and clear it (only used when not in project context)
   const [storedBackUrl] = useState(() => {
     if (projectId) return null // Don't use session storage when in project context
-    const stored = sessionStorage.getItem(SESSION_BACK_URL_KEY)
+    const session = loadSession()
+    const stored = session.sessionBackUrl
     if (stored) {
-      sessionStorage.removeItem(SESSION_BACK_URL_KEY)
+      saveSession({ sessionBackUrl: null })
     }
     return stored
   })
@@ -387,19 +388,13 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
     return () => { mounted = false }
   }, [session?.id, session?.pid])
 
-  // Derive projectDir from session file_path
-  const rawProjectDir = useMemo(() => {
-    if (!session?.file_path) return ''
-    const parts = session.file_path.split('/')
-    const projectDirIdx = parts.indexOf('projects') + 1
-    return projectDirIdx > 0 ? parts[projectDirIdx] : ''
-  }, [session?.file_path])
-
   const RAW_PAGE_SIZE = 500
 
-  // Load raw entries when switching to raw mode — loads newest page first
+  // Load raw entries when switching to raw mode — loads newest page first.
+  // Uses the assistant-agnostic /sessions/:id/raw endpoint which resolves
+  // file_path from the synced sessions row (works for both Claude and Codex).
   useEffect(() => {
-    if (viewMode !== 'raw' || !rawProjectDir || !session?.session_id) return
+    if (viewMode !== 'raw' || !session?.id) return
     let mounted = true
     setRawLoading(true)
     setRawEntries([])
@@ -408,7 +403,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
     setRawError(null)
 
     // Fetch last page: first call gets total_count, second fetches from the end
-    getSessionTranscript('claude-code', rawProjectDir, session.session_id, { limit: 1, offset: 0 })
+    getSessionRaw(session.id, { limit: 1, offset: 0 })
       .then(meta => {
         if (!mounted) return
         const total = meta.pagination?.total_count ?? 0
@@ -418,10 +413,10 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
           return
         }
         const offset = Math.max(0, total - RAW_PAGE_SIZE)
-        return getSessionTranscript('claude-code', rawProjectDir, session.session_id, { limit: RAW_PAGE_SIZE, offset })
+        return getSessionRaw(session.id, { limit: RAW_PAGE_SIZE, offset })
           .then(data => {
             if (!mounted) return
-            setRawEntries(data.session?.entries || [])
+            setRawEntries(normalizeRawEntries(data.session?.entries || [], session.assistant?.handle))
             setRawSource(data.session?.source)
             setRawFilePath(data.session?.file_path)
             setRawLoadedAll(offset === 0)
@@ -444,31 +439,34 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
       })
 
     return () => { mounted = false }
-  }, [viewMode, rawProjectDir, session?.session_id])
+  }, [viewMode, session?.id])
 
   // Refresh raw entries tail — append new entries that appeared since last load.
   // Triggered by SSE `session.updated` deltas so the Raw view stays live like Parsed.
   const refreshRawTail = useCallback(async () => {
-    if (viewMode !== 'raw' || !rawProjectDir || !session?.session_id) return
+    if (viewMode !== 'raw' || !session?.id) return
     if (rawLoading) return
     try {
-      const meta = await getSessionTranscript('claude-code', rawProjectDir, session.session_id, { limit: 1, offset: 0 })
+      const meta = await getSessionRaw(session.id, { limit: 1, offset: 0 })
       const newTotal = meta.pagination?.total_count ?? 0
       if (newTotal <= rawTotalCount) return
       const delta = newTotal - rawTotalCount
-      const data = await getSessionTranscript('claude-code', rawProjectDir, session.session_id, { limit: delta, offset: rawTotalCount })
-      const newer = data.session?.entries || []
-      if (newer.length === 0) return
+      const data = await getSessionRaw(session.id, { limit: delta, offset: rawTotalCount })
+      const newer = normalizeRawEntries(data.session?.entries || [], session.assistant?.handle)
+      if (newer.length === 0) {
+        setRawTotalCount(newTotal)
+        return
+      }
       setRawEntries(prev => [...prev, ...newer])
       setRawTotalCount(newTotal)
     } catch {
       // Silent — next delta or manual refresh will retry
     }
-  }, [viewMode, rawProjectDir, session?.session_id, rawTotalCount, rawLoading])
+  }, [viewMode, session?.id, rawTotalCount, rawLoading])
 
   // Load more (older) raw entries
   const loadMoreRaw = useCallback(async () => {
-    if (!rawProjectDir || !session?.session_id || rawLoadedAll || rawLoadingMore) return
+    if (!session?.id || rawLoadedAll || rawLoadingMore) return
     setRawLoadingMore(true)
     try {
       // Current entries are from offset..total. Load the page before that.
@@ -477,8 +475,8 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
       const nextLimit = currentOldestOffset - nextOffset
       if (nextLimit <= 0) { setRawLoadedAll(true); return }
 
-      const data = await getSessionTranscript('claude-code', rawProjectDir, session.session_id, { limit: nextLimit, offset: nextOffset })
-      const older = data.session?.entries || []
+      const data = await getSessionRaw(session.id, { limit: nextLimit, offset: nextOffset })
+      const older = normalizeRawEntries(data.session?.entries || [], session.assistant?.handle)
       // Prepend older entries (they come before the existing ones in file order)
       setRawEntries(prev => [...older, ...prev])
       if (nextOffset === 0) setRawLoadedAll(true)
@@ -487,7 +485,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
     } finally {
       setRawLoadingMore(false)
     }
-  }, [rawProjectDir, session?.session_id, rawEntries.length, rawTotalCount, rawLoadedAll, rawLoadingMore])
+  }, [session?.id, rawEntries.length, rawTotalCount, rawLoadedAll, rawLoadingMore])
 
   // Pre-filter and sort raw entries for virtualized rendering
   const filteredRawEntries = useMemo(() => {
@@ -1107,6 +1105,13 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
         <div class={styles.titleSection}>
           <h1 class={styles.title}>
             {isActive && <span class={styles.statusDot} title="Active session" />}
+            {session.assistant && (
+              <AssistantBadge
+                handle={session.assistant.handle}
+                name={session.assistant.name}
+                size="sm"
+              />
+            )}
             {session.nickname ? <span class={styles.nickname}>{session.nickname}</span> : sessionTitle}
             {lineageTokens && lineageTokens.estimated_tokens > 0 && (
               <button

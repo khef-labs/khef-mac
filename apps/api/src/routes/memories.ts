@@ -896,18 +896,38 @@ const memoryRoutes: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    const memories = results.map(({ total_count, project_handle, project_name, parent_type, parent_type_id, is_pinned_raw, is_seeded_raw, ...memory }) => ({
-      ...memory,
-      ...(parent_type ? { parent_type } : {}),
-      ...(parent_type_id ? { parent_type_id } : {}),
-      is_pinned: is_pinned_raw === 'true',
-      is_seeded: is_seeded_raw === true,
-      project: {
-        id: memory.project_id,
-        handle: project_handle,
-        name: project_name
+    const nonCompactMemoryIds = results.map(r => r.id);
+    const metadataMap = new Map<string, Record<string, string>>();
+    if (nonCompactMemoryIds.length > 0) {
+      const metaRows = await query<{ memory_id: string; field: string; value: string }>(
+        `SELECT mm.memory_id, md.field, mm.value
+         FROM memory_metadata mm
+         INNER JOIN metadata md ON mm.metadata_id = md.id
+         WHERE mm.memory_id = ANY($1)`,
+        [nonCompactMemoryIds]
+      );
+      for (const { memory_id, field, value } of metaRows) {
+        if (!metadataMap.has(memory_id)) metadataMap.set(memory_id, {});
+        metadataMap.get(memory_id)![field] = value;
       }
-    }));
+    }
+
+    const memories = results.map(({ total_count, project_handle, project_name, parent_type, parent_type_id, is_pinned_raw, is_seeded_raw, ...memory }) => {
+      const meta = metadataMap.get(memory.id);
+      return {
+        ...memory,
+        ...(parent_type ? { parent_type } : {}),
+        ...(parent_type_id ? { parent_type_id } : {}),
+        is_pinned: is_pinned_raw === 'true',
+        is_seeded: is_seeded_raw === true,
+        project: {
+          id: memory.project_id,
+          handle: project_handle,
+          name: project_name
+        },
+        ...(meta && Object.keys(meta).length > 0 ? { metadata: meta } : {}),
+      };
+    });
 
     return {
       memories,

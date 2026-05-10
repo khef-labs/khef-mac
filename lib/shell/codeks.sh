@@ -77,6 +77,31 @@ except Exception:
   pass" 2>/dev/null || true
 }
 
+set_iterm_user_var() {
+  local name="$1"
+  local value="${2:-}"
+  [ -z "$value" ] && return 0
+
+  local encoded
+  encoded=$(printf '%s' "$value" | base64 | tr -d '\n')
+  printf '\033]1337;SetUserVar=%s=%s\007' "$name" "$encoded" > /dev/tty 2>/dev/null || true
+}
+
+update_iterm_session_vars() {
+  local session_id="$1"
+  local nickname="$2"
+  local short_session_id="${session_id%%-*}"
+
+  # Existing iTerm profiles interpolate these historical Claude variable names.
+  set_iterm_user_var "claude_session" "$session_id"
+  set_iterm_user_var "claude_session_short" "$short_session_id"
+  set_iterm_user_var "claude_nickname" "$nickname"
+
+  set_iterm_user_var "codex_session" "$session_id"
+  set_iterm_user_var "codex_session_short" "$short_session_id"
+  set_iterm_user_var "codex_nickname" "$nickname"
+}
+
 # --- Background discovery: find this run's Codex JSONL and register it ---
 discover_session() {
   set +e  # don't let pipefail/errexit kill the watcher
@@ -127,6 +152,8 @@ discover_session() {
       echo "KHEF_NICKNAME=$nickname"
       echo "KHEF_SESSION_FILE=$match"
     } > "$STATUS_FILE"
+
+    update_iterm_session_vars "$session_id" "$nickname"
     return 0
   done
 }
