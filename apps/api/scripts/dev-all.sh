@@ -45,6 +45,14 @@ fi
 
 echo "$$" > "$LOCK_FILE"
 
+# Prefer the project venv if setup-python.sh created one (PEP 668 / Homebrew).
+# CWD here is apps/api when invoked via `npm run dev:api`.
+if [ -x ".venv/bin/python3" ]; then
+  EMBED_PYTHON=".venv/bin/python3"
+else
+  EMBED_PYTHON="python3"
+fi
+
 cleanup() {
   rm -f "$LOCK_FILE"
   for pid in "${PIDS[@]}"; do
@@ -79,7 +87,7 @@ if lsof -ti:3200 >/dev/null 2>&1; then
 fi
 
 if [ "$EMBED_SKIP" -eq 0 ]; then
-  python3 src/services/vector/embed_server.py &
+  "$EMBED_PYTHON" src/services/vector/embed_server.py &
   EMBED_PID="$!"
   PIDS+=("$EMBED_PID")
 fi
@@ -92,7 +100,7 @@ while true; do
   if [ "$EMBED_SKIP" -eq 0 ] && [ -n "$EMBED_PID" ]; then
     if ! kill -0 "$EMBED_PID" 2>/dev/null; then
       echo "[dev:all] embed server (pid $EMBED_PID) exited; respawning"
-      python3 src/services/vector/embed_server.py &
+      "$EMBED_PYTHON" src/services/vector/embed_server.py &
       EMBED_PID="$!"
       PIDS+=("$EMBED_PID")
     fi

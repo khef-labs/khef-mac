@@ -9,6 +9,10 @@ apps/api/mcp-server/build/
 \#*#
 *~
 
+# Python venv (created by setup-python.sh for PEP 668 / Homebrew Pythons)
+.venv/
+apps/api/.venv/
+
 # IDE / OS
 .DS_Store
 

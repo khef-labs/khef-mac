@@ -16,6 +16,8 @@ When the user says "run khef", follow these steps in order.
 
 ## Step 2: Database
 
+> If `apps/api/.env` doesn't exist yet, do Step 3 first — `db:up` reads `apps/api/.env` for postgres user/port and will fail otherwise.
+
 - Check for existing khef containers: `docker ps -a --filter name=khef`
   - If postgres container is running and healthy → skip to Step 3
   - If stopped → `docker start khef khef-kroki khef-kroki-mermaid`, wait for healthy
@@ -43,10 +45,35 @@ When the user says "run khef", follow these steps in order.
 kvec uses pgvector (already in the PostgreSQL container) and a Python sidecar for embeddings. No external vector DB needed.
 
 - Verify Python 3.10+: `python3 --version`
+- If `python3` is missing, too old, or you're on **macOS 26 (Tahoe)**, prefer **pyenv** over `brew install python@3.13`. See "Python version steering" below before doing anything else.
 - Install Python embedding dependencies: `pip3 install -r apps/api/requirements.txt`
+  - If pip refuses with `error: externally-managed-environment` (PEP 668), you are on a Homebrew-managed Python. Create a project venv instead of using `--break-system-packages`:
+    ```
+    python3 -m venv apps/api/.venv
+    apps/api/.venv/bin/pip install -r apps/api/requirements.txt
+    ```
+    The dev script auto-detects `apps/api/.venv/bin/python` if present.
 - The embed server (`embed_server.py`) starts automatically with the API via the vector sync worker
 - To manually test the sidecar: `python3 apps/api/embed_server.py` (runs on port 9100)
   - Health check: `curl http://localhost:9100/health`
+
+### Python version steering
+
+The kvec sidecar needs Python 3.10+. How you get there matters — picking the wrong path on macOS 26 (Tahoe) can waste 10+ minutes and still end with a broken Python.
+
+Pick the first matching row:
+
+| Situation | Recommended path |
+|---|---|
+| `pyenv` is already installed | `pyenv install 3.12 && pyenv local "$(pyenv latest 3.12)"` (inside the repo, installs the latest 3.12.x). Cleanest — pyenv builds from source so it's immune to Homebrew bottle bugs, and the `python3` shim resolves to the pinned version with no symlink hacks. |
+| macOS 26 / Tahoe, no pyenv | **Install pyenv first**: `brew install pyenv && pyenv install 3.12 && pyenv local "$(pyenv latest 3.12)"`. Avoid `brew install python@3.13` on Tahoe — the bottle is built against a newer libexpat than macOS 26 ships, so `import pyexpat` fails with `Symbol not found: __XML_SetAllocTrackerActivationThreshold` and pip itself crashes. Python 3.12 via pyenv (built from source) sidesteps this. |
+| macOS ≤ 15, no pyenv | `brew install python@3.12` is fine. If `python3` still points to an older version after install, you have a PATH or shim issue — fix that before continuing (do not symlink `/opt/homebrew/bin/python3` by hand). |
+| Linux | Use the distro package (`apt install python3.12`) or pyenv. |
+
+Notes:
+
+- Do not run `pip3 install --break-system-packages` against Homebrew's Python. The PEP 668 guard exists for a reason; bypassing it leaves stray packages in the brew prefix that break on the next `brew upgrade`. Use a venv instead.
+- `npm run python:setup` runs the same logic as Step 4 with graceful fallbacks; running it again after fixing Python is the easiest verification.
 
 ## Step 5: Build and configure MCP server
 
