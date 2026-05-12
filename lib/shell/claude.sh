@@ -132,6 +132,31 @@ clauderesume() {
     fi
 }
 
+# Clear the iTerm2 session badge variables (claude_nickname, claude_session, claude_session_short, claude_badge)
+# Usage: clearname
+clearname() {
+    local sid="${ITERM_SESSION_ID#*:}"
+    if [ -z "$sid" ]; then
+        echo "Not running in iTerm2 (ITERM_SESSION_ID not set)"
+        return 1
+    fi
+    for v in claude_nickname claude_session claude_session_short claude_badge; do
+        printf '\033]1337;SetUserVar=%s=\007' "$v" > /dev/tty 2>/dev/null || true
+        osascript \
+            -e 'tell application "iTerm2"' \
+            -e 'repeat with w in windows' \
+            -e 'repeat with t in tabs of w' \
+            -e 'repeat with s in sessions of t' \
+            -e "if id of s is \"$sid\" then" \
+            -e "tell s to set variable named \"user.$v\" to \"\"" \
+            -e 'end if' \
+            -e 'end repeat' \
+            -e 'end repeat' \
+            -e 'end repeat' \
+            -e 'end tell' >/dev/null 2>&1 || true
+    done
+}
+
 alias cr="clauderesume"
 alias kfr="source $KHEF_DIR/lib/shell/claude.sh"
 alias kf="$KHEF_DIR/scripts/kf-edit.sh"
