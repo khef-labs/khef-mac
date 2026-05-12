@@ -7,7 +7,7 @@
 
 import { spawn } from 'child_process';
 import { workerLogger } from '../lib/logger';
-import { generateContent, type ResponsePart } from './gemini';
+import { generateContent, type ResponsePart, type UrlContextFetched } from './gemini';
 import { checkBackendAvailability } from './kdag-executor';
 
 const log = workerLogger.child({ component: 'assistant-chat' });
@@ -89,6 +89,10 @@ export interface ThinkingData {
   tokenCount: number;
 }
 
+export interface UrlContextData {
+  fetched: UrlContextFetched[];
+}
+
 export interface ChatResult {
   response: string;
   responseParts?: ResponsePart[];
@@ -99,6 +103,7 @@ export interface ChatResult {
   session_id?: string;
   grounding?: GroundingData | null;
   thinking?: ThinkingData | null;
+  urlContext?: UrlContextData | null;
 }
 
 /**
@@ -356,6 +361,7 @@ export async function chatWithAssistant(args: {
   allowedTools?: string[];
   permissionMode?: string;
   useGoogleSearch?: boolean;
+  useUrlContext?: boolean;
   useThinking?: boolean;
   thinkingBudget?: number;
 }): Promise<ChatResult> {
@@ -384,6 +390,7 @@ async function dispatchToBackend(
     allowedTools?: string[];
     permissionMode?: string;
     useGoogleSearch?: boolean;
+    useUrlContext?: boolean;
     useThinking?: boolean;
     thinkingBudget?: number;
   },
@@ -391,6 +398,7 @@ async function dispatchToBackend(
   if (backend === 'gemini') {
     return chatWithGemini(args.promptText, args.messages, args.model, {
       useGoogleSearch: args.useGoogleSearch,
+      useUrlContext: args.useUrlContext,
       useThinking: args.useThinking,
       thinkingBudget: args.thinkingBudget,
       systemPrompt: args.systemPrompt,
@@ -466,6 +474,7 @@ async function chatWithGemini(
   model?: string,
   options?: {
     useGoogleSearch?: boolean;
+    useUrlContext?: boolean;
     useThinking?: boolean;
     thinkingBudget?: number;
     systemPrompt?: string;
@@ -494,6 +503,7 @@ async function chatWithGemini(
       model: model || undefined,
       contents,
       useGoogleSearch: options?.useGoogleSearch,
+      useUrlContext: options?.useUrlContext,
       useThinking: options?.useThinking,
       thinkingBudget: options?.thinkingBudget,
       systemPrompt: options?.systemPrompt,
@@ -508,6 +518,7 @@ async function chatWithGemini(
       error: null,
       grounding: result.grounding || null,
       thinking: result.thinking || null,
+      urlContext: result.urlContext || null,
     };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);

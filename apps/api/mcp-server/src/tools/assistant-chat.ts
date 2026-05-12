@@ -60,6 +60,10 @@ export const tools: Tool[] = [
         type: "boolean",
         description: "Enable Google Search grounding (Gemini only)",
       },
+      use_url_context: {
+        type: "boolean",
+        description: "Enable URL context fetching (Gemini only). Gemini fetches the URLs referenced in the prompt and grounds its response on their actual content. The response includes a url_context.fetched array listing each URL and its retrieval status — use this to verify claims about web pages, YouTube videos, or other URL-addressable resources instead of trusting the model's prior.",
+      },
       use_thinking: {
         type: "boolean",
         description: "Enable thinking mode (Gemini only)",
@@ -159,6 +163,7 @@ export async function handleTool(
         args.use_google_search as boolean | undefined,
         args.use_thinking as boolean | undefined,
         args.thinking_budget as number | undefined,
+        args.use_url_context as boolean | undefined,
       );
       return {
         content: [{ type: "text", text: fmt === "text" ? formatChatResponse(result) : JSON.stringify(result, null, 2) }],

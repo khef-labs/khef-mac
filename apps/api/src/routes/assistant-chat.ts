@@ -266,6 +266,7 @@ const assistantChatRoutes: FastifyPluginAsync = async (fastify) => {
       source,
       caller_handle,
       use_google_search,
+      use_url_context,
       use_thinking,
       thinking_budget,
     } = request.body as {
@@ -283,6 +284,7 @@ const assistantChatRoutes: FastifyPluginAsync = async (fastify) => {
       source?: string;
       caller_handle?: string;
       use_google_search?: boolean;
+      use_url_context?: boolean;
       use_thinking?: boolean;
       thinking_budget?: number;
     };
@@ -551,6 +553,7 @@ const assistantChatRoutes: FastifyPluginAsync = async (fastify) => {
       allowedTools: claudeAllowedTools,
       permissionMode: claudePermissionMode,
       useGoogleSearch: use_google_search,
+      useUrlContext: use_url_context,
       useThinking: use_thinking,
       thinkingBudget: thinking_budget,
     });
@@ -616,10 +619,10 @@ const assistantChatRoutes: FastifyPluginAsync = async (fastify) => {
     await query('UPDATE assistant_chats SET updated_at = NOW() WHERE id = $1', [chatId]);
 
     if (result.error) {
-      return reply.code(500).send({ chat_id: chatId, turn_id: turnId, message, error: result.error, session_id: backendSessionId });
+      return reply.code(500).send({ chat_id: chatId, turn_id: turnId, message, error: result.error, session_id: backendSessionId, url_context: result.urlContext || undefined });
     }
 
-    return reply.code(201).send({ chat_id: chatId, turn_id: turnId, message, session_id: backendSessionId });
+    return reply.code(201).send({ chat_id: chatId, turn_id: turnId, message, session_id: backendSessionId, url_context: result.urlContext || undefined });
   });
 
   // GET /api/assistants/:handle/chats — List chats for a backend

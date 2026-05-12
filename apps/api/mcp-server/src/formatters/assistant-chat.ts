@@ -57,6 +57,17 @@ export function formatChatResponse(data: any): string {
     }
   }
 
+  // Render URL context fetches if present (Gemini url_context tool)
+  const urlContext = data.url_context || msg.url_context;
+  if (urlContext && Array.isArray(urlContext.fetched) && urlContext.fetched.length > 0) {
+    lines.push('');
+    lines.push('---');
+    lines.push('**URL Context (fetched)**');
+    for (const f of urlContext.fetched) {
+      lines.push(`- ${f.url} — ${f.status}`);
+    }
+  }
+
   return lines.join('\n').trimEnd();
 }
 

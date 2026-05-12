@@ -360,7 +360,7 @@ async function runGemini(args: {
   useThinking?: boolean;
   thinkingBudget?: number;
   maxRetries?: number;
-}): Promise<{ text: string; grounding?: { searchQueries: string[]; sources: Array<{ uri: string; title: string }> }; urlContext?: { fetched: Array<{ url: string; status: string }> }; thinking?: { text: string; tokenCount: number } }> {
+}): Promise<{ text: string; grounding?: { searchQueries: string[]; sources: Array<{ uri: string; title: string }> }; urlContext?: { fetched: Array<{ url: string; status: string }> }; thinking?: { text: string; tokenCount: number }; tokens?: { input: number; output: number; thoughts: number } }> {
   log.info({ model: args.model, promptLen: args.promptText.length, useGoogleSearch: args.useGoogleSearch, useUrlContext: args.useUrlContext, useThinking: args.useThinking }, 'Calling Gemini');
   try {
     const result = await generateContent(args.promptText, {
@@ -371,7 +371,17 @@ async function runGemini(args: {
       thinkingBudget: args.thinkingBudget,
       maxRetries: args.maxRetries,
     });
-    return { text: result.response, grounding: result.grounding, urlContext: result.urlContext, thinking: result.thinking };
+    return {
+      text: result.response,
+      grounding: result.grounding,
+      urlContext: result.urlContext,
+      thinking: result.thinking,
+      tokens: {
+        input: result.inputTokens,
+        output: result.outputTokens,
+        thoughts: result.thinking?.tokenCount ?? 0,
+      },
+    };
   } catch (err: any) {
     log.error({ model: args.model, promptLen: args.promptText.length, err: err.message }, 'Gemini call failed');
     throw err;
@@ -444,6 +454,7 @@ async function runPrompt(args: {
     if (geminiResult.grounding) metadata.grounding = geminiResult.grounding;
     if (geminiResult.urlContext) metadata.url_context = geminiResult.urlContext;
     if (geminiResult.thinking) metadata.thinking = geminiResult.thinking;
+    if (geminiResult.tokens) metadata.tokens = geminiResult.tokens;
     return { text, ...(Object.keys(metadata).length > 0 && { metadata }) };
   }
   if (args.backend === 'codex') {

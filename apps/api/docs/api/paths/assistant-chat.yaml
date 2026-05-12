@@ -62,6 +62,9 @@ AssistantsByIdChat:
               use_google_search:
                 type: boolean
                 description: Enable Google Search grounding (Gemini only)
+              use_url_context:
+                type: boolean
+                description: Enable URL context fetching (Gemini only). Gemini fetches the URLs in the prompt and grounds the response on their actual content; the response's url_context.fetched array lists each URL and its retrieval status.
               use_thinking:
                 type: boolean
                 description: Enable thinking mode (Gemini only)
@@ -85,6 +88,21 @@ AssistantsByIdChat:
                   description: Turn UUID for this message (use as parent_turn_id when delegating)
                 message:
                   $ref: ../components/schemas.yaml#/AssistantChatMessage
+                url_context:
+                  type: object
+                  description: URLs Gemini fetched live via the url_context tool. Only present when use_url_context was enabled and Gemini retrieved at least one URL.
+                  properties:
+                    fetched:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                            description: The URL Gemini retrieved
+                          status:
+                            type: string
+                            description: Retrieval status (e.g., URL_RETRIEVAL_STATUS_SUCCESS, URL_RETRIEVAL_STATUS_ERROR)
       '400':
         description: >
           Invalid request. Possible reasons: invalid handle, missing prompt_text,

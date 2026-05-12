@@ -305,6 +305,70 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
       inputs.push({ typeKey: 'prompt', content: promptText, refType: null, refId: null });
     } else if (body.definition_key && body.inputs) {
       // Generic definition-driven job creation with explicit inputs
+
+      // For slack-channel-sync, honor the definition's promise of resolving
+      // channel_id/workspace_id from the registered slack_channels row when only
+      // channel_name is supplied. Also backfills workspace_name, export_path,
+      // last_message_ts, and slack_channel_db_id so the export step sees the
+      // same fields a hand-built call would have provided.
+      //
+      // When channel_name is shared across workspaces, any partial disambiguator
+      // the caller already supplied (workspace_id, workspace_name, channel_id,
+      // slack_channel_db_id) narrows the lookup before we declare ambiguity.
+      if (defKey === 'slack-channel-sync' && body.inputs.channel_name) {
+        const needsResolve = !body.inputs.channel_id || !body.inputs.workspace_id;
+        if (needsResolve) {
+          const filters: string[] = ['channel_name = $1'];
+          const params: (string | undefined)[] = [String(body.inputs.channel_name)];
+          const extraLabels: Array<{ field: string; value: string }> = [];
+          const addFilter = (col: string, field: string, val: unknown) => {
+            if (val) {
+              params.push(String(val));
+              filters.push(`${col} = $${params.length}`);
+              extraLabels.push({ field, value: String(val) });
+            }
+          };
+          addFilter('workspace_id', 'workspace_id', body.inputs.workspace_id);
+          addFilter('workspace_name', 'workspace_name', body.inputs.workspace_name);
+          addFilter('channel_id', 'channel_id', body.inputs.channel_id);
+          addFilter('id', 'slack_channel_db_id', body.inputs.slack_channel_db_id);
+
+          const candidates = await query<{
+            id: string;
+            channel_id: string;
+            workspace_id: string;
+            workspace_name: string | null;
+            export_path: string | null;
+            last_message_ts: string | null;
+          }>(
+            `SELECT id, channel_id, workspace_id, workspace_name, export_path, last_message_ts
+             FROM slack_channels
+             WHERE ${filters.join(' AND ')}`,
+            params as string[]
+          );
+          if (candidates.length === 0) {
+            const supplied = extraLabels.map(l => `${l.field}='${l.value}'`).join(', ');
+            const suffix = supplied ? ` matching ${supplied}` : '';
+            return reply.status(400).send({
+              error: `No registered Slack channel with channel_name='${body.inputs.channel_name}'${suffix}. Register it first or pass channel_id and workspace_id explicitly.`,
+            });
+          }
+          if (candidates.length > 1) {
+            const workspaces = candidates.map(c => c.workspace_name ? `${c.workspace_name} (${c.workspace_id})` : c.workspace_id).join(', ');
+            return reply.status(400).send({
+              error: `${candidates.length} registered Slack channels share channel_name='${body.inputs.channel_name}' across workspaces: ${workspaces}. Pass workspace_id or workspace_name to disambiguate.`,
+            });
+          }
+          const row = candidates[0];
+          if (!body.inputs.channel_id) body.inputs.channel_id = row.channel_id;
+          if (!body.inputs.workspace_id) body.inputs.workspace_id = row.workspace_id;
+          if (!body.inputs.workspace_name && row.workspace_name) body.inputs.workspace_name = row.workspace_name;
+          if (!body.inputs.slack_channel_db_id) body.inputs.slack_channel_db_id = row.id;
+          if (!body.inputs.export_path && row.export_path) body.inputs.export_path = row.export_path;
+          if (!body.inputs.last_message_ts && row.last_message_ts) body.inputs.last_message_ts = row.last_message_ts;
+        }
+      }
+
       // Validate required inputs against definition
       const defInputs = await query<{ input_type: string; required: boolean }>(
         `SELECT it.key as input_type, jdi.required

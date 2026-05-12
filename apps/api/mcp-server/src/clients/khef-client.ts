@@ -1865,6 +1865,7 @@ export class KhefClient {
     useGoogleSearch?: boolean,
     useThinking?: boolean,
     thinkingBudget?: number,
+    useUrlContext?: boolean,
   ) {
     const body: Record<string, any> = { prompt_text: promptText, source: 'mcp' };
     if (messages) body.messages = messages;
@@ -1877,6 +1878,7 @@ export class KhefClient {
       body.project_id = projectId;
     }
     if (useGoogleSearch) body.use_google_search = useGoogleSearch;
+    if (useUrlContext) body.use_url_context = useUrlContext;
     if (useThinking) body.use_thinking = useThinking;
     if (thinkingBudget != null) body.thinking_budget = thinkingBudget;
     return this.request(`/api/assistants/${encodeURIComponent(handle)}/chat`, {
