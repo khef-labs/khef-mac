@@ -1150,19 +1150,24 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
               </p>
             )}
             <span class={styles.metaDivider} />
-            {session.resumable && (
-              <button
-                class={styles.resumableBadge}
-                onClick={() => {
-                  navigator.clipboard.writeText(`claude --resume ${session.session_id}`)
-                  showToast('Resume command copied')
-                }}
-                title={`Resumable — click to copy: claude --resume ${session.session_id}`}
-              >
-                <Play size={10} />
-                Resumable
-              </button>
-            )}
+            {session.resumable && (() => {
+              const resumeCmd = session.assistant?.handle === 'codex-cli'
+                ? `codex resume ${session.session_id}`
+                : `claude --resume ${session.session_id}`
+              return (
+                <button
+                  class={styles.resumableBadge}
+                  onClick={() => {
+                    navigator.clipboard.writeText(resumeCmd)
+                    showToast('Resume command copied')
+                  }}
+                  title={`Resumable — click to copy: ${resumeCmd}`}
+                >
+                  <Play size={10} />
+                  Resumable
+                </button>
+              )
+            })()}
             <button
               class={styles.summarizeButton}
               onClick={handleDescribe}

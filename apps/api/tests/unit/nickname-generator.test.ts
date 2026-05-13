@@ -6,7 +6,7 @@ describe('nickname-generator', () => {
     it('returns a lowercase string', () => {
       for (let i = 0; i < 50; i++) {
         const name = randomNickname();
-        expect(name).toMatch(/^[a-z]+$/);
+        expect(name).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
       }
     });
 

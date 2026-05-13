@@ -6,7 +6,31 @@ const log = logger.child({ component: 'assistant-discovery' });
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { spawn } from 'child_process';
 import { ConfigImport, ConfigScope, ConfigFormat, ConfigType } from '../types';
+
+// Map assistant handle → CLI binary name. Handles not listed here have no
+// associated CLI (e.g. 'gemini') and skip the binary presence check.
+const ASSISTANT_CLI_BINARIES: Record<string, string> = {
+  'claude-code': 'claude',
+  'codex-cli': 'codex',
+};
+
+// Cache `which` results for the lifetime of the process so repeated assistant
+// list calls don't shell out on every request. PATH rarely changes mid-run.
+const cliAvailabilityCache = new Map<string, Promise<boolean>>();
+
+function isBinaryOnPath(binary: string): Promise<boolean> {
+  const cached = cliAvailabilityCache.get(binary);
+  if (cached) return cached;
+  const probe = new Promise<boolean>((resolve) => {
+    const child = spawn('which', [binary], { stdio: 'ignore' });
+    child.on('close', (code) => resolve(code === 0));
+    child.on('error', () => resolve(false));
+  });
+  cliAvailabilityCache.set(binary, probe);
+  return probe;
+}
 
 interface ConfigPath {
   id: string;
@@ -51,11 +75,19 @@ export function expandPath(template: string, projectPath?: string): string {
 }
 
 /**
- * Check if an assistant is installed by verifying it has at least one
- * imported global config. Discovery runs on startup and populates this,
- * so we trust whatever it found rather than re-scanning disk here.
+ * Check if an assistant is installed. Requires both:
+ *   1. At least one imported global config (proves discovery found settings on disk).
+ *   2. The associated CLI binary is on PATH (filters out stale config dirs left
+ *      behind after the user uninstalled the assistant).
+ *
+ * Assistants with no CLI mapping in ASSISTANT_CLI_BINARIES skip the binary
+ * check. Pass requireBinary=false to opt out (e.g. tests that fake configs
+ * without installing the real CLI).
  */
-export async function isAssistantInstalled(assistantHandle: string): Promise<boolean> {
+export async function isAssistantInstalled(
+  assistantHandle: string,
+  requireBinary = true
+): Promise<boolean> {
   const rows = await query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
      FROM configs c
@@ -65,7 +97,13 @@ export async function isAssistantInstalled(assistantHandle: string): Promise<boo
     [assistantHandle]
   );
 
-  return Number(rows[0]?.count ?? 0) > 0;
+  if (Number(rows[0]?.count ?? 0) === 0) return false;
+
+  if (!requireBinary) return true;
+
+  const binary = ASSISTANT_CLI_BINARIES[assistantHandle];
+  if (!binary) return true;
+  return isBinaryOnPath(binary);
 }
 
 /**

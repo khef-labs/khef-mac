@@ -1,6 +1,9 @@
 /**
  * Startup tasks that run when the server starts.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { logger } from '../lib/logger';
 import { query } from '../db/client';
 
@@ -8,6 +11,14 @@ const log = logger.child({ component: 'startup' });
 import { discoverAndImportGlobalConfigs, discoverAndImportProjectConfigs } from './assistant-discovery';
 import { resolveProjectPath, getProjectsBasePath } from './project-path';
 import { syncBuiltInCommands } from './assistant-commands';
+
+// Home directory expected to exist before we provision prompts/commands for an
+// assistant. Skipping the sync when the dir is missing keeps fresh machines
+// from accumulating ~/.codex/ or ~/.claude/ entries for tools they never use.
+const ASSISTANT_HOME_DIRS: Record<string, string> = {
+  'claude-code': path.join(os.homedir(), '.claude'),
+  'codex-cli': path.join(os.homedir(), '.codex'),
+};
 
 /**
  * Run config discovery for all assistants on startup.
@@ -88,6 +99,11 @@ export async function runStartupDiscovery(): Promise<void> {
     );
 
     for (const handle of startupSyncHandles) {
+      const homeDir = ASSISTANT_HOME_DIRS[handle];
+      if (homeDir && !fs.existsSync(homeDir)) {
+        log.debug({ assistant: handle, homeDir }, 'Skipping built-in command sync — assistant home dir missing');
+        continue;
+      }
       try {
         const results = syncBuiltInCommands(handle);
         const changes = results.filter((r) => r.action !== 'unchanged');

@@ -203,7 +203,10 @@ describe('Config Import Discovery', () => {
     expect(importConfigs).toHaveLength(1);
   });
 
-  it('should lazily discover installed assistants on list', async () => {
+  it('should lazily discover configs for an assistant when listing its configs', async () => {
+    // Note: list-assistants (/api/assistants) gates on CLI binary presence,
+    // so we verify lazy discovery via the configs endpoint instead — same
+    // discovery code path, no PATH dependency.
     const codexConfigPath = path.join(tempDir, 'codex-config.toml');
     fs.writeFileSync(codexConfigPath, '[mcp_servers.khef]\ncommand = "node"\n');
 
@@ -216,11 +219,11 @@ describe('Config Import Discovery', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: '/api/assistants',
+      url: '/api/assistants/codex-cli/configs',
     });
     expect(res.statusCode).toBe(200);
 
-    const { assistants } = res.json();
-    expect(assistants.some((a: any) => a.handle === 'codex-cli')).toBe(true);
+    const { configs } = res.json();
+    expect(configs.some((c: any) => c.path === codexConfigPath)).toBe(true);
   });
 });
