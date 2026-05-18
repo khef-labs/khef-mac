@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'os';
 import { execFile } from 'node:child_process';
+import { computeLineDiff, applyContext } from '../services/diff';
 
 // Extension → language mapping
 const EXT_LANG_MAP: Record<string, string> = {
@@ -190,7 +191,7 @@ const filesystemRoutes: FastifyPluginAsync = async (fastify) => {
 
   // GET /tree — list directory contents
   fastify.get<{
-    Querystring: { path: string; depth?: string; showHidden?: string };
+    Querystring: { path: string; depth?: string; showHidden?: string; includeIgnored?: string };
   }>('/tree', async (request, reply) => {
     const rawPath = request.query.path;
     if (!rawPath) {
@@ -199,6 +200,7 @@ const filesystemRoutes: FastifyPluginAsync = async (fastify) => {
 
     const depth = Math.min(Math.max(parseInt(request.query.depth || '1', 10), 1), 3);
     const showHidden = request.query.showHidden === 'true';
+    const includeIgnored = request.query.includeIgnored === 'true';
 
     let dirPath: string;
     try {
@@ -216,7 +218,7 @@ const filesystemRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: 'Directory not found' });
     }
 
-    const entries = await readDir(dirPath, depth, showHidden);
+    const entries = await readDir(dirPath, depth, showHidden, includeIgnored);
     return { path: dirPath, entries };
   });
 
@@ -383,6 +385,73 @@ const filesystemRoutes: FastifyPluginAsync = async (fastify) => {
       language,
       modified: stat.mtime.toISOString(),
       isImage: false,
+    };
+  });
+
+  // GET /diff — line-level diff between two files
+  fastify.get<{
+    Querystring: { a: string; b: string; context?: string; maxSize?: string };
+  }>('/diff', async (request, reply) => {
+    const { a: rawA, b: rawB } = request.query;
+    if (!rawA || !rawB) {
+      return reply.status(400).send({ error: 'Both "a" and "b" query parameters are required' });
+    }
+
+    const maxSize = parseInt(request.query.maxSize || String(MAX_FILE_SIZE), 10);
+    const contextLines = parseInt(request.query.context || '3', 10);
+    if (isNaN(contextLines) || contextLines < 0) {
+      return reply.status(400).send({ error: '"context" must be a non-negative integer' });
+    }
+
+    let pathA: string;
+    let pathB: string;
+    try {
+      pathA = validatePath(rawA);
+      pathB = validatePath(rawB);
+    } catch {
+      return reply.status(400).send({ error: 'Invalid path' });
+    }
+
+    const sides: Array<{ label: 'a' | 'b'; path: string }> = [
+      { label: 'a', path: pathA },
+      { label: 'b', path: pathB },
+    ];
+
+    const results: Array<{ path: string; content: string; size: number; modified: string }> = [];
+
+    for (const side of sides) {
+      let stat;
+      try {
+        stat = await fs.stat(side.path);
+      } catch {
+        return reply.status(404).send({ error: `File not found: ${side.label}` });
+      }
+      if (!stat.isFile()) {
+        return reply.status(400).send({ error: `Path is not a file: ${side.label}` });
+      }
+      if (stat.size > maxSize) {
+        return reply.status(413).send({
+          error: `File too large for "${side.label}" (${stat.size} bytes). Max: ${maxSize} bytes`,
+        });
+      }
+      const content = await fs.readFile(side.path, 'utf-8');
+      results.push({
+        path: side.path,
+        content,
+        size: stat.size,
+        modified: stat.mtime.toISOString(),
+      });
+    }
+
+    const [aFile, bFile] = results;
+    const { changes: rawChanges, stats } = computeLineDiff(aFile.content, bFile.content);
+    const changes = applyContext(rawChanges, contextLines);
+
+    return {
+      a: { path: aFile.path, size: aFile.size, modified: aFile.modified },
+      b: { path: bFile.path, size: bFile.size, modified: bFile.modified },
+      changes,
+      stats,
     };
   });
 
@@ -588,7 +657,7 @@ interface FsFindEntry {
   relativePath: string;
 }
 
-async function readDir(dirPath: string, depth: number, showHidden = false): Promise<DirEntry[]> {
+async function readDir(dirPath: string, depth: number, showHidden = false, includeIgnored = false): Promise<DirEntry[]> {
   let items;
   try {
     items = await fs.readdir(dirPath, { withFileTypes: true });
@@ -606,7 +675,7 @@ async function readDir(dirPath: string, depth: number, showHidden = false): Prom
       if (item.name === '.DS_Store') continue;
     }
     if (item.name === '.DS_Store') continue;
-    if (item.isDirectory() && IGNORED_DIRS.has(item.name)) continue;
+    if (!includeIgnored && item.isDirectory() && IGNORED_DIRS.has(item.name)) continue;
 
     const fullPath = path.join(dirPath, item.name);
     const entry: DirEntry = {
@@ -626,7 +695,7 @@ async function readDir(dirPath: string, depth: number, showHidden = false): Prom
     }
 
     if (item.isDirectory() && depth > 1) {
-      entry.children = await readDir(fullPath, depth - 1, showHidden);
+      entry.children = await readDir(fullPath, depth - 1, showHidden, includeIgnored);
     }
 
     entries.push(entry);

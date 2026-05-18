@@ -166,7 +166,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
   useDocumentTitle(sessionTitleLabel ? `Session - ${sessionTitleLabel}` : 'Session - Loading')
 
   // View mode: parsed chunks vs raw JSONL entries
-  const [viewMode, setViewMode] = useState<ViewMode>('terminal')
+  const [viewMode, setViewMode] = useState<ViewMode>('parsed')
   const [rawEntries, setRawEntries] = useState<SessionEntry[]>([])
   const [rawSource, setRawSource] = useState<'original' | 'backup' | undefined>(undefined)
   const [rawFilePath, setRawFilePath] = useState<string | undefined>(undefined)
@@ -633,7 +633,7 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
   }, [summaryEditing, summaryDraft])
 
 
-  const handleSummarize = useCallback(async (mode: 'full' | 'incremental' | 'consolidate' = 'full') => {
+  const handleSummarize = useCallback(async (mode: 'full' | 'incremental' | 'consolidate' | 'v2' = 'full') => {
     if (!session) return
     setSummaryLoading(true)
     try {
@@ -1255,7 +1255,93 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
         </div>
       </header>
 
-      {/* AI-generated summary panel */}
+      <SessionToolbar
+        class={styles.toolbar}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        showTerminalToggle={true}
+        showUser={showUser}
+        onShowUserChange={setShowUser}
+        showAssistant={showAssistant}
+        onShowAssistantChange={setShowAssistant}
+        showThinking={showThinking}
+        onShowThinkingChange={setShowThinking}
+        showTools={showTools}
+        onShowToolsChange={setShowTools}
+        showCommandsOnly={showCommandsOnly}
+        onShowCommandsOnlyChange={setShowCommandsOnly}
+        showBashOnly={showBashOnly}
+        onShowBashOnlyChange={setShowBashOnly}
+        onExpandToggle={(exp) => { setAllExpanded(exp); setToggledBlocks(new Set()) }}
+        sortOrder={sortOrder}
+        onSortChange={setSortOrder}
+        onRefresh={refreshSession}
+        dbSessionId={session.id}
+        onCopyDbSessionId={() => showToast('Session UUID copied')}
+        sessionId={session.session_id}
+        filePath={rawFilePath || session.file_path || undefined}
+        statsSlot={
+          <>
+            {session.pid != null && (
+              <span
+                class={styles.metaItem}
+                title={`Process ID ${session.pid}${liveMemory?.memory_human ? ` · ${liveMemory.memory_human} phys_footprint` : ''} — click to copy PID`}
+                onClick={() => {
+                  navigator.clipboard.writeText(String(session.pid))
+                  showToast(`Copied PID ${session.pid}`)
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                PID {session.pid}
+                {liveMemory?.memory_human && (
+                  <span class={styles.pidMemory}>{liveMemory.memory_human}</span>
+                )}
+              </span>
+            )}
+            {session.message_count && (
+              <span class={styles.metaItem}>
+                <FileText size={14} />
+                {session.message_count} msgs
+              </span>
+            )}
+            {duration && (
+              <span class={styles.metaItem}>
+                <Clock size={14} />
+                {duration}
+              </span>
+            )}
+            {session.context_window_tokens != null && session.context_window_tokens > 0 && (() => {
+              const ctxTokens = session.context_window_tokens!
+              const maxTokens = getContextWindowSize(session.model)
+              const pct = maxTokens ? Math.round((ctxTokens / maxTokens) * 100) : null
+              return (
+                <span
+                  class={styles.contextUsage}
+                  title={`Context: ${formatTokenCount(ctxTokens)}${maxTokens ? ` / ${formatTokenCount(maxTokens)}` : ''} tokens (last turn)`}
+                >
+                  {maxTokens && (
+                    <span class={styles.contextBar}>
+                      <span
+                        class={styles.contextFill}
+                        style={{ width: `${Math.min(pct!, 100)}%` }}
+                      />
+                    </span>
+                  )}
+                  <span>{formatTokenCount(ctxTokens)}{maxTokens ? `/${formatTokenCount(maxTokens)}` : ''}</span>
+                  {pct != null && <span class={styles.contextPct}>({pct}%)</span>}
+                </span>
+              )
+            })()}
+          </>
+        }
+      />
+      </div>
+
+      {/* AI-generated summary panel — rendered outside stickyTop so a long
+          summary doesn't make the sticky region taller than the viewport
+          and trap the page scroll. */}
       {hasSummary && summaryExpanded && (
         <div class={styles.summaryPanel}>
           <div class={styles.summaryPanelHeader}>
@@ -1381,6 +1467,16 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
                   Consolidate
                 </button>
               )}
+              <button
+                class={styles.updateBtn}
+                onClick={() => handleSummarize('v2')}
+                disabled={summaryLoading || jobActive}
+                title="Summarize v2: fresh full summarize + consolidate against prior snapshot + historian editorial prune — all in one job"
+                data-testid="session-summary--v2"
+              >
+                <Sparkles size={12} />
+                Summarize v2
+              </button>
               {displayedSnapshotId && (
                 <CopyButton text={displayedSnapshotId} size={12} title="Copy snapshot UUID" />
               )}
@@ -1450,90 +1546,6 @@ export function SessionPage({ id, projectId }: SessionPageProps) {
           )}
         </div>
       )}
-
-      <SessionToolbar
-        class={styles.toolbar}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        showTerminalToggle={true}
-        showUser={showUser}
-        onShowUserChange={setShowUser}
-        showAssistant={showAssistant}
-        onShowAssistantChange={setShowAssistant}
-        showThinking={showThinking}
-        onShowThinkingChange={setShowThinking}
-        showTools={showTools}
-        onShowToolsChange={setShowTools}
-        showCommandsOnly={showCommandsOnly}
-        onShowCommandsOnlyChange={setShowCommandsOnly}
-        showBashOnly={showBashOnly}
-        onShowBashOnlyChange={setShowBashOnly}
-        onExpandToggle={(exp) => { setAllExpanded(exp); setToggledBlocks(new Set()) }}
-        sortOrder={sortOrder}
-        onSortChange={setSortOrder}
-        onRefresh={refreshSession}
-        dbSessionId={session.id}
-        onCopyDbSessionId={() => showToast('Session UUID copied')}
-        sessionId={session.session_id}
-        filePath={rawFilePath || session.file_path || undefined}
-        statsSlot={
-          <>
-            {session.pid != null && (
-              <span
-                class={styles.metaItem}
-                title={`Process ID ${session.pid}${liveMemory?.memory_human ? ` · ${liveMemory.memory_human} phys_footprint` : ''} — click to copy PID`}
-                onClick={() => {
-                  navigator.clipboard.writeText(String(session.pid))
-                  showToast(`Copied PID ${session.pid}`)
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                PID {session.pid}
-                {liveMemory?.memory_human && (
-                  <span class={styles.pidMemory}>{liveMemory.memory_human}</span>
-                )}
-              </span>
-            )}
-            {session.message_count && (
-              <span class={styles.metaItem}>
-                <FileText size={14} />
-                {session.message_count} msgs
-              </span>
-            )}
-            {duration && (
-              <span class={styles.metaItem}>
-                <Clock size={14} />
-                {duration}
-              </span>
-            )}
-            {session.context_window_tokens != null && session.context_window_tokens > 0 && (() => {
-              const ctxTokens = session.context_window_tokens!
-              const maxTokens = getContextWindowSize(session.model)
-              const pct = maxTokens ? Math.round((ctxTokens / maxTokens) * 100) : null
-              return (
-                <span
-                  class={styles.contextUsage}
-                  title={`Context: ${formatTokenCount(ctxTokens)}${maxTokens ? ` / ${formatTokenCount(maxTokens)}` : ''} tokens (last turn)`}
-                >
-                  {maxTokens && (
-                    <span class={styles.contextBar}>
-                      <span
-                        class={styles.contextFill}
-                        style={{ width: `${Math.min(pct!, 100)}%` }}
-                      />
-                    </span>
-                  )}
-                  <span>{formatTokenCount(ctxTokens)}{maxTokens ? `/${formatTokenCount(maxTokens)}` : ''}</span>
-                  {pct != null && <span class={styles.contextPct}>({pct}%)</span>}
-                </span>
-              )
-            })()}
-          </>
-        }
-      />
-      </div>
 
       <div class={styles.conversation} ref={conversationRef}>
         {/* Keep the live PTY mounted across view switches so toggling to

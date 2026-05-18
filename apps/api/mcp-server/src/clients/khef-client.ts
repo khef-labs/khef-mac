@@ -626,6 +626,27 @@ export class KhefClient {
     return this.request(`/api/active-sessions/by-session-id/${encodeURIComponent(sessionId)}`);
   }
 
+  /**
+   * Look up an active session by the OS PID that registered it. Returns
+   * `{ session }` on hit, `null` on 404 (caller treats both shapes the same
+   * way as the by-session-id lookup). Used by the current-session resolver
+   * when no env var / terminal GUID identifies the caller.
+   */
+  async getActiveSessionByPid(pid: number) {
+    try {
+      return await this.request(`/api/active-sessions/by-pid/${pid}`);
+    } catch (err: any) {
+      // 404 (no session for that PID) is an expected fallback miss — return
+      // null so the resolver can try the next ancestor PID. The request
+      // helper throws `Error("API request failed: 404 ...")`, so match on
+      // the message. Other statuses (network, 500) propagate.
+      if (typeof err?.message === 'string' && err.message.includes('failed: 404')) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async claimNickname(sessionId: string, nickname: string) {
     return this.request(`/api/active-sessions/${encodeURIComponent(sessionId)}/nickname`, {
       method: 'POST',
@@ -2134,32 +2155,70 @@ export class KhefClient {
 
   /**
    * Long-poll for question resolution. Returns a discriminated union by status.
-   * Does not throw on 408 (expired) or 410 (canceled).
+   * Does not throw on expiry or cancellation.
+   *
+   * The server `/wait` endpoint can hold a connection open for the full
+   * `timeout_ms`, but Node's fetch (undici) aborts a request whose response
+   * headers don't arrive within ~300s — surfacing as a generic "fetch failed".
+   * So the wait is split into sub-300s segments; on each segment timeout (408)
+   * the question state is re-checked directly to tell "still pending, keep
+   * waiting" apart from "gone/resolved".
    */
   async waitForAgentAnswer(id: string, timeoutMs: number): Promise<{
     status: 'answered' | 'expired' | 'canceled';
     answer?: unknown;
     question?: unknown;
   }> {
-    const url = `${this.baseUrl}/api/agent-questions/${encodeURIComponent(id)}/wait?timeout_ms=${timeoutMs}`;
-    const response = await fetch(url);
-    const text = await response.text();
-    let body: any = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      // ignore
+    const SEGMENT_MS = 240_000; // safely under undici's ~300s headers timeout
+    const deadline = Date.now() + timeoutMs;
+
+    while (true) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return { status: 'expired' };
+      const segment = Math.min(remaining, SEGMENT_MS);
+
+      const url = `${this.baseUrl}/api/agent-questions/${encodeURIComponent(id)}/wait?timeout_ms=${segment}`;
+      const response = await fetch(url);
+      const text = await response.text();
+      let body: any = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        // ignore
+      }
+
+      if (response.status === 200) {
+        return { status: 'answered', answer: body?.answer ?? null, question: body?.question ?? null };
+      }
+      if (response.status === 410) {
+        return { status: 'canceled', question: body?.question ?? null };
+      }
+      if (response.status === 408) {
+        // The segment timed out. Re-check the question to distinguish "still
+        // pending — keep waiting" from "gone or resolved between segments".
+        let current: any = null;
+        try {
+          current = await this.getAgentQuestion(id);
+        } catch (err: any) {
+          // 404 → the question expired or is no longer stored.
+          if (String(err?.message ?? '').includes('404')) {
+            return { status: 'expired' };
+          }
+          throw err;
+        }
+        const question = current?.question ?? null;
+        if (!question) return { status: 'expired' };
+        if (question.status === 'answered') {
+          return { status: 'answered', answer: current?.answer ?? null, question };
+        }
+        if (question.status === 'canceled') {
+          return { status: 'canceled', question };
+        }
+        // Still pending — loop for another segment.
+        continue;
+      }
+      throw new Error(`API request failed: ${response.status} ${text}`);
     }
-    if (response.status === 200) {
-      return { status: 'answered', answer: body?.answer ?? null, question: body?.question ?? null };
-    }
-    if (response.status === 408) {
-      return { status: 'expired' };
-    }
-    if (response.status === 410) {
-      return { status: 'canceled', question: body?.question ?? null };
-    }
-    throw new Error(`API request failed: ${response.status} ${text}`);
   }
 
   async getJobErrors(opts?: { limit?: number; jobId?: string; definitionKey?: string }) {

@@ -57,7 +57,7 @@ export function CommitResultsList({ results, isLoading, hasQuery, repoProjectMap
       <div class={styles.list}>
         {results.map((result, i) => {
           const projectHandle = result.repo ? repoProjectMap[result.repo] : undefined
-          const diffUrl = projectHandle ? `/projects/${projectHandle}/diff?commit=${result.sha}` : undefined
+          const diffUrl = projectHandle ? `/projects/${projectHandle}/code-review?commit=${result.sha}` : undefined
 
           const card = (
             <div class={styles.card}>

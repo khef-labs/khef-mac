@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'preact/hooks'
+import { useState, useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
 import { Table2, Eye, FileText, Plus, Play, Square, X, ChevronsDownUp, ChevronsUpDown, Search, GitBranch, Braces, Zap, Camera } from 'lucide-preact'
 import clsx from 'clsx'
@@ -6,7 +6,7 @@ import {
   getConnections, getSchemas, getTables, getTableDetail, executeQuery, getTableData,
   getScripts, createScript, updateScript, deleteScript, getQueryHistory, getTableErd, getSchemaErd,
   getFunctions, getSchemaTriggers, getFunctionDetail,
-  createSavedQuery, getSavedQuery, runSavedQuery, updateSavedQuery,
+  getSavedQuery, runSavedQuery, updateSavedQuery,
   listSavedQuerySnapshots, createSavedQuerySnapshot, restoreSavedQuerySnapshot,
   type DbxConnection, type DbxQueryResult, type DbxScript, type DbxQueryHistoryEntry,
   type DbxSavedQuery, type DbxSavedQuerySnapshot,
@@ -16,7 +16,7 @@ import { ParametersForm } from './ParametersForm'
 import { SnapshotsModal } from './SnapshotsModal'
 
 const UI_SESSION_ID = 'khef-ui'
-import { ConfirmModal } from '../../components/ui'
+import { ConfirmModal, useToast } from '../../components/ui'
 import { loadStore, saveStore } from '../../lib/store'
 import { isDesktopApp } from '../../lib/settings'
 import { useDocumentTitle } from '../../hooks'
@@ -88,6 +88,7 @@ function serializeTabs(tabs: Tab[]): any[] {
 export function DbxPage() {
   useDocumentTitle('Dbx')
   const [, setLocation] = useLocation()
+  const { showToast } = useToast()
   const stored = useRef(loadStore().dbx)
 
   // Tree state
@@ -128,9 +129,50 @@ export function DbxPage() {
   const [savedQuerySnapshots, setSavedQuerySnapshots] = useState<DbxSavedQuerySnapshot[]>([])
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false)
   const [pendingMutation, setPendingMutation] = useState<{ sql: string; type: string; connectionId: string; onSuccess?: () => void } | null>(null)
+  // Surfaces when the saved query's DB SQL has changed externally (e.g. another
+  // session or an MCP update_saved_query call) while this tab still holds a
+  // stale `loadedSql`. Pops on Run/Save so we don't silently clobber the
+  // remote edit with the editor buffer.
+  const [savedQueryConflict, setSavedQueryConflict] = useState<{
+    tabId: string;
+    freshSql: string;
+    localSql: string;
+    intent: 'run' | 'save';
+  } | null>(null)
   const [editingRow, setEditingRow] = useState<{ tabId: string; rowIndex: number } | null>(null)
   const [dangerMode, setDangerMode] = useState(false)
   const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null)
+  // Sidebar right-click context for saved queries and scripts. Powers
+  // "Copy name / Copy ID / Copy name + ID" so the user can hand identifiers
+  // off to other agents without digging through the URL or the manage page.
+  const [sidebarContext, setSidebarContext] = useState<{
+    x: number; y: number;
+    kind: 'saved-query' | 'script';
+    id: string; name: string; handle?: string | null;
+  } | null>(null)
+  // Adjusted position after measuring the actual menu against the viewport.
+  // Starts null so the first paint uses the raw click coords; useLayoutEffect
+  // below corrects before the browser draws if the menu would overflow.
+  const [sidebarContextPos, setSidebarContextPos] = useState<{ x: number; y: number } | null>(null)
+  const sidebarContextRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!sidebarContext) { setSidebarContextPos(null); return }
+    const el = sidebarContextRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const PAD = 8
+    // PageMetaFooter (sticky 36px bar at the bottom of <main>) creates its
+    // own stacking context that steals pointer events from anything sitting
+    // on top of it, even with higher z-index. Reserve its height so the menu
+    // never overlaps it.
+    const footerEl = document.querySelector<HTMLElement>('[data-testid="page-meta-footer"]')
+    const footerH = footerEl?.offsetHeight ?? 0
+    const x = Math.max(PAD, Math.min(sidebarContext.x, window.innerWidth - rect.width - PAD))
+    const y = Math.max(PAD, Math.min(sidebarContext.y, window.innerHeight - footerH - rect.height - PAD))
+    if (x !== sidebarContext.x || y !== sidebarContext.y) setSidebarContextPos({ x, y })
+    else setSidebarContextPos(null)
+  }, [sidebarContext])
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
@@ -193,6 +235,7 @@ export function DbxPage() {
             ? {
                 ...t,
                 savedQueryParams: params,
+                loadedSql: t.loadedSql ?? saved_query.sql,
                 // Seed defaults for any field the user hasn't filled yet.
                 paramValues: { ...defaultsForParams(params), ...(t.paramValues || {}) },
               }
@@ -266,7 +309,7 @@ export function DbxPage() {
       // what's in the editor, not the stale server-side row.
       if (tab.isDirty) {
         await updateSavedQuery(tab.savedQueryId, { sql: tab.content, edited_by: UI_SESSION_ID })
-        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false, loadedSql: tab.content } : t))
       }
       await createSavedQuerySnapshot(tab.savedQueryId, UI_SESSION_ID)
       const { snapshots, current_snapshot } = await listSavedQuerySnapshots(tab.savedQueryId)
@@ -294,6 +337,7 @@ export function DbxPage() {
           ? {
               ...t,
               content: saved_query.sql,
+              loadedSql: saved_query.sql,
               savedQueryParams: saved_query.params || [],
               paramValues: { ...defaultsForParams(saved_query.params || []), ...(t.paramValues || {}) },
               currentSnapshot: current_snapshot,
@@ -660,12 +704,42 @@ export function DbxPage() {
       // server-stored SQL, not the editor buffer, so unsaved edits would
       // silently run the prior version. Save-on-run keeps Cmd+Enter / the Run
       // button feeling immediate.
+      //
+      // Before clobbering the server row, fetch the current DB SQL so we can
+      // detect external edits (another session updated the saved query while
+      // this tab was open). If the DB has diverged from the snapshot we
+      // loaded, surface the conflict to the user rather than silently
+      // overwriting it.
       if (tab.isDirty) {
+        let freshSql: string | null = null
+        try {
+          const { saved_query: fresh } = await getSavedQuery(tab.savedQueryId, UI_SESSION_ID)
+          freshSql = fresh.sql
+        } catch {
+          // Fall through — if we can't read the latest row, fall back to the
+          // previous behavior so Run still works offline.
+        }
+        if (
+          freshSql !== null &&
+          tab.loadedSql !== undefined &&
+          freshSql !== tab.loadedSql &&
+          tab.content !== freshSql
+        ) {
+          // External edit detected and the local buffer would overwrite it.
+          setSavedQueryConflict({
+            tabId: tab.id,
+            freshSql,
+            localSql: tab.content,
+            intent: 'run',
+          })
+          setIsRunning(false)
+          return
+        }
         await updateSavedQuery(tab.savedQueryId, {
           sql: tab.content,
           edited_by: UI_SESSION_ID,
         })
-        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+        setTabs(prev => prev.map(t => t.id === tab.id && t.kind === 'sql' ? { ...t, isDirty: false, loadedSql: tab.content } : t))
       }
 
       const result = await runSavedQuery(tab.savedQueryId, {
@@ -735,11 +809,35 @@ export function DbxPage() {
     // legacy update path.
     if (sqlTab.savedQueryId) {
       try {
+        // Mirror the Run conflict check: if the DB row has been updated
+        // externally since we loaded it, surface the divergence instead of
+        // clobbering the remote edit with the editor buffer.
+        let freshSql: string | null = null
+        try {
+          const { saved_query: fresh } = await getSavedQuery(sqlTab.savedQueryId, UI_SESSION_ID)
+          freshSql = fresh.sql
+        } catch {
+          // Treat the read failure as "no known external change" and proceed.
+        }
+        if (
+          freshSql !== null &&
+          sqlTab.loadedSql !== undefined &&
+          freshSql !== sqlTab.loadedSql &&
+          sqlTab.content !== freshSql
+        ) {
+          setSavedQueryConflict({
+            tabId: sqlTab.id,
+            freshSql,
+            localSql: sqlTab.content,
+            intent: 'save',
+          })
+          return
+        }
         await updateSavedQuery(sqlTab.savedQueryId, {
           sql: sqlTab.content,
           edited_by: UI_SESSION_ID,
         })
-        setTabs(prev => prev.map(t => t.id === activeTabId && t.kind === 'sql' ? { ...t, isDirty: false } : t))
+        setTabs(prev => prev.map(t => t.id === activeTabId && t.kind === 'sql' ? { ...t, isDirty: false, loadedSql: sqlTab.content } : t))
       } catch (err: any) {
         alert(`Failed to save: ${err?.message || err}`)
       }
@@ -787,6 +885,7 @@ export function DbxPage() {
       paramValues: defaultsForParams(initialParams),
       connectionId: q.connection_id || connections[0]?.id || '',
       isDirty: false,
+      loadedSql: q.sql,
     }
     setTabs(prev => [...prev, tab]); setActiveTabId(tab.id)
     // The list endpoint may have returned a compact saved-query without params —
@@ -800,6 +899,7 @@ export function DbxPage() {
                 ...t,
                 savedQueryParams: params,
                 content: saved_query.sql,
+                loadedSql: saved_query.sql,
                 // User may have started typing before hydration landed — keep
                 // their values; only seed defaults for blank fields.
                 paramValues: { ...defaultsForParams(params), ...(t.paramValues || {}) },
@@ -807,28 +907,6 @@ export function DbxPage() {
             : t
         ))
       }).catch(() => {})
-    }
-  }
-
-  async function createNewSavedQuery() {
-    const name = prompt('Saved query name')
-    if (!name) return
-    const handle = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    if (!handle) { alert('Name must contain at least one letter or digit'); return }
-    const activeTab = tabs.find(t => t.id === activeTabId)
-    const conn = activeTab && 'connectionId' in activeTab
-      ? activeTab.connectionId
-      : connections[0]?.id || null
-    try {
-      const { saved_query } = await createSavedQuery({
-        name,
-        handle,
-        connection_id: conn,
-        owner_session_id: UI_SESSION_ID,
-      })
-      openSavedQueryInTab(saved_query)
-    } catch (err: any) {
-      alert(`Failed to create: ${err?.message || err}`)
     }
   }
 
@@ -961,8 +1039,10 @@ export function DbxPage() {
             return t && 'connectionId' in t ? t.connectionId : connections[0]?.id || null
           })()}
           onOpen={openSavedQueryInTab}
-          onNew={createNewSavedQuery}
           onManageAll={() => setLocation('/dbx/saved-queries')}
+          onContextMenu={(q, x, y) => setSidebarContext({
+            x, y, kind: 'saved-query', id: q.id, name: q.name, handle: q.handle,
+          })}
         />
 
         <div class={styles.sidebarDivider} onMouseDown={onScriptsDividerMouseDown} />
@@ -1003,7 +1083,22 @@ export function DbxPage() {
                   <div key={connId}>
                     {grouped.size > 1 && <div class={styles.scriptGroupLabel}>{connName}</div>}
                     {items.map(s => (
-                      <div key={s.id} class={styles.scriptItem} onClick={() => openScriptInTab(s)}>
+                      <div
+                        key={s.id}
+                        data-testid={`dbx-script-row--${s.id}`}
+                        class={styles.scriptItem}
+                        onClick={() => openScriptInTab(s)}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setSidebarContext({
+                            x: (e as MouseEvent).clientX,
+                            y: (e as MouseEvent).clientY,
+                            kind: 'script',
+                            id: s.id,
+                            name: s.name,
+                          })
+                        }}
+                      >
                         <FileText size={12} />
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
                         <button class={styles.scriptDelete} onClick={(e) => { e.stopPropagation(); setDeletingScript(s) }} title="Delete script">
@@ -1069,6 +1164,47 @@ export function DbxPage() {
           ))}
           </div>
         </div>
+
+        {/* Sidebar context menu (saved queries + scripts: copy name / id) */}
+        {sidebarContext && (() => {
+          const ctx = sidebarContext
+          const close = () => setSidebarContext(null)
+          const copy = async (text: string, label: string) => {
+            try {
+              await navigator.clipboard.writeText(text)
+              showToast(`Copied ${label}`, undefined, { variant: 'success' })
+            } catch (err: any) {
+              showToast(`Copy failed: ${err?.message || err}`, undefined, { variant: 'error' })
+            }
+            close()
+          }
+          const nameAndId = `${ctx.name} (${ctx.id})`
+          // useLayoutEffect remeasures and overrides via sidebarContextPos when
+          // the menu would overflow. First paint uses raw click coords, then
+          // the corrected position kicks in before the browser commits.
+          const posX = sidebarContextPos?.x ?? ctx.x
+          const posY = sidebarContextPos?.y ?? ctx.y
+          return (
+            <div class={styles.contextOverlay} onClick={close} onContextMenu={e => { e.preventDefault(); close() }}>
+              <div ref={sidebarContextRef} data-testid="dbx-sidebar-context-menu" class={styles.contextMenu} style={{ left: `${posX}px`, top: `${posY}px` }} onClick={e => e.stopPropagation()}>
+                <button class={styles.contextMenuItem} onClick={() => copy(ctx.name, 'name')}>
+                  Copy name
+                </button>
+                <button class={styles.contextMenuItem} onClick={() => copy(ctx.id, 'ID')}>
+                  Copy ID
+                </button>
+                <button class={styles.contextMenuItem} onClick={() => copy(nameAndId, 'name + ID')}>
+                  Copy name + ID
+                </button>
+                {ctx.kind === 'saved-query' && ctx.handle && (
+                  <button class={styles.contextMenuItem} onClick={() => copy(ctx.handle!, 'handle')}>
+                    Copy handle
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Tab context menu */}
         {tabContextMenu && (
@@ -1425,6 +1561,92 @@ export function DbxPage() {
           onCancel={() => setPendingMutation(null)}
         />
       )}
+      {savedQueryConflict && (() => {
+        const conflict = savedQueryConflict
+        const close = () => setSavedQueryConflict(null)
+        const useDb = () => {
+          // Discard local edits, sync the tab to the latest DB SQL.
+          setTabs(prev => prev.map(t =>
+            t.id === conflict.tabId && t.kind === 'sql'
+              ? { ...t, content: conflict.freshSql, loadedSql: conflict.freshSql, isDirty: false }
+              : t
+          ))
+          close()
+          if (conflict.intent === 'run') {
+            // Re-trigger Run with the refreshed tab. Use a microtask so the
+            // setTabs update flushes before we read the tab back.
+            queueMicrotask(() => {
+              const refreshed = tabs.find(t => t.id === conflict.tabId && t.kind === 'sql') as SqlTab | undefined
+              if (refreshed && refreshed.savedQueryId) {
+                runSavedQueryNow({ ...refreshed, content: conflict.freshSql, loadedSql: conflict.freshSql, isDirty: false })
+              }
+            })
+          }
+        }
+        const overwrite = async () => {
+          // Force-save the local buffer over the DB row, then optionally run.
+          const tab = tabs.find(t => t.id === conflict.tabId && t.kind === 'sql') as SqlTab | undefined
+          if (!tab?.savedQueryId) { close(); return }
+          try {
+            await updateSavedQuery(tab.savedQueryId, {
+              sql: conflict.localSql,
+              edited_by: UI_SESSION_ID,
+            })
+            setTabs(prev => prev.map(t =>
+              t.id === conflict.tabId && t.kind === 'sql'
+                ? { ...t, loadedSql: conflict.localSql, isDirty: false }
+                : t
+            ))
+            close()
+            if (conflict.intent === 'run') {
+              queueMicrotask(() => {
+                const refreshed = tabs.find(t => t.id === conflict.tabId && t.kind === 'sql') as SqlTab | undefined
+                if (refreshed && refreshed.savedQueryId) {
+                  runSavedQueryNow({ ...refreshed, content: conflict.localSql, loadedSql: conflict.localSql, isDirty: false })
+                }
+              })
+            }
+          } catch (err: any) {
+            alert(`Failed to save: ${err?.message || err}`)
+            close()
+          }
+        }
+        return (
+          <div
+            class={styles.conflictOverlay}
+            onClick={(e) => { if (e.target === e.currentTarget) close() }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div class={styles.conflictModal}>
+              <h2 class={styles.conflictTitle}>Saved query was changed elsewhere</h2>
+              <p class={styles.conflictMessage}>
+                Another session updated this saved query's SQL after you opened this tab.
+                Choose which version to keep.
+              </p>
+              <div class={styles.conflictDiffGrid}>
+                <div class={styles.conflictDiffCol}>
+                  <span class={styles.conflictDiffLabel}>DB version (current)</span>
+                  <pre class={styles.conflictDiffBody}>{conflict.freshSql}</pre>
+                </div>
+                <div class={styles.conflictDiffCol}>
+                  <span class={styles.conflictDiffLabel}>Your editor</span>
+                  <pre class={styles.conflictDiffBody}>{conflict.localSql}</pre>
+                </div>
+              </div>
+              <div class={styles.conflictActions}>
+                <button class={styles.conflictCancelBtn} onClick={close}>Cancel</button>
+                <button class={styles.conflictDangerBtn} onClick={overwrite}>
+                  Overwrite DB with mine
+                </button>
+                <button class={styles.conflictPrimaryBtn} onClick={useDb}>
+                  {conflict.intent === 'run' ? 'Use DB version and run' : 'Use DB version'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       {editingRow && (() => {
         const tab = tabs.find(t => t.id === editingRow.tabId && t.kind === 'detail') as DetailViewTab | undefined
         if (!tab || !tab.tableDetail || !tab.tableData) { return null }

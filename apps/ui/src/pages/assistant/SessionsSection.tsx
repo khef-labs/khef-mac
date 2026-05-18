@@ -182,8 +182,12 @@ export function SessionsSection({ handle, initialProjectFilter = '' }: Props) {
     if (projectFilter) {
       params.project = projectFilter
     }
-    if (searchMode === 'content' && debouncedQuery.length >= 2) {
-      params.q = debouncedQuery
+    if (debouncedQuery.length >= 2) {
+      if (searchMode === 'content') {
+        params.q = debouncedQuery
+      } else {
+        params.meta_q = debouncedQuery
+      }
     }
     getSyncedSessions(params)
       .then((data) => {
@@ -194,27 +198,18 @@ export function SessionsSection({ handle, initialProjectFilter = '' }: Props) {
       .catch(() => {})
       .finally(() => { if (mounted) setRecentLoading(false) })
     return () => { mounted = false }
-  }, [handle, projectFilter, searchMode === 'content' ? debouncedQuery : ''])
+  }, [handle, projectFilter, searchMode, debouncedQuery])
 
-  // Filter recent sessions client-side (summary mode filters locally, content mode filters via API)
+  // Both search modes are server-side now; the nickname input still filters
+  // the loaded set client-side.
   const filteredRecent = useMemo(() => {
     let result = recentSessions
     if (nicknameFilter) {
       const nf = nicknameFilter.toLowerCase()
       result = result.filter(s => (s.nickname || '').toLowerCase().includes(nf))
     }
-    if (searchMode === 'summary' && debouncedQuery) {
-      const q = debouncedQuery.toLowerCase()
-      result = result.filter(s => {
-        const nick = (s.nickname || '').toLowerCase()
-        const proj = (s.project?.handle || s.project?.name || '').toLowerCase()
-        const sid = s.session_id.toLowerCase()
-        const summary = (s.summary || '').toLowerCase()
-        return nick.includes(q) || proj.includes(q) || sid.includes(q) || summary.includes(q)
-      })
-    }
     return result
-  }, [recentSessions, debouncedQuery, nicknameFilter, searchMode])
+  }, [recentSessions, nicknameFilter])
 
   const activeSessionIds = useMemo(
     () => new Set(activeSessions.map(s => s.session_id)),

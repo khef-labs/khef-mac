@@ -35,6 +35,12 @@ export interface SqlTab {
   viewingSnapshot?: number | null
   /** Cached SQL of the snapshot currently being viewed (null when not in view mode). */
   viewingSnapshotSql?: string | null
+  /**
+   * SQL last loaded from the server for this saved query. Used to detect
+   * external edits (someone else updated the saved query while this tab was
+   * open) before auto-saving on Run/Save would clobber them.
+   */
+  loadedSql?: string
   connectionId: string
   isDirty: boolean
 }

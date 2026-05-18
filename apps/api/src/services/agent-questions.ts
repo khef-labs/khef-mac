@@ -50,6 +50,7 @@ export interface AgentQuestion {
   description?: string;
   fields: QuestionField[];
   created_at: string;
+  /** ISO timestamp when the question auto-expires. Always set — the TTL is internal plumbing, not user-facing. */
   expires_at: string;
   status: QuestionStatus;
 }
@@ -68,8 +69,9 @@ export interface QuestionEvent {
   at: string;
 }
 
-export const DEFAULT_TTL_SECONDS = 600; // 10 minutes
-export const MAX_TTL_SECONDS = 86400; // 24 hours
+export const DEFAULT_TTL_SECONDS = 86400; // 24 hours — invisible to the user, just internal garbage collection
+export const MAX_TTL_SECONDS = 86400; // 24 hours — also the cap on explicit ttl_seconds
+export const RESOLVED_RETENTION_SECONDS = 3600; // how long answered/canceled questions linger for read-back
 export const MAX_PENDING_PER_NICKNAME = 5;
 export const EVENT_CHANNEL = 'aq:events';
 
@@ -315,9 +317,17 @@ export async function createQuestion(input: CreateQuestionInput): Promise<AgentQ
   appendSomethingElseField(fields);
   const agent = validateAgent(input.agent);
 
-  let ttlSeconds = input.ttl_seconds ?? DEFAULT_TTL_SECONDS;
-  if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) ttlSeconds = DEFAULT_TTL_SECONDS;
-  if (ttlSeconds > MAX_TTL_SECONDS) ttlSeconds = MAX_TTL_SECONDS;
+  // ttl_seconds is internal plumbing — not surfaced to the user. Default is
+  // 24h so abandoned questions eventually clean themselves up; explicit
+  // ttl_seconds can shorten that but cannot push past MAX_TTL_SECONDS.
+  let ttlSeconds = DEFAULT_TTL_SECONDS;
+  if (
+    typeof input.ttl_seconds === 'number' &&
+    Number.isFinite(input.ttl_seconds) &&
+    input.ttl_seconds > 0
+  ) {
+    ttlSeconds = Math.min(input.ttl_seconds, MAX_TTL_SECONDS);
+  }
 
   if (agent.nickname) {
     const redis = getRedis();
@@ -331,7 +341,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<AgentQ
 
   const id = randomUUID();
   const now = new Date();
-  const expires = new Date(now.getTime() + ttlSeconds * 1000);
+  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
 
   const question: AgentQuestion = {
     id,
@@ -340,7 +350,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<AgentQ
     description,
     fields,
     created_at: now.toISOString(),
-    expires_at: expires.toISOString(),
+    expires_at: expiresAt,
     status: 'pending',
   };
 
@@ -424,7 +434,9 @@ export async function answerQuestion(
   const updated: AgentQuestion = { ...question, status: 'answered' };
   const redis = getRedis();
   const ttl = await redis.ttl(KEY_QUESTION(id));
-  const writeTtl = ttl > 0 ? ttl : 60;
+  // Once resolved, the question + answer linger for read-back via GET /:id then
+  // GC themselves. Non-expiring questions (ttl === -1) use the retention window.
+  const writeTtl = ttl > 0 ? ttl : RESOLVED_RETENTION_SECONDS;
 
   const pipeline = redis.multi();
   pipeline.set(KEY_QUESTION(id), JSON.stringify(updated), 'EX', writeTtl);
@@ -457,7 +469,7 @@ export async function cancelQuestion(id: string): Promise<boolean> {
 
   const redis = getRedis();
   const ttl = await redis.ttl(KEY_QUESTION(id));
-  const writeTtl = ttl > 0 ? ttl : 60;
+  const writeTtl = ttl > 0 ? ttl : RESOLVED_RETENTION_SECONDS;
   const updated: AgentQuestion = { ...question, status: 'canceled' };
 
   const pipeline = redis.multi();

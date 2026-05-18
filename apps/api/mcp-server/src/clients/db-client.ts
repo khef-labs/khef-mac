@@ -1,36 +1,63 @@
 import pg from "pg";
 
+type Target = "dev" | "test";
+
+/**
+ * Default test DB DSN follows the project's docker-compose.test.yml: an
+ * ephemeral tmpfs Postgres bound to localhost:5433 with database `khef_test`.
+ * Override via KHEF_TEST_DATABASE_URL if your local setup differs.
+ */
+const DEFAULT_TEST_DSN = "postgresql://postgres@localhost:5433/khef_test";
+
 export class DbClient {
-  private pool: pg.Pool | null = null;
+  private devPool: pg.Pool | null = null;
+  private testPool: pg.Pool | null = null;
 
   constructor() {
-    const dbUrl = process.env.KHEF_DATABASE_URL;
-    if (dbUrl) {
-      this.pool = new pg.Pool({
-        connectionString: dbUrl,
+    const devUrl = process.env.KHEF_DATABASE_URL;
+    if (devUrl) {
+      this.devPool = new pg.Pool({
+        connectionString: devUrl,
         max: 3,
         idleTimeoutMillis: 60000,
         connectionTimeoutMillis: 5000,
       });
     }
+
+    const testUrl = process.env.KHEF_TEST_DATABASE_URL || DEFAULT_TEST_DSN;
+    this.testPool = new pg.Pool({
+      connectionString: testUrl,
+      max: 2,
+      idleTimeoutMillis: 60000,
+      connectionTimeoutMillis: 5000,
+    });
   }
 
-  private ensurePool(): pg.Pool {
-    if (!this.pool) {
+  private ensurePool(target: Target): pg.Pool {
+    if (target === "test") {
+      if (!this.testPool) {
+        throw new Error(
+          "Test DB pool not configured. Set KHEF_TEST_DATABASE_URL in mcpServers.khef.env."
+        );
+      }
+      return this.testPool;
+    }
+    if (!this.devPool) {
       throw new Error(
         "KHEF_DATABASE_URL not configured. Add it to mcpServers.khef.env in ~/.claude.json"
       );
     }
-    return this.pool;
+    return this.devPool;
   }
 
   private async executeQuery(
+    target: Target,
     schema: string,
     sql: string,
     params?: unknown[],
     limit?: number
   ): Promise<object> {
-    const pool = this.ensurePool();
+    const pool = this.ensurePool(target);
     const forbidden =
       /\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|COPY)\b/i;
     if (forbidden.test(sql)) {
@@ -60,19 +87,28 @@ export class DbClient {
   }
 
   async queryKhef(sql: string, params?: unknown[], limit?: number) {
-    return this.executeQuery("public", sql, params, limit);
+    return this.executeQuery("dev", "public", sql, params, limit);
   }
 
   async queryKvec(sql: string, params?: unknown[], limit?: number) {
-    return this.executeQuery("kvec", sql, params, limit);
+    return this.executeQuery("dev", "kvec", sql, params, limit);
   }
 
   async queryKdag(sql: string, params?: unknown[], limit?: number) {
-    return this.executeQuery("kdag", sql, params, limit);
+    return this.executeQuery("dev", "kdag", sql, params, limit);
   }
 
-  async listTables(schema?: string): Promise<object> {
-    const pool = this.ensurePool();
+  async queryTestDb(
+    sql: string,
+    params?: unknown[],
+    limit?: number,
+    schema?: "public" | "kvec" | "kdag"
+  ) {
+    return this.executeQuery("test", schema || "public", sql, params, limit);
+  }
+
+  async listTables(target: Target, schema?: string): Promise<object> {
+    const pool = this.ensurePool(target);
     const schemas = schema ? [schema] : ["public", "kvec", "kdag"];
     const result = await pool.query(
       `SELECT t.table_schema, t.table_name, t.table_type,
@@ -87,8 +123,12 @@ export class DbClient {
     return { tables: result.rows };
   }
 
-  async describeTable(tableName: string, schema?: string): Promise<object> {
-    const pool = this.ensurePool();
+  async describeTable(
+    target: Target,
+    tableName: string,
+    schema?: string
+  ): Promise<object> {
+    const pool = this.ensurePool(target);
     const s = schema || "public";
     const [columns, constraints, indexes] = await Promise.all([
       pool.query(

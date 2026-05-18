@@ -13,7 +13,10 @@ final class SpeechRecognizerClient: NSObject {
     private var updateHandler: ((String) -> Void)?
     private var levelHandler: ((Float) -> Void)?
 
-    // Accumulation state — mirrors listen.swift's proven approach
+    // Accumulation state — mirrors listen.swift's proven approach.
+    // `blocks` holds finalized paragraphs (one per manual break);
+    // `accumulatedText` + `lastTranscription` hold the in-progress paragraph.
+    private var blocks: [String] = []
     private var accumulatedText = ""
     private var lastTranscription = ""
     private var lastNonEmptySegment = ""
@@ -41,6 +44,7 @@ final class SpeechRecognizerClient: NSObject {
         speechRecognizer = recognizer
         updateHandler = onUpdate
         levelHandler = onLevel
+        blocks = []
         accumulatedText = ""
         lastTranscription = ""
         lastNonEmptySegment = ""
@@ -82,6 +86,30 @@ final class SpeechRecognizerClient: NSObject {
         levelHandler?(0)
         levelHandler = nil
         return result
+    }
+
+    /// Finalizes the in-progress paragraph and starts a fresh one. Called while
+    /// recording. The recognition task is restarted so the recognizer
+    /// transcribes fresh from this point — without it the next partial would
+    /// echo the whole paragraph back, since `bestTranscription.formattedString`
+    /// is cumulative per task.
+    func insertBreak() {
+        guard isRecording else { return }
+
+        let segment = !lastTranscription.isEmpty ? lastTranscription : lastNonEmptySegment
+        let finalizedText = [accumulatedText, segment]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        if !finalizedText.isEmpty {
+            blocks.append(finalizedText)
+        }
+
+        accumulatedText = ""
+        lastTranscription = ""
+        lastNonEmptySegment = ""
+
+        restartRecognitionTask()
+        updateHandler?(fullTranscription())
     }
 
     // MARK: - Recognition task (matches listen.swift approach)
@@ -136,12 +164,8 @@ final class SpeechRecognizerClient: NSObject {
 
     private func accumulateAndRestart() {
         guard isRecording, !isRestarting else { return }
-        isRestarting = true
 
-        // Bump generation so stale callbacks from the old task are ignored
-        taskGeneration += 1
-
-        // Save current segment
+        // Save current segment into the in-progress paragraph
         let segment = !lastTranscription.isEmpty ? lastTranscription : lastNonEmptySegment
         if !segment.isEmpty {
             if accumulatedText.isEmpty {
@@ -152,6 +176,19 @@ final class SpeechRecognizerClient: NSObject {
         }
         lastTranscription = ""
         lastNonEmptySegment = ""
+
+        restartRecognitionTask()
+    }
+
+    /// Tears down the current recognition task/request and schedules a fresh
+    /// one. Shared by the silence/timeout restart (`accumulateAndRestart`) and
+    /// manual paragraph breaks (`insertBreak`).
+    private func restartRecognitionTask() {
+        guard isRecording, !isRestarting else { return }
+        isRestarting = true
+
+        // Bump generation so stale callbacks from the old task are ignored
+        taskGeneration += 1
 
         // Remove the tap before tearing down the old request to prevent an
         // in-flight append(buffer:) call from racing with ARC release of the
@@ -198,13 +235,13 @@ final class SpeechRecognizerClient: NSObject {
     }
 
     private func fullTranscription() -> String {
-        if accumulatedText.isEmpty {
-            return lastTranscription
-        } else if lastTranscription.isEmpty {
-            return accumulatedText
-        } else {
-            return accumulatedText + " " + lastTranscription
-        }
+        let currentText = [accumulatedText, lastTranscription]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        return (blocks + [currentText])
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
     }
 
     // MARK: - Permissions

@@ -1325,8 +1325,8 @@ export function ProjectPage({ projectId }: Props) {
                 <Brain size={13} /> Memory Files
               </Link>
               {sessionContext.project.path && (
-                <Link href={`/projects/${projectId}/diff`} class={styles.navBtn}>
-                  <GitBranch size={13} /> Diff
+                <Link href={`/projects/${projectId}/code-review`} class={styles.navBtn}>
+                  <GitBranch size={13} /> Code Review
                 </Link>
               )}
               {sessionContext.project.path && (

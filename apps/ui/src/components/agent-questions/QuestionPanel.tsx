@@ -25,20 +25,14 @@ function buildInitialValues(fields: AgentQuestionField[]): Values {
       out[f.key] = f.default
     } else if (f.type === 'multi-choice') {
       out[f.key] = []
-    } else if (f.type === 'toggle') {
-      out[f.key] = false
     }
+    // Toggles intentionally have no initial value: an untouched toggle should
+    // be absent from the answer, not submitted as `false`. Otherwise the agent
+    // can't tell "user explicitly said No" from "user didn't engage with this
+    // toggle at all". A required toggle still blocks Submit until the user
+    // interacts (isMissing returns true for undefined values).
   }
   return out
-}
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return 'expired'
-  const totalSec = Math.floor(ms / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  if (m === 0) return `${s}s`
-  return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
 function isMissing(field: AgentQuestionField, value: unknown): boolean {
@@ -53,24 +47,13 @@ export function QuestionPanel({ question, onClose, onResolved }: Props) {
   const [values, setValues] = useState<Values>(() => buildInitialValues(question.fields))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [now, setNow] = useState(() => Date.now())
   const submitRef = useRef<HTMLButtonElement>(null)
   const firstFieldRef = useRef<HTMLElement | null>(null)
-
-  // Tick the expiry countdown once a second.
-  useEffect(() => {
-    const handle = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(handle)
-  }, [])
 
   // Focus the first interactive field on open.
   useEffect(() => {
     firstFieldRef.current?.focus?.()
   }, [question.id])
-
-  const expiresAt = useMemo(() => new Date(question.expires_at).getTime(), [question.expires_at])
-  const remainingMs = expiresAt - now
-  const expiryClass = remainingMs < 30_000 ? styles.expiryUrgent : ''
 
   const requiredOk = useMemo(() => {
     return question.fields.every((f) => !isMissing(f, values[f.key]))
@@ -156,9 +139,6 @@ export function QuestionPanel({ question, onClose, onResolved }: Props) {
             <div class={styles.kicker}>
               <span>Agent question</span>
               {question.agent.nickname && <span>· {question.agent.nickname}</span>}
-              <span class={`${styles.expiry} ${expiryClass}`}>
-                · {formatRemaining(remainingMs)}
-              </span>
             </div>
             <h2 id="aq-title" class={styles.title}>
               {question.title}
@@ -168,8 +148,8 @@ export function QuestionPanel({ question, onClose, onResolved }: Props) {
             type="button"
             class={styles.closeBtn}
             onClick={onClose}
-            aria-label="Answer later (question stays pending)"
-            title="Answer later (Esc) — question stays pending"
+            aria-label="Close panel"
+            title="Close panel (Esc)"
             data-testid="agent-question-panel--close"
           >
             <X size={16} />
@@ -356,15 +336,6 @@ export function QuestionPanel({ question, onClose, onResolved }: Props) {
             data-testid="agent-question-panel--cancel-question"
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            class={styles.laterBtn}
-            onClick={onClose}
-            title="Close panel — question stays pending"
-            data-testid="agent-question-panel--later"
-          >
-            Answer later
           </button>
           <button
             ref={submitRef}

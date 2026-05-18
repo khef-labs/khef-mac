@@ -679,6 +679,51 @@ function syncBuiltInSkills(assistantHandle: string): SyncResult[] {
   return results;
 }
 
+function syncBuiltInAgents(assistantHandle: string): SyncResult[] {
+  if (assistantHandle !== 'claude-code') {
+    return [];
+  }
+
+  const targetDir = process.env.CLAUDE_AGENTS_DIR || path.join(os.homedir(), '.claude', 'agents');
+  const libAgentsDir = process.env.KF_AGENTS_DIR || path.join(__dirname, '../../lib/agents');
+
+  if (!fs.existsSync(libAgentsDir)) {
+    return [];
+  }
+
+  ensureDir(targetDir);
+
+  const results: SyncResult[] = [];
+  const files = fs.readdirSync(libAgentsDir).filter((f) => f.endsWith('.md'));
+
+  for (const filename of files) {
+    const sourcePath = path.join(libAgentsDir, filename);
+    const targetPath = path.join(targetDir, filename);
+    const sourceContent = fs.readFileSync(sourcePath, 'utf8');
+
+    let action: 'created' | 'updated' | 'unchanged' = 'unchanged';
+
+    if (!fs.existsSync(targetPath)) {
+      fs.writeFileSync(targetPath, sourceContent, 'utf8');
+      action = 'created';
+    } else {
+      const existingContent = fs.readFileSync(targetPath, 'utf8');
+      if (existingContent !== sourceContent) {
+        fs.writeFileSync(targetPath, sourceContent, 'utf8');
+        action = 'updated';
+      }
+    }
+
+    results.push({
+      name: filename.replace(/\.md$/, ''),
+      file_path: targetPath,
+      action,
+    });
+  }
+
+  return results;
+}
+
 export function syncBuiltInCommands(assistantHandle: string): SyncResult[] {
   // Determine target directory based on assistant
   let targetDir: string;
@@ -729,6 +774,9 @@ export function syncBuiltInCommands(assistantHandle: string): SyncResult[] {
 
   // Also sync built-in skills
   results.push(...syncBuiltInSkills(assistantHandle));
+
+  // Also sync built-in agents
+  results.push(...syncBuiltInAgents(assistantHandle));
 
   return results;
 }

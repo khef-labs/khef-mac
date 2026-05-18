@@ -71,6 +71,7 @@ import collectionRoutes, { globalCollectionsRoute, memoryCollectionsRoute } from
 import liveMessageRoutes from './routes/live-messages';
 import agentQuestionRoutes from './routes/agent-questions';
 import filesystemRoutes from './routes/filesystem';
+import imageBrowserRoutes from './routes/image-browser';
 import systemHealthRoutes from './routes/system-health';
 import { startBackgroundScanner, stopBackgroundScanner } from './services/active-sessions';
 import { connectRedis, closeRedis } from './services/redis';
@@ -171,6 +172,7 @@ fastify.register(collectionRoutes, { prefix: '/api/projects/:projectId/collectio
 fastify.register(globalCollectionsRoute, { prefix: '/api/collections' });
 fastify.register(memoryCollectionsRoute, { prefix: '/api/projects/:projectId/memories/:memoryId/collections' });
 fastify.register(filesystemRoutes, { prefix: '/api/fs' });
+fastify.register(imageBrowserRoutes, { prefix: '/api/image-browser' });
 fastify.register(liveMessageRoutes, { prefix: '/api/live-messages' });
 fastify.register(agentQuestionRoutes, { prefix: '/api/agent-questions' });
 fastify.register(metricsProxyRoutes, { prefix: '/api/metrics' });

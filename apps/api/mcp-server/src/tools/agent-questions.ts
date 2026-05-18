@@ -46,7 +46,7 @@ export const tools: Tool[] = [
         },
         ttl_seconds: {
           type: "number",
-          description: "Time-to-live in seconds before the question auto-expires (default 600, max 86400).",
+          description: "Optional. Seconds before the question auto-expires. Default is 24 hours (86400) and max is 86400. The TTL is internal — the user-facing panel does not surface expiry; the question simply disappears from the queue after the window passes.",
         },
         wait: {
           type: "boolean",

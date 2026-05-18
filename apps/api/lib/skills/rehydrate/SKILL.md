@@ -7,6 +7,10 @@ description: This skill should be used when the user says "rehydrate", "rebuild 
 
 Rebuild session context after a `/compact` event by reading your own session's lineage summaries and compaction files. Unlike `/continue-as`, this runs within the same session — no nickname claim, no handoff, no live session coordination.
 
+## Hard Rule
+
+**You MUST rebuild context from the exported lineage. Do not skip on the assumption that the in-context compaction summary already covers it.** Claude Code's in-context compaction summary is a token-budget compression that drops file paths, identifiers, error details, decision rationales, and cross-session continuity. The exported summaries are the canonical record; the in-context summary is a lossy preview, often a fraction of the size of a consolidated session summary.
+
 ## When to Use
 
 After `/compact` strips detailed context from the conversation. The compaction summaries and any prior session summaries under your nickname still exist on disk — this skill reads them back in.
@@ -29,13 +33,14 @@ Call `export_session_lineage` with the nickname. This writes all summaries and c
 
 Read the `00-lineage.json` file from the export path. This tells you how many sessions exist, their dates, and how many summaries/compactions each has.
 
-### 4. Read Summaries Chronologically
+### 4. Read the Lineage
 
-Read the exported files in order:
-- Start with the earliest session directory
-- Read compaction files first (these capture context from before the session was compacted)
-- Then read summary snapshot files (these are the AI-generated session summaries)
-- Proceed to the next session directory and repeat
+For each session in `00-lineage.json` → `sessions[]`, in order:
+
+- **If `summary_count > 0`:** read every `summary-*.md` file in that session's directory, oldest first. Each snapshot is an incremental update that adds new content built on the previous one — they are not repeats. Skip every `compaction-*.md` file in that directory; the summaries supersede them.
+- **If `summary_count === 0`:** you MUST read every `compaction-*.md` file in that session's directory in chunk-index order. They are the only persistent record of that session.
+
+Do not skip files based on perceived redundancy with the in-context compaction summary — see the Hard Rule above.
 
 Focus on building a mental model of: what was worked on, key decisions made, patterns established, and any open/in-progress work.
 
@@ -57,7 +62,6 @@ Summarize what you rebuilt:
 - Key work completed across the lineage
 - Current state: what was in progress when compaction happened
 - Open todos or unfinished tasks
-- Estimated token cost of the catchup (from `export_session_lineage`)
 - Confirm readiness to continue
 
 ## Important Notes

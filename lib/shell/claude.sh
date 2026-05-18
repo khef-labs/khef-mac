@@ -158,6 +158,10 @@ clearname() {
 }
 
 alias cr="clauderesume"
+# Companion to `cr` for codex sessions. `cdr briny` resumes the most recent
+# codex session with that khef nickname via the codeks wrapper (which handles
+# the nickname → session UUID lookup before invoking `codex resume`).
+alias cdr="codeks resume"
 alias kfr="source $KHEF_DIR/lib/shell/claude.sh"
 alias kf="$KHEF_DIR/scripts/kf-edit.sh"
 alias kv="$KHEF_DIR/scripts/voice/kf-voice.sh"

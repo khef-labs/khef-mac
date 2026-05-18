@@ -77,7 +77,8 @@
     "voice:app:run": "cd apps/voice && swift run",
     "voice:app:start": "npm run voice:app:bundle && open apps/voice/dist/Khef\\ Voice.app",
     "voice:install": "scripts/voice/kf-voice.sh --install",
-    "voice:app:install": "npm run voice:app:bundle && pkill -x KhefVoiceApp 2>/dev/null; mkdir -p ~/Applications && rm -rf ~/Applications/'Khef Voice.app' && cp -R 'apps/voice/dist/Khef Voice.app' ~/Applications/",
+    "voice:app:install": "bash apps/voice/scripts/install-if-stale.sh",
+    "voice:app:install:force": "bash apps/voice/scripts/install-if-stale.sh --force",
     "codeks:install": "lib/shell/codeks.sh --install",
     "prepare": "husky || true"
   },

@@ -9,7 +9,7 @@ import type { Project } from '../types'
 import { useCommits, useDiff, useDiffComments } from '../hooks'
 import { CommitList, DiffViewer } from '../components/diff'
 import { PageHeader } from '../components/layout'
-import styles from './ProjectDiffPage.module.css'
+import styles from './ProjectCodeReviewPage.module.css'
 
 type DiffMode = 'commits' | 'branch'
 
@@ -27,7 +27,7 @@ function loadSidebarWidth(): number {
   return Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, raw))
 }
 
-export function ProjectDiffPage({ projectId }: Props) {
+export function ProjectCodeReviewPage({ projectId }: Props) {
   const searchString = useSearch()
   const initialCommit = new URLSearchParams(searchString).get('commit') || null
 

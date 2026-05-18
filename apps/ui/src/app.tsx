@@ -28,7 +28,8 @@ import {
   ProjectPlansPage,
   ProjectMemoryFilesPage,
   MemoryFilePage,
-  ProjectDiffPage,
+  ProjectCodeReviewPage,
+  DiffFilesPage,
   CustomTypeFormPage,
   PromptsPage,
   PromptPage,
@@ -49,8 +50,11 @@ import {
   EditorPage,
   DbxPage,
   SavedQueriesPage,
+  SavedQueryNewPage,
   SavedQueryPage,
   KapiPage,
+  ImageBrowserPage,
+  NotificationsPage,
 } from './pages'
 
 export function App() {
@@ -66,6 +70,12 @@ export function App() {
             <Route path="/search">
               <PageMeta label="SearchPage" templateFiles={['src/pages/SearchPage.tsx']}>
                 <SearchPage />
+              </PageMeta>
+            </Route>
+
+            <Route path="/alerts">
+              <PageMeta label="NotificationsPage" templateFiles={['src/pages/NotificationsPage.tsx']}>
+                <NotificationsPage />
               </PageMeta>
             </Route>
 
@@ -214,12 +224,18 @@ export function App() {
               )}
             </Route>
 
-            <Route path="/projects/:id/diff">
+            <Route path="/projects/:id/code-review">
               {(params) => (
-                <PageMeta label="ProjectDiffPage" templateFiles={['src/pages/ProjectDiffPage.tsx']}>
-                  <ProjectDiffPage projectId={params.id} />
+                <PageMeta label="ProjectCodeReviewPage" templateFiles={['src/pages/ProjectCodeReviewPage.tsx']}>
+                  <ProjectCodeReviewPage projectId={params.id} />
                 </PageMeta>
               )}
+            </Route>
+
+            <Route path="/diff/files">
+              <PageMeta label="DiffFilesPage" templateFiles={['src/pages/DiffFilesPage.tsx']}>
+                <DiffFilesPage />
+              </PageMeta>
             </Route>
 
             <Route path="/kapi/:handle">
@@ -497,6 +513,12 @@ export function App() {
               </PageMeta>
             </Route>
 
+            <Route path="/kpic">
+              <PageMeta label="ImageBrowserPage" templateFiles={['src/pages/image-browser/ImageBrowserPage.tsx']}>
+                <ImageBrowserPage />
+              </PageMeta>
+            </Route>
+
             <Route path="/dbx">
               <PageMeta label="DbxPage" templateFiles={['src/pages/dbx-page/DbxPage.tsx']}>
                 <DbxPage />
@@ -506,6 +528,13 @@ export function App() {
             <Route path="/dbx/saved-queries">
               <PageMeta label="SavedQueriesPage" templateFiles={['src/pages/SavedQueriesPage.tsx']}>
                 <SavedQueriesPage />
+              </PageMeta>
+            </Route>
+
+            {/* Must precede the /:id route — otherwise wouter matches "new" as an :id. */}
+            <Route path="/dbx/saved-queries/new">
+              <PageMeta label="SavedQueryNewPage" templateFiles={['src/pages/SavedQueryNewPage.tsx']}>
+                <SavedQueryNewPage />
               </PageMeta>
             </Route>
 

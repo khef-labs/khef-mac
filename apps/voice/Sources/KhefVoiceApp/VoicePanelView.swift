@@ -243,6 +243,25 @@ struct VoicePanelView: View {
             }
 
             Spacer()
+
+            if viewModel.state == .recording {
+                Button {
+                    viewModel.insertParagraphBreak()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.turn.down.left")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("New paragraph")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .foregroundStyle(Color.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("Start a new paragraph in the transcript")
+            }
         }
         .frame(height: 52)
     }

@@ -26,6 +26,7 @@ interface SessionListQuery {
   assistant?: string;
   project?: string;
   q?: string;
+  meta_q?: string;
   nickname?: string;
   session_id?: string;
   limit?: string;
@@ -158,7 +159,7 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
     request: FastifyRequest<{ Querystring: SessionListQuery }>,
     reply: FastifyReply
   ) => {
-    const { assistant, project, q, nickname, session_id, limit = '50', offset = '0', sort: rawSort = 'started_at', order = 'desc', includeHidden } = request.query;
+    const { assistant, project, q, meta_q, nickname, session_id, limit = '50', offset = '0', sort: rawSort = 'started_at', order = 'desc', includeHidden } = request.query;
     const sort = ALLOWED_SORT_FIELDS.has(rawSort) ? rawSort : 'started_at';
     const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
     const offsetNum = parseInt(offset, 10) || 0;
@@ -202,6 +203,21 @@ export default async function sessionSearchRoutes(fastify: FastifyInstance) {
       // every transcript that happens to mention them.
       conditions.push(`s.nickname ILIKE $${paramIndex} || '%'`);
       params.push(nickname.toLowerCase().trim());
+      paramIndex++;
+    }
+
+    if (meta_q) {
+      // Metadata search across session name, nickname, short summary label,
+      // and project handle/name — backs the UI "Summary" search mode so old
+      // sessions are findable without loading every transcript chunk.
+      conditions.push(`(
+        s.name ILIKE '%' || $${paramIndex} || '%'
+        OR s.nickname ILIKE '%' || $${paramIndex} || '%'
+        OR s.summary ILIKE '%' || $${paramIndex} || '%'
+        OR p.handle ILIKE '%' || $${paramIndex} || '%'
+        OR p.name ILIKE '%' || $${paramIndex} || '%'
+      )`);
+      params.push(meta_q.toLowerCase().trim());
       paramIndex++;
     }
 

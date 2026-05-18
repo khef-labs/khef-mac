@@ -213,3 +213,71 @@ describe('POST /api/sessions/grep', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('GET /api/sessions — meta_q metadata search', () => {
+  beforeEach(async () => {
+    const a = await client.query<{ id: string }>(
+      `SELECT id FROM assistants WHERE handle = 'claude-code' LIMIT 1`
+    );
+    const assistantId = a.rows[0].id;
+
+    const proj = await client.query<{ id: string }>(
+      `INSERT INTO projects (name, handle, display_name)
+       VALUES ('Meta Search Proj', 'meta-search-proj', 'Meta Search Proj')
+       ON CONFLICT (handle) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id`
+    );
+    const projectId = proj.rows[0].id;
+
+    // Three sessions with distinct metadata; none mention the others' terms.
+    await client.query(
+      `INSERT INTO sessions (session_id, assistant_id, file_path, file_size, message_count, name, nickname, summary, project_id)
+       VALUES
+         ('11111111-0000-0000-0000-000000000001', $1, '/tmp/meta-s1.jsonl', 10, 1, 'Refactor the auth layer', 'daveen', 'Short label about tokens', $2),
+         ('22222222-0000-0000-0000-000000000002', $1, '/tmp/meta-s2.jsonl', 10, 1, 'Unrelated work', 'zelda', 'nothing notable here', NULL),
+         ('33333333-0000-0000-0000-000000000003', $1, '/tmp/meta-s3.jsonl', 10, 1, NULL, NULL, NULL, $2)`,
+      [assistantId, projectId]
+    );
+  });
+
+  afterAll(async () => {
+    await client.query(`DELETE FROM projects WHERE handle = 'meta-search-proj'`);
+  });
+
+  it('matches on nickname', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/sessions?meta_q=daveen' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.sessions).toHaveLength(1);
+    expect(body.sessions[0].session_id).toBe('11111111-0000-0000-0000-000000000001');
+  });
+
+  it('matches on session name, case-insensitive substring', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/sessions?meta_q=AUTH' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.sessions.map((s: any) => s.session_id)).toContain('11111111-0000-0000-0000-000000000001');
+  });
+
+  it('matches on the short summary label', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/sessions?meta_q=tokens' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload);
+    expect(body.sessions.map((s: any) => s.session_id)).toContain('11111111-0000-0000-0000-000000000001');
+  });
+
+  it('matches on project handle', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/sessions?meta_q=meta-search-proj' });
+    expect(res.statusCode).toBe(200);
+    const ids = JSON.parse(res.payload).sessions.map((s: any) => s.session_id);
+    expect(ids).toContain('11111111-0000-0000-0000-000000000001');
+    expect(ids).toContain('33333333-0000-0000-0000-000000000003');
+    expect(ids).not.toContain('22222222-0000-0000-0000-000000000002');
+  });
+
+  it('returns nothing for an unmatched term', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/sessions?meta_q=zzznotfound' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.payload).sessions).toHaveLength(0);
+  });
+});

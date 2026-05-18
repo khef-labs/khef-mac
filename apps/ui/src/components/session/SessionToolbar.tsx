@@ -182,16 +182,6 @@ export function SessionToolbar(props: SessionToolbarProps) {
         {onViewModeChange != null && (
           <>
             <div class={styles.toggleGroup}>
-              {showTerminalToggle && (
-                <button
-                  class={clsx(styles.toggleBtn, viewMode === 'terminal' && styles.toggleBtnActive)}
-                  onClick={() => onViewModeChange('terminal')}
-                  title="Live PTY terminal view"
-                >
-                  <TerminalIcon size={11} />
-                  <span>Terminal</span>
-                </button>
-              )}
               <button
                 class={clsx(styles.toggleBtn, viewMode === 'parsed' && styles.toggleBtnActive)}
                 onClick={() => onViewModeChange('parsed')}
@@ -204,6 +194,16 @@ export function SessionToolbar(props: SessionToolbarProps) {
               >
                 Raw
               </button>
+              {showTerminalToggle && (
+                <button
+                  class={clsx(styles.toggleBtn, viewMode === 'terminal' && styles.toggleBtnActive)}
+                  onClick={() => onViewModeChange('terminal')}
+                  title="Live PTY terminal view"
+                >
+                  <TerminalIcon size={11} />
+                  <span>Terminal</span>
+                </button>
+              )}
             </div>
             <span class={styles.divider} />
           </>

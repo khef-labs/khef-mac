@@ -468,11 +468,16 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
       );
     }
 
-    // Mark sessions not in scan results as inactive
+    // Find candidates for deactivation: currently-active sessions that the
+    // scanner did not surface this tick. We do NOT trust the scanner miss
+    // alone — many code paths (codex sessions without a recurring heartbeat,
+    // fuser timeouts, transient PID races) can drop a session from a single
+    // scan even though its process is still alive. Recheck each candidate's
+    // PID with kill(0) and only deactivate on positive evidence of death.
+    let candidatesResult;
     if (foundSessionIds.length > 0) {
-      await client.query(
-        `UPDATE sessions
-         SET status = 'inactive', updated_at = NOW()
+      candidatesResult = await client.query<{ id: string; pid: number | null }>(
+        `SELECT id, pid FROM sessions
          WHERE status = 'active'
            AND NOT EXISTS (
              SELECT 1
@@ -483,10 +488,24 @@ export async function refreshActiveSessionsCache(scanned: ActiveSession[]): Prom
         [foundAssistantIds, foundSessionIds]
       );
     } else {
+      candidatesResult = await client.query<{ id: string; pid: number | null }>(
+        `SELECT id, pid FROM sessions WHERE status = 'active'`
+      );
+    }
+
+    const toDeactivate: string[] = [];
+    for (const row of candidatesResult.rows) {
+      if (row.pid === null || !isPidAlive(row.pid)) {
+        toDeactivate.push(row.id);
+      }
+    }
+
+    if (toDeactivate.length > 0) {
       await client.query(
         `UPDATE sessions
          SET status = 'inactive', updated_at = NOW()
-         WHERE status = 'active'`
+         WHERE id = ANY($1::uuid[])`,
+        [toDeactivate]
       );
     }
 
@@ -642,6 +661,56 @@ export async function getActiveSessionBySessionId(sessionId: string): Promise<Ac
   );
 }
 
+/**
+ * Look up the most-recently-seen ACTIVE session attached to a given OS PID.
+ *
+ * Used by the MCP server's current-session resolver as a fallback when neither
+ * KHEF_SESSION_ID nor the iTerm2 terminal session ID can identify the calling
+ * agent. The MCP server walks its own ancestor PIDs (process.ppid, ppid of
+ * ppid, ...) and asks the API to match each one against this table.
+ *
+ * status='active' filters out stale rows where the PID has been reused since
+ * the session ended. We also pick the most recent active row in the rare case
+ * a PID is double-claimed before deactivation.
+ */
+export async function getActiveSessionByPid(pid: number): Promise<ActiveSessionRow | null> {
+  return querySingle<ActiveSessionRow>(
+    `SELECT
+      s.id,
+      s.session_id,
+      s.assistant_id,
+      a.handle as assistant_handle,
+      a.name as assistant_name,
+      s.project_id,
+      p.handle as project_handle,
+      p.name as project_name,
+      s.file_path,
+      s.project_dir,
+      s.pid,
+      s.status,
+      s.last_seen_at,
+      s.first_seen_at,
+      s.created_at,
+      s.updated_at,
+      s.name,
+      s.summary,
+      s.message_count,
+      s.started_at,
+      s.ended_at,
+      s.model,
+      s.context_window_tokens,
+      s.nickname,
+      s.terminal_session_id
+    FROM sessions s
+    JOIN assistants a ON a.id = s.assistant_id
+    LEFT JOIN projects p ON p.id = s.project_id
+    WHERE s.pid = $1 AND s.status = 'active'
+    ORDER BY s.last_seen_at DESC
+    LIMIT 1`,
+    [pid]
+  );
+}
+
 export interface HeartbeatOptions {
   pid?: number;
   terminalSessionId?: string;
@@ -678,7 +747,17 @@ export async function heartbeatSession(
   filePath: string,
   opts: HeartbeatOptions = {}
 ): Promise<void> {
-  const { pid, terminalSessionId, assistantHandle = 'claude-code', projectPath } = opts;
+  const { pid, terminalSessionId, assistantHandle, projectPath } = opts;
+  // Infer the assistant from the transcript path when the caller did not
+  // pass one explicitly. Codex transcripts live under ~/.codex/sessions and
+  // Claude Code transcripts under ~/.claude/projects; without this inference
+  // every codex heartbeat (which posts to the generic /heartbeat endpoint
+  // with no assistant in the body) would register a phantom claude-code row
+  // owning the codex session UUID, leading to duplicate rows in the active
+  // list and crashes in clients that key by sessionID alone.
+  const codexSessionsRoot = path.join(os.homedir(), '.codex', 'sessions');
+  const resolvedAssistantHandle = assistantHandle
+    ?? (filePath.startsWith(codexSessionsRoot + path.sep) ? 'codex-cli' : 'claude-code');
   const normalizedTerminalSessionId = normalizeTerminalSessionId(terminalSessionId);
 
   // Derive project_dir. Claude: from the ~/.claude/projects/<encoded>/ path.
@@ -708,9 +787,9 @@ export async function heartbeatSession(
     projectId = projectMap.get(projectDir) ?? null;
   }
 
-  const assistantId = await getAssistantId(assistantHandle);
+  const assistantId = await getAssistantId(resolvedAssistantHandle);
   if (!assistantId) {
-    log.warn({ assistantHandle }, 'Cannot heartbeat: assistant not found');
+    log.warn({ assistantHandle: resolvedAssistantHandle }, 'Cannot heartbeat: assistant not found');
     return;
   }
 
@@ -753,7 +832,7 @@ export async function heartbeatSession(
     client.release();
   }
 
-  log.info({ sessionId, assistantHandle, projectDir, pid: pid ?? null }, 'Session heartbeat registered');
+  log.info({ sessionId, assistantHandle: resolvedAssistantHandle, projectDir, pid: pid ?? null }, 'Session heartbeat registered');
 }
 
 /**

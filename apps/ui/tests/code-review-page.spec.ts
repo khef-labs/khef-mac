@@ -6,7 +6,7 @@ import * as path from 'path'
 // Run tests serially to avoid race conditions with shared project
 test.describe.configure({ mode: 'serial' })
 
-test.describe('Diff Page', () => {
+test.describe('Code Review Page', () => {
   let projectId: string
   const tempFileName = '.diff-test-temp-file.txt'
   const tempFilePath = path.join(process.cwd(), tempFileName)
@@ -59,7 +59,7 @@ test.describe('Diff Page', () => {
   })
 
   test('should display mode buttons when viewing uncommitted changes', async ({ page }) => {
-    await page.goto(`/projects/${projectId}/diff`)
+    await page.goto(`/projects/${projectId}/code-review`)
     await page.waitForLoadState('networkidle')
 
     // Should show the code review page with mode switch buttons
@@ -74,7 +74,7 @@ test.describe('Diff Page', () => {
   })
 
   test('should have Commits mode active by default', async ({ page }) => {
-    await page.goto(`/projects/${projectId}/diff`)
+    await page.goto(`/projects/${projectId}/code-review`)
     await page.waitForLoadState('networkidle')
 
     // Mode switch should be visible with Commits active
@@ -88,7 +88,7 @@ test.describe('Diff Page', () => {
   })
 
   test('should switch to Branch mode when clicking Branch button', async ({ page }) => {
-    await page.goto(`/projects/${projectId}/diff`)
+    await page.goto(`/projects/${projectId}/code-review`)
     await page.waitForLoadState('networkidle')
 
     const modeSwitch = page.locator('[data-testid="diff-page--mode-switch"]')
@@ -105,7 +105,7 @@ test.describe('Diff Page', () => {
   test('should show commit list in sidebar', async ({ page }) => {
     test.skip(!!process.env.KHEF_USE_TEST_ENV, 'Requires real git repo with history')
 
-    await page.goto(`/projects/${projectId}/diff`)
+    await page.goto(`/projects/${projectId}/code-review`)
     await page.waitForLoadState('networkidle')
 
     // Commit list or uncommitted changes should be in the sidebar

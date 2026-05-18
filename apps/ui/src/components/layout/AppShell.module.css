@@ -81,6 +81,16 @@
   text-align: center;
 }
 
+.badgeError {
+  background-color: var(--error);
+  color: #fff;
+}
+
+.badgeInfo {
+  background-color: var(--info, var(--brand-blue));
+  color: #fff;
+}
+
 .main {
   position: relative;
   background-color: var(--bg);

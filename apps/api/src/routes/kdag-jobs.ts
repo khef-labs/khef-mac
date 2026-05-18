@@ -22,7 +22,7 @@ interface CreateJobBody {
   system_prompt_text?: string;
   model?: string;
   cli_flags?: Record<string, unknown>;
-  mode?: 'full' | 'incremental' | 'consolidate';
+  mode?: 'full' | 'incremental' | 'consolidate' | 'v2';
   project_id?: string;
   // Generic inputs for definition-driven jobs: { input_type_key: content_string }
   inputs?: Record<string, string>;
@@ -75,7 +75,10 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
 
     // Resolve definition — explicit definition_key takes priority, then auto-resolve from job_type/mode
     let definitionId: string | null = null;
-    const sessionSummaryDefault = body.mode === 'consolidate' ? 'consolidate-session-summaries' : 'session-summary';
+    const sessionSummaryDefault =
+      body.mode === 'consolidate' ? 'consolidate-session-summaries' :
+      body.mode === 'v2' ? 'session-summary-v2' :
+      'session-summary';
     const defKey = body.definition_key || (body.job_type === 'session_summary' ? sessionSummaryDefault : body.job_type);
     if (defKey) {
       const def = await querySingle<{ id: string }>(
@@ -173,6 +176,7 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
 
       const isConsolidate = body.mode === 'consolidate';
       const isIncremental = body.mode === 'incremental';
+      const isV2 = body.mode === 'v2';
 
       if (isConsolidate) {
         const snapshots = await query<{ id: string; content: string; assistant_handle: string | null; created_at: string }>(
@@ -233,7 +237,11 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
         inputs.push({ typeKey: 'prompt', content: promptRow.content, refType: null, refId: null });
         inputs.push({ typeKey: 'transcript', content: consolidatedInput, refType: 'session', refId: session.id });
       } else {
-        // Full / incremental modes — load session chunks as transcript input.
+        // Full / incremental / v2 modes — load session chunks as transcript input.
+        // v2 mirrors full mode (whole-transcript fresh summarize) but also folds
+        // in any existing summary at the consolidate step, then runs an editorial
+        // prune. So it loads chunkOffset=0 like full, but also fetches existing
+        // summary if present (without erroring on absence, unlike incremental).
         let existingSummary: string | null = null;
         let chunkOffset = 0;
         if (isIncremental) {
@@ -250,6 +258,17 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
           existingSummary = summaryRow.content;
           if (summaryRow.chunk_count !== null) {
             chunkOffset = summaryRow.chunk_count;
+          }
+        } else if (isV2) {
+          const summaryRow = await querySingle<{ content: string }>(
+            `SELECT sss.content
+             FROM session_summaries ss
+             JOIN session_summary_snapshots sss ON sss.id = ss.current_snapshot_id
+             WHERE ss.session_id = $1`,
+            [session.id]
+          );
+          if (summaryRow) {
+            existingSummary = summaryRow.content;
           }
         }
 
@@ -270,6 +289,8 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
         const transcript = metaHeader + chunks.map(c => c.content).join('\n\n');
 
         if (!body.prompt_text) {
+          // v2 always starts from a fresh summarize-session pass; the consolidate
+          // step is where existing_summary gets folded in.
           const promptHandle = isIncremental ? 'update-session-summary' : 'summarize-session';
           const promptRow = await querySingle<{ content: string }>(
             'SELECT content FROM prompts WHERE handle = $1',
@@ -286,6 +307,13 @@ export default async function promptJobRoutes(fastify: FastifyInstance) {
 
         if (isIncremental && existingSummary) {
           inputs.push({ typeKey: 'existing_summary', content: existingSummary, refType: null, refId: null });
+        }
+        // v2 always inserts existing_summary (empty string when absent) so the
+        // consolidate step's template renders cleanly with no missing-placeholder
+        // surprises. When empty, the consolidate prompt sees a single substantive
+        // snapshot and acts as light cleanup before the historian prune.
+        if (isV2) {
+          inputs.push({ typeKey: 'existing_summary', content: existingSummary || '', refType: null, refId: null });
         }
 
         const chunkPromptRow = await querySingle<{ content: string }>(

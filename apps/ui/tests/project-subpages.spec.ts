@@ -102,10 +102,10 @@ test.describe('Project Sub-pages', () => {
     await expectNoVisibleErrors(page)
   })
 
-  test('diff page should display title', async ({ page }) => {
+  test('code review page should display title', async ({ page }) => {
     test.skip(!!process.env.KHEF_USE_TEST_ENV, 'Requires real project path on disk')
 
-    await page.goto(`/projects/${projectId}/diff`)
+    await page.goto(`/projects/${projectId}/code-review`)
     await page.waitForLoadState('networkidle')
 
     const title = page.locator('h1', { hasText: 'Code Review' })

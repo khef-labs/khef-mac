@@ -180,7 +180,7 @@ export function formatCommitSearchResults(data: any, args: Record<string, unknow
 export function formatSessionSummary(data: any): string {
   const lines: string[] = [];
   const summary = data.summary || null;
-  const snapshot = data.snapshot || {};
+  const snapshots = Array.isArray(data.snapshots) ? data.snapshots : [];
   const job = data.job || null;
 
   lines.push('# Session Summary');
@@ -194,18 +194,25 @@ export function formatSessionSummary(data: any): string {
     return lines.join('\n').trimEnd();
   }
 
-  if (snapshot.session_id) {
-    lines.push(`Session: ${snapshot.session_id}`);
+  lines.push(`Snapshot: ${summary.id}`);
+  if (summary.assistant_handle) {
+    lines.push(`Assistant: ${summary.assistant_handle}`);
   }
-  if (snapshot.created_at) {
-    lines.push(`Generated: ${snapshot.created_at.substring(0, 10)}`);
+  if (summary.created_at) {
+    lines.push(`Generated: ${summary.created_at.substring(0, 10)}`);
+  }
+  if (summary.updated_at) {
+    lines.push(`Updated: ${summary.updated_at.substring(0, 10)}`);
+  }
+  if (snapshots.length > 0) {
+    lines.push(`Snapshots: ${snapshots.length}`);
   }
   lines.push('');
-  lines.push(summary);
+  lines.push(summary.content);
 
   if (job) {
     lines.push('');
-    lines.push(`Job: ${job.status || 'unknown'}${job.completed_at ? ` (${job.completed_at.substring(0, 10)})` : ''}`);
+    lines.push(`Job: ${job.status || 'unknown'}`);
   }
 
   return lines.join('\n').trimEnd();

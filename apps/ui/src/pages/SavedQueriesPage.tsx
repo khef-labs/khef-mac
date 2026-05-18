@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'preact/hooks'
 import { useLocation } from 'wouter-preact'
-import { Search, Star, X } from 'lucide-preact'
+import { Plus, Search, Star, X } from 'lucide-preact'
 import {
   getSavedQueries,
   getConnections,
@@ -13,13 +13,19 @@ import {
 import { setNavContext } from '../lib/navContext'
 import { useDocumentTitle } from '../hooks'
 import { PageHeader } from '../components/layout'
-import { ConfirmModal, useToast } from '../components/ui'
+import { ConfirmModal, useToast, SortBar } from '../components/ui'
+import type { SortField as SortFieldDef, SortState } from '../components/ui'
 import { SavedQueryRow } from '../components/dbx/SavedQueryRow'
 import { SavedQueryContextMenu } from '../components/dbx/SavedQueryContextMenu'
 import styles from './SavedQueriesPage.module.css'
 
 const UI_SESSION_ID = 'khef-ui'
 const PAGE_SIZE = 25
+
+const SORT_FIELDS: SortFieldDef[] = [
+  { key: 'updated_at', label: 'Updated' },
+  { key: 'created_at', label: 'Created' },
+]
 
 export function SavedQueriesPage() {
   useDocumentTitle('Saved Queries')
@@ -30,6 +36,7 @@ export function SavedQueriesPage() {
   const [connectionId, setConnectionId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const [sort, setSort] = useState<SortState>({ field: 'updated_at', direction: 'desc' })
   // 1-based page index over `visible`. Filters reset it to 1.
   const [page, setPage] = useState(1)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; query: DbxSavedQuery } | null>(null)
@@ -55,7 +62,7 @@ export function SavedQueriesPage() {
   const visible = useMemo(() => {
     const q = search.toLowerCase().trim()
     const builtinId = connections.find(c => c.is_builtin)?.id
-    return queries.filter(row => {
+    const filtered = queries.filter(row => {
       if (favoritesOnly && !row.is_favorite) return false
       if (q && !`${row.handle} ${row.name}`.toLowerCase().includes(q)) return false
       if (connectionId) {
@@ -68,7 +75,12 @@ export function SavedQueriesPage() {
       }
       return true
     })
-  }, [queries, connections, search, favoritesOnly, connectionId])
+    const dir = sort.direction === 'asc' ? 1 : -1
+    const key = sort.field as 'updated_at' | 'created_at'
+    return [...filtered].sort(
+      (a, b) => dir * (new Date(a[key] || 0).getTime() - new Date(b[key] || 0).getTime()),
+    )
+  }, [queries, connections, search, favoritesOnly, connectionId, sort])
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
   const pageItems = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -128,7 +140,14 @@ export function SavedQueriesPage() {
       <PageHeader
         title="Saved queries"
         breadcrumbs={[{ label: 'Dbx', href: '/dbx' }]}
-      />
+      >
+        <button
+          class={styles.newBtn}
+          onClick={() => setLocation('/dbx/saved-queries/new')}
+        >
+          <Plus size={14} /> New saved query
+        </button>
+      </PageHeader>
 
       <div class={styles.filters}>
         <div class={styles.search}>
@@ -167,6 +186,11 @@ export function SavedQueriesPage() {
           <Star size={11} /> Favorites
         </button>
 
+        <SortBar
+          fields={SORT_FIELDS}
+          value={sort}
+          onChange={s => { setSort(s); setPage(1) }}
+        />
       </div>
 
       <div class={styles.list}>

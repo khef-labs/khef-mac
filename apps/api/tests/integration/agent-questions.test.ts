@@ -267,4 +267,46 @@ describeIfRedis('Agent questions integration', () => {
     },
     15_000,
   );
+
+  it('defaults to a 24h TTL when ttl_seconds is omitted', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/agent-questions',
+      payload: {
+        title: 'Default expiry',
+        fields: [{ key: 'x', type: 'text', label: 'X' }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const { question } = JSON.parse(created.payload);
+    expect(question.expires_at).toBeTruthy();
+    const remainingSec = (new Date(question.expires_at).getTime() - Date.now()) / 1000;
+    // Should be very close to 24h.
+    expect(remainingSec).toBeGreaterThan(86000);
+    expect(remainingSec).toBeLessThanOrEqual(86400);
+
+    const ttl = await getRedis().ttl(`aq:question:${question.id}`);
+    expect(ttl).toBeGreaterThan(86000);
+    expect(ttl).toBeLessThanOrEqual(86400);
+  });
+
+  it('honors an explicit ttl_seconds with a real expiry', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/agent-questions',
+      payload: {
+        title: 'Has expiry',
+        ttl_seconds: 120,
+        fields: [{ key: 'x', type: 'text', label: 'X' }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const { question } = JSON.parse(created.payload);
+    expect(question.expires_at).not.toBeNull();
+    expect(new Date(question.expires_at).getTime()).toBeGreaterThan(Date.now());
+
+    const ttl = await getRedis().ttl(`aq:question:${question.id}`);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(120);
+  });
 });

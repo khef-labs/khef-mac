@@ -100,6 +100,23 @@ export interface KhefState {
   diff: {
     sidebarWidth: number
   }
+  // Image browser
+  imageBrowser: {
+    sidebarWidth: number
+    favoritesHeight: number
+    currentPath: string
+    recursive: boolean
+    view: 'grid' | 'single'
+    metaOpen: boolean
+    /** Starred directories (kept as plain absolute paths). */
+    folderFavorites: string[]
+    /** Recent directories, newest first, capped. */
+    folderRecents: string[]
+    /** Favorited individual images by absolute path. */
+    imageFavorites: string[]
+    /** Default project handle for "Save as memory". */
+    saveProject: string
+  }
   // Chat sidebar (per-backend) — replaces khefChatCwd/Pinned/Hidden/Order:* keys.
   chat: Record<string, {
     cwd?: string
@@ -215,6 +232,18 @@ const DEFAULTS: KhefState = {
   },
   diff: {
     sidebarWidth: 360,
+  },
+  imageBrowser: {
+    sidebarWidth: 240,
+    favoritesHeight: 220,
+    currentPath: '',
+    recursive: false,
+    view: 'grid',
+    metaOpen: false,
+    folderFavorites: [],
+    folderRecents: [],
+    imageFavorites: [],
+    saveProject: 'user',
   },
   chat: {},
 }
@@ -475,8 +504,49 @@ export function loadStore(): KhefState {
     dbx: { ...DEFAULTS.dbx, ...(l.dbx ?? {}) },
     kapi: { ...DEFAULTS.kapi, ...(l.kapi ?? {}) },
     diff: { ...DEFAULTS.diff, ...migrateLegacyDiff(l.diff) },
+    imageBrowser: { ...DEFAULTS.imageBrowser, ...migrateImageBrowser(l.imageBrowser) },
     chat: { ...migrateLegacyChatKeys(), ...((l.chat as KhefState['chat'] | undefined) ?? {}) },
   }
+}
+
+/**
+ * One-time migration: legacy imageBrowser had `bookmarks: Array<{path,name}>`,
+ * `recents: Array<{path,visitedAt}>`, `favorites: string[]` (for images). Map
+ * those into the flat string-array shape used by FolderPicker (folderFavorites,
+ * folderRecents) plus imageFavorites.
+ */
+function migrateImageBrowser(raw: unknown): Partial<KhefState['imageBrowser']> {
+  if (!raw || typeof raw !== 'object') return {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any
+  const out: Partial<KhefState['imageBrowser']> = {}
+  if (typeof r.sidebarWidth === 'number' && Number.isFinite(r.sidebarWidth)) out.sidebarWidth = r.sidebarWidth
+  if (typeof r.favoritesHeight === 'number' && Number.isFinite(r.favoritesHeight)) out.favoritesHeight = r.favoritesHeight
+  if (typeof r.currentPath === 'string') out.currentPath = r.currentPath
+  if (typeof r.recursive === 'boolean') out.recursive = r.recursive
+  if (r.view === 'grid' || r.view === 'single') out.view = r.view
+  if (typeof r.metaOpen === 'boolean') out.metaOpen = r.metaOpen
+  if (typeof r.saveProject === 'string') out.saveProject = r.saveProject
+  if (Array.isArray(r.folderFavorites)) {
+    out.folderFavorites = r.folderFavorites.filter((s: unknown): s is string => typeof s === 'string')
+  } else if (Array.isArray(r.bookmarks)) {
+    out.folderFavorites = r.bookmarks
+      .map((b: unknown) => (b && typeof (b as any).path === 'string' ? (b as any).path : null))
+      .filter((p: unknown): p is string => typeof p === 'string')
+  }
+  if (Array.isArray(r.folderRecents)) {
+    out.folderRecents = r.folderRecents.filter((s: unknown): s is string => typeof s === 'string')
+  } else if (Array.isArray(r.recents)) {
+    out.folderRecents = r.recents
+      .map((b: unknown) => (b && typeof (b as any).path === 'string' ? (b as any).path : (typeof b === 'string' ? b : null)))
+      .filter((p: unknown): p is string => typeof p === 'string')
+  }
+  if (Array.isArray(r.imageFavorites)) {
+    out.imageFavorites = r.imageFavorites.filter((s: unknown): s is string => typeof s === 'string')
+  } else if (Array.isArray(r.favorites)) {
+    out.imageFavorites = r.favorites.filter((s: unknown): s is string => typeof s === 'string')
+  }
+  return out
 }
 
 /**
@@ -542,6 +612,7 @@ export function saveStore(patch: Partial<KhefState>): void {
   if (patch.dbx) merged.dbx = { ...(current.dbx ?? {}), ...patch.dbx }
   if (patch.kapi) merged.kapi = { ...(current.kapi ?? {}), ...patch.kapi }
   if (patch.diff) merged.diff = { ...(current.diff ?? {}), ...patch.diff }
+  if (patch.imageBrowser) merged.imageBrowser = { ...(current.imageBrowser ?? {}), ...patch.imageBrowser }
   if (patch.chat) {
     const currentChat = (current.chat as KhefState['chat'] | undefined) ?? {}
     const nextChat: KhefState['chat'] = { ...currentChat }

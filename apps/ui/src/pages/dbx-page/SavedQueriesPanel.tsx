@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'preact/hooks'
-import { Plus, Search, X, Star } from 'lucide-preact'
+import { Search, X, Star } from 'lucide-preact'
 import {
   getSavedQueries, getRecentSavedQueries,
   favoriteSavedQuery, unfavoriteSavedQuery,
@@ -11,11 +11,12 @@ interface Props {
   sessionId: string | null
   activeConnectionId: string | null
   onOpen: (query: DbxSavedQuery) => void
-  onNew: () => void
   onManageAll: () => void
+  /** Right-click on a query row. Fired with the query plus the click coords. */
+  onContextMenu?: (query: DbxSavedQuery, x: number, y: number) => void
 }
 
-export function SavedQueriesPanel({ sessionId, onOpen, onNew, onManageAll }: Props) {
+export function SavedQueriesPanel({ sessionId, onOpen, onManageAll, onContextMenu }: Props) {
   const [favorites, setFavorites] = useState<DbxSavedQuery[]>([])
   const [recent, setRecent] = useState<DbxRecentSavedQuery[]>([])
   const [allQueries, setAllQueries] = useState<DbxSavedQuery[]>([])
@@ -96,9 +97,6 @@ export function SavedQueriesPanel({ sessionId, onOpen, onNew, onManageAll }: Pro
         >
           Manage
         </button>
-        <button class={styles.btnAdd} onClick={onNew} title="New saved query">
-          <Plus size={12} /> New
-        </button>
       </div>
 
       {(favorites.length > 0 || recent.length > 0) && (
@@ -125,8 +123,10 @@ export function SavedQueriesPanel({ sessionId, onOpen, onNew, onManageAll }: Pro
             {favFiltered.map(q => (
               <div
                 key={q.id}
+                data-testid={`saved-query-row--${q.handle}`}
                 class={styles.scriptItem}
                 onClick={() => onOpen(q)}
+                onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(q, (e as MouseEvent).clientX, (e as MouseEvent).clientY) } : undefined}
                 title={q.description || q.handle}
               >
                 <Star size={11} class={styles.savedQueryStar} fill="currentColor" />
@@ -156,6 +156,7 @@ export function SavedQueriesPanel({ sessionId, onOpen, onNew, onManageAll }: Pro
                   key={r.query_id}
                   class={styles.scriptItem}
                   onClick={() => { if (full) onOpen(full) }}
+                  onContextMenu={onContextMenu && full ? (e) => { e.preventDefault(); onContextMenu(full, (e as MouseEvent).clientX, (e as MouseEvent).clientY) } : undefined}
                   title={`Last run ${formatRelativeTime(r.last_run_at)}`}
                 >
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -173,8 +174,10 @@ export function SavedQueriesPanel({ sessionId, onOpen, onNew, onManageAll }: Pro
             {otherFiltered.map(q => (
               <div
                 key={q.id}
+                data-testid={`saved-query-row--${q.handle}`}
                 class={styles.scriptItem}
                 onClick={() => onOpen(q)}
+                onContextMenu={onContextMenu ? (e) => { e.preventDefault(); onContextMenu(q, (e as MouseEvent).clientX, (e as MouseEvent).clientY) } : undefined}
                 title={q.description || q.handle}
               >
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

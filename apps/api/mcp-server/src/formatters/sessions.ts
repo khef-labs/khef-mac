@@ -244,14 +244,14 @@ export function formatSessionLineage(data: any): string {
 
   for (let i = 0; i < sessions.length; i++) {
     const s = sessions[i];
-    const shortId = (s.session_id || '').substring(0, 13) + '...';
+    const sessionId = s.session_id || '';
     const project = s.project?.handle || 'no project';
     const status = s.is_live ? `LIVE, pid: ${s.pid}` : 'inactive';
     const start = formatDate(s.started_at) || '?';
     const end = s.is_live ? 'present' : (formatDate(s.ended_at) || '?');
     const msgs = s.message_count != null ? `${s.message_count} messages` : '';
 
-    lines.push(`${i + 1}. ${shortId} [${project}] (${status})`);
+    lines.push(`${i + 1}. ${sessionId} [${project}] (${status})`);
     lines.push(`   ${start} – ${end}${msgs ? ' | ' + msgs : ''}`);
 
     const summaries = s.summaries || [];

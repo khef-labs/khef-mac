@@ -149,15 +149,16 @@ final class VoicePanelViewModel: ObservableObject {
             do {
                 try await speechClient.startRecording { [weak self] fullText in
                     guard let self else { return }
-                    // The recognizer already accumulates across timeouts.
-                    // We just prepend any existing transcript (for Append).
+                    // The recognizer already accumulates across timeouts and
+                    // paragraph breaks. We just prepend any existing transcript
+                    // (for Append) as its own paragraph.
                     let prefix = self.recordingPrefix
                     if prefix.isEmpty {
                         self.transcript = fullText
                     } else if fullText.isEmpty {
                         self.transcript = prefix
                     } else {
-                        self.transcript = "\(prefix) \(fullText)"
+                        self.transcript = "\(prefix)\n\n\(fullText)"
                     }
                 } onLevel: { [weak self] level in
                     self?.pushAudioLevel(level)
@@ -186,7 +187,7 @@ final class VoicePanelViewModel: ObservableObject {
                 } else if text.isEmpty {
                     self.transcript = prefix
                 } else {
-                    self.transcript = "\(prefix) \(text)"
+                    self.transcript = "\(prefix)\n\n\(text)"
                 }
                 self.state = .review
                 self.statusMessage = "Review transcript"
@@ -219,6 +220,14 @@ final class VoicePanelViewModel: ObservableObject {
 
     func appendRecording() {
         startRecording()
+    }
+
+    // MARK: - Paragraph breaks
+
+    /// Ends the current paragraph and starts a fresh one in the transcript.
+    func insertParagraphBreak() {
+        guard state == .recording else { return }
+        speechClient.insertBreak()
     }
 
     func saveToFile() {
@@ -333,7 +342,11 @@ final class VoicePanelViewModel: ObservableObject {
     private func restoreRecentTargets(from active: [ActiveSession]) {
         let savedIDs = defaults.stringArray(forKey: DefaultsKey.recentTargetIDs) ?? []
         // Match by sessionID or nickname for resilience
-        let byID = Dictionary(uniqueKeysWithValues: active.map { ($0.sessionID, $0) })
+        // Defensive: the active list can briefly hold two rows with the same
+        // sessionID (e.g. the same session UUID registered under two assistant
+        // handles). uniqueKeysWithValues would trap; keep the first occurrence
+        // instead, matching the byNick handling below.
+        let byID = Dictionary(active.map { ($0.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
         let byNick = Dictionary(active.compactMap { s in s.nickname.map { ($0, s) } }, uniquingKeysWith: { first, _ in first })
         recentTargets = savedIDs.compactMap { byID[$0] ?? byNick[$0] }
         // If no persisted recents, seed with the first few active sessions

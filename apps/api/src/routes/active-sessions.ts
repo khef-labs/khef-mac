@@ -12,6 +12,7 @@ import {
   getCachedActiveSessions,
   getCachedActiveSessionsWithLiveness,
   getActiveSessionBySessionId,
+  getActiveSessionByPid,
   heartbeatSession,
   assignNickname,
   registerCodexSessionFile,
@@ -198,6 +199,32 @@ export default async function activeSessionRoutes(fastify: FastifyInstance) {
     const row = await getActiveSessionBySessionId(sessionId);
     if (!row) {
       return reply.status(404).send({ error: 'Active session not found' });
+    }
+
+    return { session: formatActiveSession(row) };
+  });
+
+  /**
+   * GET /api/active-sessions/by-pid/:pid - Lookup by OS PID
+   *
+   * Used by the MCP server's current-session resolver as a fallback when
+   * neither KHEF_SESSION_ID nor the iTerm2 terminal session ID identify the
+   * caller. The MCP server walks its own ancestor PIDs (process.ppid, ppid of
+   * ppid, ...) and asks this endpoint to match each one. Returns the most
+   * recently-seen active session attached to that PID.
+   */
+  fastify.get('/by-pid/:pid', async (
+    request: FastifyRequest<{ Params: { pid: string } }>,
+    reply: FastifyReply
+  ) => {
+    const pid = Number.parseInt(request.params.pid, 10);
+    if (!Number.isFinite(pid) || pid <= 0) {
+      return reply.status(400).send({ error: 'pid must be a positive integer' });
+    }
+
+    const row = await getActiveSessionByPid(pid);
+    if (!row) {
+      return reply.status(404).send({ error: 'Active session not found for PID' });
     }
 
     return { session: formatActiveSession(row) };

@@ -1400,6 +1400,7 @@ export async function getSessions(params: {
   assistant?: string
   project?: string
   q?: string
+  meta_q?: string
   nickname?: string
   session_id?: string
   limit?: number
@@ -1411,6 +1412,7 @@ export async function getSessions(params: {
   if (params.assistant) searchParams.set('assistant', params.assistant)
   if (params.project) searchParams.set('project', params.project)
   if (params.q) searchParams.set('q', params.q)
+  if (params.meta_q) searchParams.set('meta_q', params.meta_q)
   if (params.nickname) searchParams.set('nickname', params.nickname)
   if (params.session_id) searchParams.set('session_id', params.session_id)
   if (params.limit !== undefined) searchParams.set('limit', String(params.limit))
@@ -2532,7 +2534,7 @@ export async function createKdagJob(body: {
   system_prompt_text?: string
   model?: string
   cli_flags?: Record<string, unknown>
-  mode?: 'full' | 'incremental' | 'consolidate'
+  mode?: 'full' | 'incremental' | 'consolidate' | 'v2'
   inputs?: Record<string, string>
 }): Promise<{ job: { id: string; job_type: string; definition_key?: string; created_at: string } }> {
   return client.post('kdag/job', { json: body }).json()
@@ -3208,11 +3210,13 @@ export async function getMemoryCollections(
 export async function fsTree(
   fsPath: string,
   depth?: number,
-  showHidden?: boolean
+  showHidden?: boolean,
+  includeIgnored?: boolean
 ): Promise<import('../types').FsTreeResponse> {
   const searchParams = new URLSearchParams({ path: fsPath })
   if (depth !== undefined) searchParams.set('depth', String(depth))
   if (showHidden) searchParams.set('showHidden', 'true')
+  if (includeIgnored) searchParams.set('includeIgnored', 'true')
   return client.get('fs/tree', { searchParams }).json()
 }
 
@@ -3260,6 +3264,23 @@ export async function fsNew(
   return client.post('fs/new', { json: { path: fsPath, type } }).json()
 }
 
+export interface FsDiffResponse {
+  a: { path: string; size: number; modified: string }
+  b: { path: string; size: number; modified: string }
+  changes: SnapshotDiffChange[]
+  stats: { additions: number; deletions: number; unchanged: number }
+}
+
+export async function fsDiff(
+  a: string,
+  b: string,
+  context?: number
+): Promise<FsDiffResponse> {
+  const searchParams = new URLSearchParams({ a, b })
+  if (context !== undefined) searchParams.set('context', String(context))
+  return client.get('fs/diff', { searchParams }).json()
+}
+
 export async function fsDelete(
   fsPath: string
 ): Promise<import('../types').FsDeleteResponse> {
@@ -3275,6 +3296,80 @@ export async function fsCompletions(
 
 export async function fsReveal(fsPath: string): Promise<void> {
   await client.post('fs/reveal', { json: { path: fsPath } })
+}
+
+// --- Image Browser ---
+
+export interface ListedImage {
+  name: string
+  path: string
+  size: number
+  modified: string
+  ext: string
+  mime: string
+}
+
+export interface ImageMetadata {
+  path: string
+  name: string
+  size: number
+  modified: string
+  mime: string
+  width: number | null
+  height: number | null
+  format: string | null
+}
+
+export interface ListImagesResponse {
+  root: string
+  images: ListedImage[]
+  truncated: boolean
+}
+
+export interface SaveAsMemoryResponse {
+  memory: {
+    id: string
+    project_id: string
+    handle: string
+    title: string
+    type: string
+  }
+  file: {
+    id: string
+    url: string
+    mime_type: string
+    size: number
+    converted: boolean
+  }
+}
+
+export async function listImageBrowserImages(
+  dirPath: string,
+  recursive = false
+): Promise<ListImagesResponse> {
+  const searchParams = new URLSearchParams({ path: dirPath })
+  if (recursive) searchParams.set('recursive', 'true')
+  return client.get('image-browser/list', { searchParams }).json()
+}
+
+export async function getImageBrowserMetadata(filePath: string): Promise<ImageMetadata> {
+  const searchParams = new URLSearchParams({ path: filePath })
+  return client.get('image-browser/metadata', { searchParams }).json()
+}
+
+/** Returns the URL the <img> tag should hit for the given filesystem path. */
+export function imageBrowserFileUrl(filePath: string): string {
+  return `${API_BASE}/image-browser/file?path=${encodeURIComponent(filePath)}`
+}
+
+export async function saveImageAsMemory(
+  filePath: string,
+  projectId: string,
+  options?: { memory_type?: string; title?: string; tags?: string[] }
+): Promise<SaveAsMemoryResponse> {
+  return client.post('image-browser/save-as-memory', {
+    json: { path: filePath, project_id: projectId, ...options },
+  }).json()
 }
 
 export async function getScratchHome(): Promise<{ path: string; is_default: boolean }> {
@@ -3317,6 +3412,7 @@ export interface AgentQuestion {
   description?: string
   fields: AgentQuestionField[]
   created_at: string
+  /** ISO timestamp when the question auto-expires. Internal plumbing — not surfaced in the panel. */
   expires_at: string
   status: 'pending' | 'answered' | 'canceled' | 'expired'
 }

@@ -121,6 +121,73 @@ export const tools: Tool[] = [
 },
 
   {
+  name: "query_test_db",
+  description:
+    "Run a read-only SQL query against the test database (khef_test on port 5433, tmpfs/ephemeral). Pass `schema` to switch search_path to kvec or kdag (default public). Use this whenever you need to inspect test-DB state instead of `docker exec psql`. Only SELECT/WITH/EXPLAIN allowed.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      sql: {
+        type: "string",
+        description: "SQL query to execute (SELECT/WITH/EXPLAIN)",
+      },
+      params: {
+        type: "array",
+        items: {},
+        description: "Parameterized query values (use $1, $2, etc. in SQL)",
+      },
+      limit: {
+        type: "number",
+        description: "Max rows to return (default: 100, max: 1000)",
+      },
+      schema: {
+        type: "string",
+        enum: ["public", "kvec", "kdag"],
+        description: "Schema to set search_path to (default: public)",
+      },
+    },
+    required: ["sql"],
+  },
+},
+
+  {
+  name: "list_test_tables",
+  description:
+    "List tables and views in the test database (port 5433) with estimated row counts. Same shape as list_tables but targets the test DB.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      schema: {
+        type: "string",
+        enum: ["public", "kvec", "kdag"],
+        description: "Filter to a specific schema (default: show all three)",
+      },
+    },
+  },
+},
+
+  {
+  name: "describe_test_table",
+  description:
+    "Get column / constraint / index info for a table in the test database (port 5433). Same shape as describe_table but targets the test DB.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      table: {
+        type: "string",
+        description: "Table name to describe",
+      },
+      schema: {
+        type: "string",
+        enum: ["public", "kvec", "kdag"],
+        description: "Schema the table belongs to (default: public)",
+      },
+    },
+    required: ["table"],
+  },
+},
+
+  {
   name: "debug_raw_json",
   description:
     "Debug tool: re-runs any khef MCP tool and returns raw JSON instead of formatted text. Gated by PreToolUse hook — requires user approval. Never use for routine queries.",
@@ -180,6 +247,7 @@ export async function handleTool(
 
     case "list_tables": {
       const result = await dbClient.listTables(
+        "dev",
         args.schema as string | undefined,
       );
       return {
@@ -189,6 +257,40 @@ export async function handleTool(
 
     case "describe_table": {
       const result = await dbClient.describeTable(
+        "dev",
+        args.table as string,
+        args.schema as string | undefined,
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+
+    case "query_test_db": {
+      const result = await dbClient.queryTestDb(
+        args.sql as string,
+        args.params as unknown[] | undefined,
+        args.limit as number | undefined,
+        args.schema as "public" | "kvec" | "kdag" | undefined,
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+
+    case "list_test_tables": {
+      const result = await dbClient.listTables(
+        "test",
+        args.schema as string | undefined,
+      );
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+      };
+    }
+
+    case "describe_test_table": {
+      const result = await dbClient.describeTable(
+        "test",
         args.table as string,
         args.schema as string | undefined,
       );

@@ -52,6 +52,48 @@ if ! command -v codex &>/dev/null; then
   exit 1
 fi
 
+# --- Nickname resolution for `codeks resume <name>` ---
+# Codex's own `resume` subcommand only knows session UUIDs. Translate khef
+# nicknames here so `codeks resume erica` works the same way `cr briny` does
+# for claude. Bare UUIDs and the no-arg interactive form pass straight through.
+
+# Resolve a khef nickname to the most recent codex session UUID.
+# Echoes the UUID on success, nothing on miss. Never errors out — callers
+# decide what to do with empty output.
+resolve_codex_nickname() {
+  local nick="${1:-}"
+  [ -z "$nick" ] && return 0
+  curl -sf "$API/api/sessions/by-nickname/$nick" 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    codex = [s for s in (data.get('sessions') or []) if s.get('assistant') == 'codex-cli']
+    if codex:
+        print(codex[-1].get('session_id') or '')
+except Exception:
+    pass
+" 2>/dev/null
+}
+
+if [[ "${1:-}" == "resume" && -n "${2:-}" ]]; then
+  # Pass through full UUIDs and any 8+ hex-char prefix unchanged.
+  if [[ "$2" =~ ^[0-9a-f-]{8,}$ ]]; then
+    : # codex resume handles it directly
+  else
+    nick="$2"
+    resolved=$(resolve_codex_nickname "$nick")
+    if [ -n "$resolved" ]; then
+      printf "\033[0;90mResuming codex session: \033[1;36m%s\033[0m (%s)\n" "$nick" "$resolved"
+      # Rewrite the args so the rest of the script + codex see the UUID.
+      set -- "resume" "$resolved" "${@:3}"
+    else
+      printf "\033[1;31mERROR: No codex session found for nickname '%s'.\033[0m\n" "$nick" >&2
+      printf "\033[0;90mTip: run \033[1mcodeks resume\033[0;90m with no name for the interactive picker.\033[0m\n" >&2
+      exit 1
+    fi
+  fi
+fi
+
 CWD="$(pwd)"
 TERM_SID="${ITERM_SESSION_ID:-}"
 TERM_SID="${TERM_SID##*:}"
@@ -61,6 +103,7 @@ STATUS_FILE="${TMPDIR:-/tmp}/khef-codex-session-$$.env"
 TIME_MARKER="${TMPDIR:-/tmp}/khef-codex-marker-$$"
 : > "$TIME_MARKER"
 DISCOVERY_PID=""
+HEARTBEAT_INTERVAL_S="${KHEF_CODEX_HEARTBEAT_S:-30}"
 
 # Read a JSON field from stdin using python3 (always present on macOS).
 # Returns empty on any parse failure.
@@ -100,6 +143,30 @@ update_iterm_session_vars() {
   set_iterm_user_var "codex_session" "$session_id"
   set_iterm_user_var "codex_session_short" "$short_session_id"
   set_iterm_user_var "codex_nickname" "$nickname"
+}
+
+# --- Background heartbeat: keep the session marked active in khef ---
+# Codex has no per-prompt hook (Claude Code's UserPromptSubmit re-heartbeats
+# on every prompt). Without this loop, a single scanner miss on the API side
+# can mark the session inactive until the user restarts codex. The interval
+# is configurable via KHEF_CODEX_HEARTBEAT_S (default 30s).
+heartbeat_loop() {
+  set +e
+  local sid="$1"
+  local file_path="$2"
+  local interval="$3"
+  local body
+
+  while sleep "$interval"; do
+    body=$(printf '{"session_id":"%s","file_path":"%s","pid":%d' "$sid" "$file_path" "$$")
+    if [ -n "$TERM_SID" ]; then
+      body="${body},\"terminal_session_id\":\"${TERM_SID}\""
+    fi
+    body="${body}}"
+    curl -sf -X POST "$API/api/active-sessions/heartbeat" \
+      -H "Content-Type: application/json" \
+      -d "$body" > /dev/null 2>&1 || true
+  done
 }
 
 # --- Background discovery: find this run's Codex JSONL and register it ---
@@ -147,10 +214,14 @@ discover_session() {
     session_id=$(printf '%s' "$response" | json_field "session_id")
     nickname=$(printf '%s' "$response" | json_field "nickname")
 
+    heartbeat_loop "$session_id" "$match" "$HEARTBEAT_INTERVAL_S" &
+    local heartbeat_pid=$!
+
     {
       echo "KHEF_SESSION_ID=$session_id"
       echo "KHEF_NICKNAME=$nickname"
       echo "KHEF_SESSION_FILE=$match"
+      echo "KHEF_HEARTBEAT_PID=$heartbeat_pid"
     } > "$STATUS_FILE"
 
     update_iterm_session_vars "$session_id" "$nickname"
@@ -164,9 +235,13 @@ cleanup() {
     kill "$DISCOVERY_PID" 2>/dev/null || true
   fi
   if [ -f "$STATUS_FILE" ]; then
-    local sid nick
+    local sid nick heartbeat_pid
     sid=$(grep '^KHEF_SESSION_ID=' "$STATUS_FILE" | cut -d= -f2- || true)
     nick=$(grep '^KHEF_NICKNAME=' "$STATUS_FILE" | cut -d= -f2- || true)
+    heartbeat_pid=$(grep '^KHEF_HEARTBEAT_PID=' "$STATUS_FILE" | cut -d= -f2- || true)
+    if [ -n "${heartbeat_pid:-}" ]; then
+      kill "$heartbeat_pid" 2>/dev/null || true
+    fi
     if [ -n "${sid:-}" ]; then
       curl -sf -X POST "$API/api/active-sessions/$sid/deactivate" \
         -H "Content-Type: application/json" > /dev/null 2>&1 || true

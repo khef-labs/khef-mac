@@ -318,7 +318,9 @@
   line-height: 1.5;
 }
 
-/* Sticky region wrapping header + summary panel + toolbar */
+/* Sticky region wrapping header + toolbar. The AI summary panel lives
+   outside this wrapper so a long summary doesn't push the sticky region
+   past the viewport and trap the page scroll. */
 .stickyTop {
   position: sticky;
   top: 0;
@@ -836,6 +838,8 @@
 
 .summaryMarkdown {
   padding: var(--space-3);
+  max-height: 70vh;
+  overflow-y: auto;
   font-size: var(--text-sm);
   color: var(--fg);
   line-height: 1.7;

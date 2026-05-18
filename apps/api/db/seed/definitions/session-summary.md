@@ -26,7 +26,7 @@ steps:
     input_source: job_input
     input_config:
       input_type: transcript
-    timeout_ms: 300000
+    timeout_ms: 12000000
     config:
       chunk_size: 50000
       threshold: 100000
@@ -35,5 +35,5 @@ steps:
       update_prompt_handle: update-session-summary
       include_generated_at: true
       merge_template: "## Segment {{index}}\n\n{{output}}"
-      synthesis_timeout_ms: 600000
+      synthesis_timeout_ms: 12000000
 ---

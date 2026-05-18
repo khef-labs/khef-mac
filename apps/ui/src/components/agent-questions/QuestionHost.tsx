@@ -113,12 +113,22 @@ export function QuestionHost() {
           key={active.id}
           question={active}
           onClose={() => setOpen(false)}
-          onResolved={() => {
-            // Server-side state changes (answered/canceled) will arrive via SSE
-            // and remove the question from the queue. Until then, optimistically
-            // drop it so the next queued question can take focus.
+          onResolved={async () => {
+            // Optimistically drop the resolved question so the next queued
+            // entry can take focus right away.
             if (active) {
               setQueue((prev) => prev.filter((q) => q.id !== active.id))
+            }
+            // Then reconcile against the server. Catches questions whose
+            // Redis keys were deleted out-of-band (e.g. test cleanup, manual
+            // intervention) and never got a question.expired event — without
+            // this the queue keeps stale ghosts that "reappear" as the user
+            // cancels each one.
+            try {
+              const fresh = await listAgentQuestions()
+              setQueue(fresh.questions)
+            } catch {
+              // ignore — optimistic drop already happened
             }
           }}
         />

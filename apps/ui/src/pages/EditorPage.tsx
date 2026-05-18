@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'preact/hooks'
 import { Fragment } from 'preact'
-import { Folder, FolderOpen, FolderPlus, FilePlus, X, FileCode, PanelLeftClose, PanelLeft, Undo2, Eye, Columns2, SquarePen, Copy, Search, Minimize2, ChevronsDownUp, ChevronsUpDown, ChevronRight, Star, Home, FileText, ExternalLink } from 'lucide-preact'
+import { Folder, FolderOpen, FolderPlus, FilePlus, X, FileCode, PanelLeftClose, PanelLeft, Undo2, Eye, Columns2, SquarePen, Copy, Search, Minimize2, ChevronsDownUp, ChevronsUpDown, Star, ExternalLink } from 'lucide-preact'
 import clsx from 'clsx'
 import { CodeEditor, FileTree, QuickOpen, SearchPanel } from '../components/editor'
 import { ChickenIcon } from '../components/editor/ChickenIcon'
 import { useToast } from '../components/ui'
+import { FolderPicker } from '../components/folder-picker/FolderPicker'
 import type { PaletteCommand } from '../components/editor'
 import type { EditorLanguage } from '../components/editor'
 import { fsRead, fsWrite, fsDelete, fsTree, fsNew, fsCompletions, fsReveal, getScratchHome, previewDiagram, getProjects, type DiagramType } from '../lib/api'
@@ -14,7 +15,7 @@ import { consumeEditorDeepLink } from '../lib/editorDeepLink'
 import { markdownProcessor } from '../lib/markdown'
 import { getDiagramTheme } from '../lib/exportPreferences'
 import { loadStore, saveStore } from '../lib/store'
-import type { FsCompletion, FsEntry } from '../types/api'
+import type { FsCompletion } from '../types/api'
 import { useDocumentTitle } from '../hooks'
 import styles from './EditorPage.module.css'
 
@@ -152,13 +153,9 @@ export function EditorPage() {
   const [shimmerPath, setShimmerPath] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [isFolded, setIsFolded] = useState(false)
-  const [showPathInput, setShowPathInput] = useState(false)
-  const [pathInputMode, setPathInputMode] = useState<'open-folder' | 'save-as'>('open-folder')
-  const [showFolderBrowser, setShowFolderBrowser] = useState(false)
-  const [browserCwd, setBrowserCwd] = useState('')
-  const [browserEntries, setBrowserEntries] = useState<FsEntry[]>([])
-  const [browserLoading, setBrowserLoading] = useState(false)
-  const [browserError, setBrowserError] = useState<string | null>(null)
+  const [showSaveAs, setShowSaveAs] = useState(false)
+  const [showOpenFolder, setShowOpenFolder] = useState(false)
+  const [recentFolders, setRecentFolders] = useState<string[]>(loadStore().editor.recentFolders ?? [])
   const [quickOpenVisible, setQuickOpenVisible] = useState(false)
   const [quickOpenInitialScope, setQuickOpenInitialScope] = useState<'commands' | 'project' | 'global'>('commands')
   const [rootCreateRequest, setRootCreateRequest] = useState<{ type: 'file' | 'directory'; parentPath: string; nonce: number } | null>(null)
@@ -715,15 +712,14 @@ export function EditorPage() {
     setPathValue(defaultPath)
     setCompletions([])
     setCompletionIndex(-1)
-    setPathInputMode('save-as')
-    setShowPathInput(true)
+    setShowSaveAs(true)
   }, [activeTab, rootPath, scratchHome])
 
   // Execute Save As after path is confirmed
   const executeSaveAs = useCallback(async (targetPath: string) => {
     if (!activeTab || !targetPath.trim()) return
     const trimmed = targetPath.trim()
-    setShowPathInput(false)
+    setShowSaveAs(false)
     setCompletions([])
     setCompletionIndex(-1)
     try {
@@ -1234,6 +1230,12 @@ export function EditorPage() {
     saveStore({ editor: { ...loadStore().editor, fontSize: 14 } })
   }, [])
 
+  // Open folder handler (used by keyboard shortcuts below + top nav)
+  const handleOpenFolder = useCallback(() => {
+    setQuickOpenVisible(false)
+    setShowOpenFolder(true)
+  }, [])
+
   // Keyboard shortcuts: zoom + Ctrl+X K chord
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1274,18 +1276,10 @@ export function EditorPage() {
         return
       }
 
-      // Escape dismisses path input modal
-      if (e.key === 'Escape' && showPathInput) {
+      // Escape dismisses save-as modal
+      if (e.key === 'Escape' && showSaveAs) {
         e.preventDefault()
-        setShowPathInput(false)
-        return
-      }
-
-      // Escape dismisses folder browser modal (returns to path input)
-      if (e.key === 'Escape' && showFolderBrowser) {
-        e.preventDefault()
-        setShowFolderBrowser(false)
-        setShowPathInput(true)
+        setShowSaveAs(false)
         return
       }
 
@@ -1341,12 +1335,7 @@ export function EditorPage() {
       // Cmd/Ctrl+Shift+O : open folder
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'o') {
         e.preventDefault()
-        setQuickOpenVisible(false)
-        setPathValue(rootPath || '~/')
-        setCompletions([])
-        setCompletionIndex(-1)
-        setPathInputMode('open-folder')
-        setShowPathInput(true)
+        handleOpenFolder()
         return
       }
 
@@ -1502,7 +1491,7 @@ export function EditorPage() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [activeGroup, isSplit, groups, activeGroupId, activeTab, closeTab, zoomIn, zoomOut, zoomReset, revertActiveTab, pendingCloseIndex, pendingRevert, handleRevertConfirm, handleCloseSave, quickOpenVisible, rootPath, saveTabAs, openScratchTab, showPathInput, showFolderBrowser])
+  }, [activeGroup, isSplit, groups, activeGroupId, activeTab, closeTab, zoomIn, zoomOut, zoomReset, revertActiveTab, pendingCloseIndex, pendingRevert, handleRevertConfirm, handleCloseSave, quickOpenVisible, rootPath, saveTabAs, openScratchTab, showSaveAs, handleOpenFolder])
 
   // Fetch directory completions (debounced)
   const fetchCompletions = useCallback((prefix: string) => {
@@ -1522,16 +1511,6 @@ export function EditorPage() {
       }
     }, 150)
   }, [])
-
-  // Open folder handler
-  const handleOpenFolder = useCallback(() => {
-    setQuickOpenVisible(false)
-    setPathValue(rootPath || '~/')
-    setCompletions([])
-    setCompletionIndex(-1)
-    setPathInputMode('open-folder')
-    setShowPathInput(true)
-  }, [rootPath])
 
   const requestRootCreate = useCallback((type: 'file' | 'directory') => {
     if (!rootPath) return
@@ -1584,77 +1563,37 @@ export function EditorPage() {
     return favoriteFolders.includes(normalizeFolderPath(path))
   }, [favoriteFolders, normalizeFolderPath])
 
-  const handlePathSubmit = useCallback((newPath: string) => {
+  const openFolder = useCallback((newPath: string) => {
     if (!newPath.trim()) return
-    if (pathInputMode === 'save-as') {
-      void executeSaveAs(newPath)
-      return
-    }
     let trimmed = newPath.trim()
     if (trimmed.length > 1) trimmed = trimmed.replace(/\/+$/, '')
     setRootPath(trimmed)
-    const editor = loadStore().editor
-    const recent = editor.recentFolders.filter((f) => f !== trimmed)
-    recent.unshift(trimmed)
-    saveStore({ editor: { ...editor, recentFolders: recent.slice(0, 10) } })
-    setShowPathInput(false)
-    setCompletions([])
-    setCompletionIndex(-1)
-  }, [pathInputMode, executeSaveAs])
+    setRecentFolders((prev) => {
+      const next = [trimmed, ...prev.filter((f) => f !== trimmed)].slice(0, 10)
+      saveStore({ editor: { ...loadStore().editor, recentFolders: next } })
+      return next
+    })
+  }, [])
+
+  const handleFavoritesChange = useCallback((next: string[]) => {
+    setFavoriteFolders(next)
+    saveStore({ editor: { ...loadStore().editor, favoriteFolders: next } })
+  }, [])
+
+  const handleRecentsChange = useCallback((next: string[]) => {
+    setRecentFolders(next)
+    saveStore({ editor: { ...loadStore().editor, recentFolders: next } })
+  }, [])
+
+  const handleSaveAsSubmit = useCallback((newPath: string) => {
+    if (!newPath.trim()) return
+    void executeSaveAs(newPath)
+  }, [executeSaveAs])
 
   const handlePathInputChange = useCallback((value: string) => {
     setPathValue(value)
     fetchCompletions(value)
   }, [fetchCompletions])
-
-  const loadBrowserDir = useCallback(async (dir: string) => {
-    setBrowserLoading(true)
-    setBrowserError(null)
-    try {
-      const tree = await fsTree(dir, 1, showHiddenFiles)
-      const dirs = (tree.entries || [])
-        .filter((e) => e.type === 'directory')
-        .sort((a, b) => a.name.localeCompare(b.name))
-      setBrowserCwd(tree.path)
-      setBrowserEntries(dirs)
-    } catch (err) {
-      setBrowserError(err instanceof Error ? err.message : 'Failed to load directory')
-      setBrowserEntries([])
-    } finally {
-      setBrowserLoading(false)
-    }
-  }, [showHiddenFiles])
-
-  const openFolderBrowser = useCallback(() => {
-    const v = pathValue.trim()
-    let start = '~/'
-    if (v) {
-      if (v.endsWith('/')) {
-        start = v.length > 1 ? v.slice(0, -1) : v
-      } else if (v.includes('/')) {
-        const idx = v.lastIndexOf('/')
-        start = v.slice(0, idx) || '/'
-      } else {
-        start = v
-      }
-    }
-    // Backend only expands "~/", not bare "~"
-    if (start === '~') start = '~/'
-    setShowPathInput(false)
-    setShowFolderBrowser(true)
-    void loadBrowserDir(start)
-  }, [pathValue, loadBrowserDir])
-
-  const cancelFolderBrowser = useCallback(() => {
-    setShowFolderBrowser(false)
-    setShowPathInput(true)
-  }, [])
-
-  const confirmFolderBrowser = useCallback(() => {
-    if (!browserCwd) return
-    setShowFolderBrowser(false)
-    handlePathSubmit(browserCwd)
-  }, [browserCwd, handlePathSubmit])
 
   const acceptCompletion = useCallback((completion: FsCompletion) => {
     const newValue = completion.path + '/'
@@ -2064,7 +2003,7 @@ export function EditorPage() {
                         <button
                           type="button"
                           class={styles.starredItemOpen}
-                          onClick={() => { handlePathSubmit(folder); setSidebarMode('explorer') }}
+                          onClick={() => { openFolder(folder); setSidebarMode('explorer') }}
                           title={`Open ${folder}`}
                         >
                           <FolderOpen size={14} class={styles.starredItemIcon} />
@@ -2556,11 +2495,11 @@ export function EditorPage() {
         initialScope={quickOpenInitialScope}
       />
 
-      {/* Path input modal */}
-      {showPathInput && (
-        <div class={styles.pathInputOverlay} onClick={() => setShowPathInput(false)}>
+      {/* Save As modal */}
+      {showSaveAs && (
+        <div class={styles.pathInputOverlay} onClick={() => setShowSaveAs(false)}>
           <div class={styles.pathInput} onClick={(e: Event) => e.stopPropagation()}>
-            <label class={styles.pathInputLabel}>{pathInputMode === 'save-as' ? 'Save As' : 'Open Folder'}</label>
+            <label class={styles.pathInputLabel}>Save As</label>
             <div class={styles.pathInputRow}>
               <input
                 class={styles.pathInputField}
@@ -2582,48 +2521,23 @@ export function EditorPage() {
                     e.preventDefault()
                     acceptCompletion(completions[completionIndex])
                   } else if (e.key === 'Enter') {
-                    if (pathInputMode === 'open-folder' && completionIndex >= 0 && completions[completionIndex]) {
-                      handlePathSubmit(completions[completionIndex].path)
-                    } else if (completionIndex >= 0 && completions[completionIndex]) {
+                    if (completionIndex >= 0 && completions[completionIndex]) {
                       acceptCompletion(completions[completionIndex])
                     } else {
-                      handlePathSubmit(pathValue)
+                      handleSaveAsSubmit(pathValue)
                     }
                   } else if (e.key === 'Escape') {
                     if (completions.length > 0) {
                       setCompletions([])
                       setCompletionIndex(-1)
                     } else {
-                      setShowPathInput(false)
+                      setShowSaveAs(false)
                     }
                   }
                 }}
-                placeholder={pathInputMode === 'save-as' ? '/path/to/file.md' : '/path/to/folder'}
+                placeholder="/path/to/file.md"
                 autoFocus
               />
-              {pathInputMode === 'open-folder' && (
-                <button
-                  type="button"
-                  class={styles.browseButton}
-                  onClick={openFolderBrowser}
-                  title="Browse for a folder"
-                >
-                  <FolderOpen size={13} />
-                  <span>Browse…</span>
-                </button>
-              )}
-              {pathInputMode === 'open-folder' && pathValue.trim().length > 0 && (
-                <button
-                  type="button"
-                  class={clsx(styles.starCurrent, isFavorite(pathValue) && styles.starCurrentActive)}
-                  onClick={() => toggleFavorite(pathValue)}
-                  title={isFavorite(pathValue) ? 'Unstar this path' : 'Add this path to favorites'}
-                  aria-pressed={isFavorite(pathValue)}
-                >
-                  <Star size={13} />
-                  <span>{isFavorite(pathValue) ? 'Starred' : 'Star path'}</span>
-                </button>
-              )}
             </div>
             {completions.length > 0 && (
               <div class={styles.completions}>
@@ -2636,251 +2550,32 @@ export function EditorPage() {
                     <button
                       type="button"
                       class={styles.completionOpen}
-                      onClick={() => {
-                        if (pathInputMode === 'open-folder') {
-                          handlePathSubmit(c.path)
-                        } else {
-                          acceptCompletion(c)
-                        }
-                      }}
-                      title={pathInputMode === 'open-folder' ? `Open ${c.path}` : c.path}
+                      onClick={() => acceptCompletion(c)}
+                      title={c.path}
                     >
                       <Folder size={14} />
                       <span class={styles.completionName}>{c.name}</span>
                       <span class={styles.completionPath}>{c.path}</span>
                     </button>
-                    {pathInputMode === 'open-folder' && (
-                      <button
-                        type="button"
-                        class={styles.completionDrill}
-                        onClick={(e: Event) => { e.stopPropagation(); acceptCompletion(c) }}
-                        title="Browse inside"
-                        aria-label={`Browse inside ${c.name}`}
-                      >
-                        <ChevronRight size={14} />
-                      </button>
-                    )}
                   </div>
                 ))}
               </div>
             )}
-            {completions.length === 0 && pathInputMode === 'open-folder' && (() => {
-              const recentFolders = loadStore().editor.recentFolders.filter((f) => !favoriteFolders.includes(normalizeFolderPath(f)))
-              const hasFavorites = favoriteFolders.length > 0
-              const hasRecents = recentFolders.length > 0
-
-              if (!hasFavorites && !hasRecents) {
-                return (
-                  <div class={styles.folderEmpty}>
-                    <div class={styles.folderEmptyGlyph}><Star size={26} /></div>
-                    <h3 class={styles.folderEmptyTitle}>Open your first folder</h3>
-                    <p class={styles.folderEmptyBody}>
-                      Type a path above or press <kbd class={styles.folderKbd}>Tab</kbd> to browse.
-                      Folders you open will show up as recents; star any you want pinned.
-                    </p>
-                    <div class={styles.folderSuggest}>
-                      {[
-                        { path: '~/projects', label: '~/projects', icon: <Folder size={12} /> },
-                        { path: '~', label: 'Home', icon: <Home size={12} /> },
-                        { path: '~/Documents', label: 'Documents', icon: <FileText size={12} /> },
-                      ].map((s) => (
-                        <button
-                          key={s.path}
-                          type="button"
-                          class={styles.suggestChip}
-                          onClick={() => {
-                            setPathValue(s.path + '/')
-                            fetchCompletions(s.path + '/')
-                          }}
-                        >
-                          {s.icon}
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )
-              }
-
-              return (
-                <>
-                  {hasFavorites && (
-                    <>
-                      <span class={styles.recentLabel}>Favorites</span>
-                      <div class={styles.folderRows}>
-                        {favoriteFolders.map((folder) => {
-                          const label = folder.split('/').filter(Boolean).pop() || folder
-                          return (
-                            <div
-                              key={folder}
-                              class={clsx(styles.folderRow, shimmerPath === folder && styles.folderRowShimmer)}
-                            >
-                              <span class={styles.folderRowIcon}><FolderOpen size={14} /></span>
-                              <button
-                                type="button"
-                                class={styles.folderRowOpen}
-                                onClick={() => handlePathSubmit(folder)}
-                                title={`Open ${folder}`}
-                              >
-                                <span class={styles.folderRowName}>{label}</span>
-                                <span class={styles.folderRowPath}>{folder}</span>
-                              </button>
-                              <button
-                                type="button"
-                                class={clsx(styles.folderRowStar, styles.folderRowStarActive)}
-                                onClick={(e: Event) => { e.stopPropagation(); toggleFavorite(folder) }}
-                                title="Unstar"
-                                aria-pressed="true"
-                              >
-                                <Star size={13} fill="currentColor" />
-                              </button>
-                              <button
-                                type="button"
-                                class={styles.folderRowDrill}
-                                onClick={(e: Event) => { e.stopPropagation(); acceptCompletion({ name: label, path: folder }) }}
-                                title="Browse inside"
-                                aria-label={`Browse inside ${folder}`}
-                              >
-                                <ChevronRight size={14} />
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-                  {hasRecents && (
-                    <>
-                      <span class={styles.recentLabel}>Recent</span>
-                      <div class={styles.folderRows}>
-                        {recentFolders.map((folder) => {
-                          const label = folder.split('/').filter(Boolean).pop() || folder
-                          return (
-                            <div key={folder} class={clsx(styles.folderRow, styles.folderRowRecent)}>
-                              <span class={styles.folderRowIcon}><Folder size={14} /></span>
-                              <button
-                                type="button"
-                                class={styles.folderRowOpen}
-                                onClick={() => handlePathSubmit(folder)}
-                                title={`Open ${folder}`}
-                              >
-                                <span class={styles.folderRowName}>{label}</span>
-                                <span class={styles.folderRowPath}>{folder}</span>
-                              </button>
-                              <button
-                                type="button"
-                                class={styles.folderRowStar}
-                                onClick={(e: Event) => { e.stopPropagation(); toggleFavorite(folder) }}
-                                title="Star"
-                                aria-pressed="false"
-                              >
-                                <Star size={13} />
-                              </button>
-                              <button
-                                type="button"
-                                class={styles.folderRowDrill}
-                                onClick={(e: Event) => { e.stopPropagation(); acceptCompletion({ name: label, path: folder }) }}
-                                title="Browse inside"
-                                aria-label={`Browse inside ${folder}`}
-                              >
-                                <ChevronRight size={14} />
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  )}
-                </>
-              )
-            })()}
           </div>
         </div>
       )}
 
-      {/* Folder browser modal */}
-      {showFolderBrowser && (
-        <div class={styles.pathInputOverlay} onClick={cancelFolderBrowser}>
-          <div class={clsx(styles.pathInput, styles.folderBrowser)} onClick={(e: Event) => e.stopPropagation()}>
-            <label class={styles.pathInputLabel}>Browse folders</label>
-            <div class={styles.browserCrumbs}>
-              {(() => {
-                const isAbsolute = browserCwd.startsWith('/')
-                const isHome = browserCwd === '~' || browserCwd.startsWith('~/')
-                const segments = browserCwd.split('/').filter(Boolean)
-                const items: { label: string; path: string }[] = []
-                if (isAbsolute) {
-                  items.push({ label: '/', path: '/' })
-                  let acc = ''
-                  for (const seg of segments) {
-                    acc = `${acc}/${seg}`
-                    items.push({ label: seg, path: acc })
-                  }
-                } else if (isHome) {
-                  items.push({ label: '~', path: '~' })
-                  let acc = '~'
-                  for (let i = 1; i < segments.length; i++) {
-                    acc = `${acc}/${segments[i]}`
-                    items.push({ label: segments[i], path: acc })
-                  }
-                } else {
-                  let acc = ''
-                  segments.forEach((seg, i) => {
-                    acc = i === 0 ? seg : `${acc}/${seg}`
-                    items.push({ label: seg, path: acc })
-                  })
-                }
-                return items.map((it, i) => (
-                  <Fragment key={`${it.path}-${i}`}>
-                    {i > 0 && <span class={styles.browserCrumbSep}>/</span>}
-                    <button
-                      type="button"
-                      class={clsx(styles.browserCrumbBtn, i === items.length - 1 && styles.browserCrumbCurrent)}
-                      onClick={() => loadBrowserDir(it.path)}
-                      title={it.path}
-                    >
-                      {it.label}
-                    </button>
-                  </Fragment>
-                ))
-              })()}
-            </div>
-            <div class={styles.browserList}>
-              {browserLoading && <div class={styles.browserStatus}>Loading…</div>}
-              {browserError && <div class={styles.browserError}>{browserError}</div>}
-              {!browserLoading && !browserError && browserEntries.length === 0 && (
-                <div class={styles.browserStatus}>No subfolders</div>
-              )}
-              {!browserLoading && !browserError && browserEntries.map((entry) => (
-                <button
-                  key={entry.path}
-                  type="button"
-                  class={styles.browserItem}
-                  onClick={() => loadBrowserDir(entry.path)}
-                  title={entry.path}
-                >
-                  <Folder size={14} />
-                  <span class={styles.browserItemName}>{entry.name}</span>
-                  <ChevronRight size={14} class={styles.browserItemChevron} />
-                </button>
-              ))}
-            </div>
-            <div class={styles.browserActions}>
-              <button type="button" class={clsx(styles.modalBtn)} onClick={cancelFolderBrowser}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                class={clsx(styles.modalBtnPrimary)}
-                onClick={confirmFolderBrowser}
-                disabled={!browserCwd}
-              >
-                Open this folder
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FolderPicker
+        visible={showOpenFolder}
+        onClose={() => setShowOpenFolder(false)}
+        onSelect={(path) => openFolder(path)}
+        initialPath={rootPath || '~/'}
+        title="Open Folder"
+        favorites={favoriteFolders}
+        onFavoritesChange={handleFavoritesChange}
+        recents={recentFolders}
+        onRecentsChange={handleRecentsChange}
+      />
     </div>
     <div class={styles.footerSpacer} />
     </Fragment>

@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter-preact'
 import { useEffect, useMemo } from 'preact/hooks'
-import { Search, FolderKanban, Bot, ChartBarBig, Settings, Sparkles, MessageSquare, Database, Zap, FileCode, HardDrive, ScrollText, Users, Send } from 'lucide-preact'
+import { Search, FolderKanban, Bot, ChartBarBig, Settings, Sparkles, MessageSquare, Database, Zap, FileCode, HardDrive, ScrollText, Users, Send, Image as ImageIcon, Bell } from 'lucide-preact'
 import clsx from 'clsx'
 import type { ComponentChildren } from 'preact'
 import { useFetch } from '../../hooks'
@@ -9,7 +9,8 @@ import { getDismissedServers } from '../../lib/mcpDismissed'
 import { isDesktopApp } from '../../lib/settings'
 import { saveSession } from '../../lib/store'
 import { PageMetaFooter } from './PageMetaFooter'
-import { NotificationsBanner } from '../shared/NotificationsBanner'
+import { NotificationsProvider, useNotifications } from '../shared/NotificationsContext'
+import { NotificationsToasts } from '../shared/NotificationsToasts'
 import { QuestionHost } from '../agent-questions'
 import styles from './AppShell.module.css'
 
@@ -18,7 +19,16 @@ interface Props {
 }
 
 export function AppShell({ children }: Props) {
+  return (
+    <NotificationsProvider>
+      <AppShellInner>{children}</AppShellInner>
+    </NotificationsProvider>
+  )
+}
+
+function AppShellInner({ children }: Props) {
   const [location] = useLocation()
+  const { total: notificationCount, topSeverity } = useNotifications()
 
   // Fetch MCP server health for nav badge
   const { data: mcpHealth } = useFetch(
@@ -181,6 +191,17 @@ export function AppShell({ children }: Props) {
             Editor
           </Link>
           <Link
+            href="/kpic"
+            class={clsx(
+              styles.navLink,
+              location.startsWith('/kpic') && styles.navLinkActive
+            )}
+            data-testid="nav--kpic"
+          >
+            <ImageIcon size={18} />
+            Kpic
+          </Link>
+          <Link
             href="/dbx"
             class={clsx(
               styles.navLink,
@@ -203,6 +224,28 @@ export function AppShell({ children }: Props) {
             Stats
           </Link>
           <Link
+            href="/alerts"
+            class={clsx(
+              styles.navLink,
+              location.startsWith('/alerts') && styles.navLinkActive
+            )}
+            data-testid="nav--alerts"
+          >
+            <Bell size={18} />
+            Alerts
+            {notificationCount > 0 && (
+              <span
+                class={clsx(
+                  styles.badge,
+                  topSeverity === 'error' && styles.badgeError,
+                  topSeverity === 'info' && styles.badgeInfo
+                )}
+              >
+                {notificationCount > 99 ? '99+' : notificationCount}
+              </span>
+            )}
+          </Link>
+          <Link
             href="/settings"
             class={clsx(
               styles.navLink,
@@ -217,10 +260,10 @@ export function AppShell({ children }: Props) {
         <footer class={styles.footer}>Khef</footer>
       </aside>
       <main class={styles.main}>
-        <NotificationsBanner />
         <div class={styles.content}>{children}</div>
         {!isDesktopApp() && <PageMetaFooter />}
       </main>
+      <NotificationsToasts />
       <QuestionHost />
     </div>
   )

@@ -97,3 +97,32 @@
 .snippet :global(.par) { color: var(--muted); }
 .snippet :global(.str) { color: var(--muted-2); }
 .snippet :global(.com) { color: var(--muted-2); font-style: italic; }
+
+.tables {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* Align the icon with the snippet's text (2px border + space-3 padding). */
+  padding-left: calc(var(--space-3) + 2px);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--muted-2);
+  min-width: 0;
+}
+.tablesIcon { flex-shrink: 0; }
+.tablesList {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schemaBadge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 5px;
+}
